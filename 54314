@@ -1,0 +1,1 @@
+export class OpenWindowProxyImpl{openUrl(url){window.open(url)}static getInstance(){return instance||(instance=new OpenWindowProxyImpl)}static setInstance(obj){instance=obj}}let instance=null;

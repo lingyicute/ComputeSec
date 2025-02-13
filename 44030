@@ -1,0 +1,1 @@
+import{mojo}from"//resources/mojo/mojo/public/js/bindings.js";export const BucketIdSpec={$:{}};mojo.internal.Struct(BucketIdSpec.$,"BucketId",[mojo.internal.StructField("value",0,0,mojo.internal.Int64,BigInt(0),false,0)],[[0,16]]);

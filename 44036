@@ -1,0 +1,1 @@
+import{mojo}from"//resources/mojo/mojo/public/js/bindings.js";import{OriginSpec as url_mojom_OriginSpec}from"//resources/mojo/url/mojom/origin.mojom-webui.js";export const SchemefulSiteSpec={$:{}};mojo.internal.Struct(SchemefulSiteSpec.$,"SchemefulSite",[mojo.internal.StructField("siteAsOrigin",0,0,url_mojom_OriginSpec.$,null,false,0)],[[0,16]]);

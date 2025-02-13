@@ -1,0 +1,4 @@
+import{html}from"//resources/lit/v3_0/lit.rollup.js";export function getHtml(){return html`
+    <div id="tooltip" hidden part="tooltip">
+      <slot></slot>
+    </div>`}

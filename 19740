@@ -1,0 +1,18 @@
+import{getTrustedHTML}from"//resources/js/static_types.js";export function getTemplate(){return getTrustedHTML`<!--_html_template_start_--><link rel="stylesheet" href="chrome://resources/css/action_link.css">
+<style>table{border-collapse:collapse;margin:0;padding:0;width:100%}table a{color:#15c;font-size:10pt;padding:6px;text-decoration:underline}table td,table th{border:var(--divider-border);padding:7px}table th{background-color:#f0f0f0;font-weight:400}table .removed{background-color:#e0e0e0}@media screen and (max-width:600px){table{border-collapse:separate;border-spacing:0 var(--section-padding)}table thead{display:none}table td{display:block;text-align:end}table td::before{content:attr(data-label);float:left;font-weight:700}table td,table th{border-bottom:0}table td:last-child{border-bottom:var(--divider-border)}}</style>
+<table>
+  <thead>
+    <tr>
+      <th data-field="nameForDisplay">Name</th>
+      <th data-field="address">Address</th>
+      <th data-field="rssi.value">Latest RSSI</th>
+      <th data-field="serviceUuids">Services</th>
+      <th data-field="manufacturerDataMap">Manufacturer Data</th>
+      <th data-field="isGattConnected">GATT Connection State</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  </tbody>
+</table>
+<!--_html_template_end_-->`}

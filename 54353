@@ -1,0 +1,1 @@
+import{mojo}from"//resources/mojo/mojo/public/js/bindings.js";export const UuidSpec={$:{}};mojo.internal.Struct(UuidSpec.$,"Uuid",[mojo.internal.StructField("value",0,0,mojo.internal.String,null,false,0)],[[0,16]]);

@@ -1,0 +1,15 @@
+import{getTrustedHTML}from"//resources/js/static_types.js";export function getTemplate(){return getTrustedHTML`<!--_html_template_start_--><style>:host{display:block}div{display:flex;margin:4px 0}div>input{flex-grow:1}div:nth-of-type(2){justify-content:flex-end}h3{font-weight:400;line-height:1;user-select:none}</style>
+<h3>Value cannot be read or written</h3>
+<div>
+  <input>
+  <select>
+    <option value="Hexadecimal">Hexadecimal</option>
+    <option value="UTF-8">UTF-8</option>
+    <option value="Decimal">Decimal</option>
+  </select>
+</div>
+<div>
+  <button class="read">Read</button>
+  <button class="write">Write</button>
+</div>
+<!--_html_template_end_-->`}

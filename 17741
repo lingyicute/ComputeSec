@@ -1,0 +1,135 @@
+﻿<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width">
+
+
+
+
+<script type="module" src="chrome://proxy/proxy_config.js"></script>
+<link rel="stylesheet" href="chrome://resources/css/text_defaults.css">
+<style>/* Copyright (c) 2013 The Chromium Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+body {
+  font-size: 80%;
+  margin: 1em;
+}
+
+#main-container {
+  max-width: 60em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+button {
+  display: block;
+  font-size: 110%;
+  font-weight: bold;
+  margin: 10px auto;
+  padding: 1em;
+  width: 15em;
+}
+
+h2 {
+  color: #546E7A;
+  font-weight: normal;
+  font-size: 170%;
+  margin-bottom: 1.5em;
+}
+
+.radio-button-div {
+  margin: 7px auto;
+}
+
+.warning {
+  color: red;
+  font-size: 90%;
+}
+
+.section-container {
+  margin-top: 2em;
+}
+
+#file-path-logging,
+#file-path-stopped {
+  font-family: monospace;
+}
+
+.outline-box {
+  margin-top: 2em;
+  border: 1px solid #ababab;
+  padding: 0.5em;
+  line-height: 1.5em;
+}
+
+textarea {
+  width: 95%;
+  height: 4em;
+}
+</style>
+<title>Proxy configuration</title>
+</head>
+<body>
+  <div id="main-container">
+    <!--
+      =========================================================================
+      View for "pending" state.
+       * Only visible briefly, if at all
+      =========================================================================
+    -->
+    <div id="state-pending">
+      <h2>Proxy configuration</h2>
+      Loading...
+    </div>
+
+    <!--
+      =========================================================================
+      View for "available" and "unset" states.
+       * Has controls to change or reset proxy configuration.
+      =========================================================================
+    -->
+    <div id="state-main" hidden>
+      <h2>Proxy configuration</h2>
+      <button id="reset">Reset</button>
+      <div class="section-container">
+        Reset will update the displayed configuration to match the one currently in use.
+      </div>
+      <div class="section-container">
+          <input type="radio" id="empty" name="mode" value="empty"><label for="empty">System Default</label><br/>
+          <input type="radio" id="direct" name="mode" value="direct"><label for="direct">Direct</label><br/>
+          <input type="radio" id="auto-detect" name="mode" value="auto-detect"><label for="auto-detect">Auto-detect (WPAD DHCP/DNS)</label><br/>
+          <input type="radio" id="use-pac-url" name="mode" value="use-pac-url"><label for="use-pac-url">Use PAC URL: <input id='pac-url' value="" size="40" /></label>
+          <p><input type="checkbox" id="pac-mandatory" name="pac-mandatory"><label for="pac-mandatory">Do not allow fallback to direct connection in case PAC script fails</label></p>
+          <input type="radio" id="use-single-list" name="mode" value="use-single-list"><label for="use-single-list">Use a single proxy list for all schemes (<a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_(PAC)_file#Description">PAC format</a>):
+              <textarea id="single-proxies"></textarea>
+            </label><br/>
+          <input type="radio" id="use-list-per-scheme" name="mode" value="use-list-per-scheme"><label for="use-list-per-scheme">Use a proxy list per scheme:</label><br/>
+              <label for="use-list-per-scheme">HTTP (<a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_(PAC)_file#Description">PAC format</a>):<br/>
+              <textarea id="http-proxies"></textarea></label><br/>
+              <label for="use-list-per-scheme">HTTPS (<a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_(PAC)_file#Description">PAC format</a>):<br/>
+              <textarea id="https-proxies"></textarea></label><br/>
+              <label for="use-list-per-scheme">FTP (<a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_(PAC)_file#Description">PAC format</a>):<br/>
+              <textarea id="ftp-proxies"></textarea></label><br/>
+              <label for="use-list-per-scheme">Fallback (used when the URL does not match any of the standard schemes, <a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_(PAC)_file#Description">PAC format</a>):<br/>
+              <textarea id="fallback-proxies"></textarea></label>
+          <div class="outline-box">
+            Bypass rules (a list of matching expressions for the hostname separated by comma or semicolon, can use asterisk; matches against port numbers and IPv4/IPv6); in use only with single or per-scheme proxy lists.<br/>
+            <textarea id="bypass-rules"></textarea><br/>
+            <input type="checkbox" id="reverse-bypass" name="reverse-bypass"><label for="reverse-bypass">Reverse the meaning of bypass rules</label>
+          </div>
+      </div>
+      <button id="apply">Apply</button>
+      <button id="clear">Clear</button>
+      <div class="section-container">
+        Clicking on Clear will remove any proxy configuration preference currently in effect.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

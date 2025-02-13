@@ -1,0 +1,38 @@
+import"chrome://resources/cr_elements/cr_splitter/cr_splitter.js";import"chrome://resources/cr_elements/cr_tree/cr_tree.js";import"chrome://resources/cr_elements/cr_tree/cr_tree_item.js";import{assert}from"chrome://resources/js/assert.js";import{getRequiredElement}from"chrome://resources/js/util.js";import{html,render}from"chrome://resources/lit/v3_0/lit.rollup.js";import{getAllNodes}from"./chrome_sync.js";function isTypeRootNode(node){return node.PARENT_ID==="r"&&node.UNIQUE_SERVER_TAG!==""}function isChildOf(parentNode,node){if(node.PARENT_ID!==""){return node.PARENT_ID===parentNode.ID}else{return node.dataType===parentNode.dataType}}function nodeComparator(nodeA,nodeB){if(nodeA.hasOwnProperty("positionIndex")&&nodeB.hasOwnProperty("positionIndex")){return nodeA.positionIndex-nodeB.positionIndex}else if(nodeA.NON_UNIQUE_NAME!==nodeB.NON_UNIQUE_NAME){return nodeA.NON_UNIQUE_NAME.localeCompare(nodeB.NON_UNIQUE_NAME)}else{return nodeA.METAHANDLE-nodeB.METAHANDLE}}function updateNodeDetailView(node){const detail=node.detail;render(getNodeDetailsHtml(detail.payload),getRequiredElement("node-details"))}function getNodeDetailsHtml(node){return html`
+    <table>
+      <tr>
+        <td>Title</td>
+        <td>${node.NON_UNIQUE_NAME}</td>
+      </tr>
+      <tr>
+        <td>ID</td>
+        <td>${node.ID}</td>
+      </tr>
+      <tr>
+        <td>Modification Time</td>
+        <td>${node.MTIME}</td>
+      </tr>
+      <tr>
+        <td>Parent</td>
+        <td>${node.PARENT_ID}</td>
+      </tr>
+      <tr>
+        <td>Is Folder</td>
+        <td>${node.IS_DIR}</td>
+      </tr>
+      <tr>
+        <td>Type</td>
+        <td>${node.dataType}</td>
+      </tr>
+      <tr>
+        <td>External ID</td>
+        <td>${node.LOCAL_EXTERNAL_ID}</td>
+      </tr>
+      ${node.positionIndex!==undefined?html`
+        <tr>
+          <td>Position Index</td>
+          <td>${node.positionIndex}</td>
+        </tr>
+      `:""}
+    </table>
+    <pre>${JSON.stringify(node,null,2)}</pre>`}function setLastRefreshTime(str){const refreshTime=document.querySelector("#node-browser-refresh-time");assert(refreshTime);refreshTime.textContent=str}function clear(){const treeContainer=document.querySelector("#sync-node-tree-container");assert(treeContainer);while(treeContainer.firstChild){treeContainer.removeChild(treeContainer.firstChild)}}function setNode(treeItem,node){treeItem.detail.payload=node;treeItem.label=node.NON_UNIQUE_NAME;if(node.IS_DIR){treeItem.toggleAttribute("may-have-children",true);treeItem.toggleAttribute("expanded",false);treeItem.addEventListener("cr-tree-item-expand",(()=>handleExpand(treeItem)))}else{treeItem.classList.add("leaf")}}function handleExpand(treeItem){if(treeItem.hasChildren){return}const treeItemData=treeItem.detail.payload;const treeData=treeItem.tree.detail.payload;const children=treeData.filter((node=>isChildOf(treeItemData,node)));children.sort(nodeComparator);children.forEach((function(node){const item=document.createElement("cr-tree-item");treeItem.add(item);setNode(item,node)}))}function refresh(){const refreshButton=document.querySelector("#node-browser-refresh-button");assert(refreshButton);refreshButton.disabled=true;clear();setLastRefreshTime("In progress since "+(new Date).toLocaleString());getAllNodes((function(nodeMap){let nodes=[];if(nodeMap&&nodeMap.length>0){nodes=nodeMap.map((x=>x.nodes)).reduce(((a,b)=>a.concat(b)))}const treeContainer=document.querySelector("#sync-node-tree-container");assert(treeContainer);const tree=document.createElement("cr-tree");tree.id="sync-node-tree";tree.addEventListener("cr-tree-change",(()=>{if(tree.selectedItem){updateNodeDetailView(tree.selectedItem)}}));treeContainer.appendChild(tree);tree.detail={payload:nodes,children:{}};const roots=nodes.filter(isTypeRootNode);roots.sort(nodeComparator);roots.forEach((typeRoot=>{const child=document.createElement("cr-tree-item");tree.add(child);setNode(child,typeRoot)}));setLastRefreshTime((new Date).toLocaleString());refreshButton.disabled=false}))}document.addEventListener("DOMContentLoaded",(()=>{const refreshButton=document.querySelector("#node-browser-refresh-button");assert(refreshButton);refreshButton.addEventListener("click",refresh);const splitter=document.querySelector("#sync-node-splitter");assert(splitter);splitter.addEventListener("resize",(()=>{const treeElement=document.querySelector("#sync-node-tree-container");assert(treeElement);const newWidth=parseFloat(treeElement.style.width);treeElement.style.minWidth=Math.max(newWidth,50)+"px"}));const tabBox=document.querySelector("cr-tab-box");assert(tabBox);tabBox.addEventListener("selected-index-change",(function f(){const syncBrowserTab=document.querySelector("#sync-browser-tab");assert(syncBrowserTab);if(syncBrowserTab.hasAttribute("selected")){assert(tabBox);tabBox.removeEventListener("selected-index-change",f);refresh()}}))}));

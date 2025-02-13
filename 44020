@@ -1,0 +1,1 @@
+.metadata-list-item{display: block;border-inline-start: solid 1px black;padding-inline-start: 5px;margin-inline-start: 20px;margin-top: 5px}.controls .control{color: #777;cursor: pointer;margin-block-end: 16px;text-decoration: underline}

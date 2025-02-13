@@ -1,0 +1,5 @@
+import{getTrustedHTML}from"//resources/js/static_types.js";export function getTemplate(){return getTrustedHTML`<!--_html_template_start_--><style>#type{color:#696969;font-size:.6rem}#logical-value.defined{color:#696969;margin-left:1rem;padding-left:4px;padding-right:4px}#logical-value.defined::before{content:"("}#logical-value.defined::after{content:")"}span.bool-true{color:green}span.bool-false{color:red}span.none{color:orange}</style>
+<span id="type"></span>
+<span id="value"></span>
+<span id="logical-value"></span>
+<!--_html_template_end_-->`}

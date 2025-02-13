@@ -1,0 +1,1 @@
+import{html}from"//resources/lit/v3_0/lit.rollup.js";export function getHtml(){return html`<div>${this.i18n("newBadgeLabel")}</div>`}

@@ -1,0 +1,33 @@
+import{html,render}from"//resources/lit/v3_0/lit.rollup.js";import{addWebUiListener,sendWithPromise}from"chrome://resources/js/cr.js";import{getRequiredElement}from"chrome://resources/js/util.js";function getBasicInfoHtml(sections){return html`
+    ${sections.map(((section,sectionIndex)=>html`
+      <div class="section">
+        <h2>${section.title}</h2>
+        <table class="section-details">
+          ${section.data.map(((item,dataIndex)=>html`
+            <tr class="${item.is_valid?"":"uninitialized"}"
+                ?highlighted="${shouldHighlight(item,sectionIndex,dataIndex)}">
+              <td class="detail" width=50%>${item.stat_name}</td>
+              <td class="value" width=50%>${item.stat_value}</td>
+            </tr>
+          `))}
+        </table>
+      </div>
+    `))}
+  `}function getUserSettingsHtml(pairs){if(pairs.length===0){return html``}return html`
+    <h2>Family Link User Settings</h2>
+    <table class="section-details">
+      ${pairs.map((pair=>html`
+        <tr>
+          <td>${pair.key}</td>
+          <td><pre>${pair.value}</pre></td>
+        </tr>
+      `))}
+    </table>`}function getFilteringResultsHtml(results){return html`
+    ${results.map((item=>html`
+      <div class="filtering-results-entry">
+        <div class="url">${item.url}</div>
+        <span class="result">${item.result}</span>
+        <span class="reason">${item.reason}</span>
+      </div>
+    `))}
+  `}function initialize(){function submitURL(event){getRequiredElement("try-url-result").textContent="";getRequiredElement("manual-allowlist").textContent="";sendWithPromise("tryURL",getRequiredElement("try-url-input").value).then((({allowResult:allowResult,manual:manual})=>{getRequiredElement("try-url-result").textContent=allowResult;getRequiredElement("manual-allowlist").textContent=manual}));event.preventDefault()}getRequiredElement("try-url").addEventListener("submit",submitURL);addWebUiListener("basic-info-received",receiveBasicInfo);addWebUiListener("user-settings-received",receiveUserSettings);addWebUiListener("filtering-result-received",receiveFilteringResult);chrome.send("registerForEvents");chrome.send("getBasicInfo")}let previousSections=[];function shouldHighlight(item,sectionIndex,dataIndex){if(sectionIndex>=previousSections.length){return false}if(dataIndex>=previousSections[sectionIndex].data.length){return false}return previousSections[sectionIndex].data[dataIndex].stat_value!==item.stat_value}function receiveBasicInfo(info){render(getBasicInfoHtml(info.sections),getRequiredElement("basic-info"));previousSections=info.sections;setTimeout((function(){chrome.send("getBasicInfo")}),5e3)}function receiveUserSettings(settings){const kvpairs=Object.keys(settings).map((function(key){return{key:key,value:JSON.stringify(settings[key],null,2)}}));render(getUserSettingsHtml(kvpairs),getRequiredElement("user-settings"))}function isScrolledToBottom(elem){return elem.scrollHeight-elem.scrollTop===elem.clientHeight}function scrollToBottom(elem){elem.scrollTop=elem.scrollHeight-elem.clientHeight}const filteringResults=[];function receiveFilteringResult(result){filteringResults.push(result);const container=getRequiredElement("filtering-results-container");const shouldScrollDown=isScrolledToBottom(container);render(getFilteringResultsHtml(filteringResults),container);if(shouldScrollDown){scrollToBottom(container)}}document.addEventListener("DOMContentLoaded",initialize);

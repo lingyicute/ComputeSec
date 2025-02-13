@@ -1,0 +1,1 @@
+import{mojo}from"//resources/mojo/mojo/public/js/bindings.js";export const ReadOnlyBufferSpec={$:{}};mojo.internal.Struct(ReadOnlyBufferSpec.$,"ReadOnlyBuffer",[mojo.internal.StructField("buffer",0,0,mojo.internal.Array(mojo.internal.Uint8,false),null,false,0)],[[0,16]]);

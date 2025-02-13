@@ -1,0 +1,3 @@
+import{getTrustedHTML}from"//resources/js/static_types.js";export function getTemplate(){return getTrustedHTML`<!--_html_template_start_--><style>span.none{color:#696969}</style>
+<span id="duration"></span>
+<!--_html_template_end_-->`}

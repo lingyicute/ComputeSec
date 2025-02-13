@@ -1,0 +1,6 @@
+import{getTrustedHTML}from"//resources/js/static_types.js";export function getTemplate(){return getTrustedHTML`<!--_html_template_start_--><style>span.name{font-weight:700}</style>
+<div>
+<span class="name id-pref-name"></span>:&nbsp;
+<span class="value id-pref-value"></span>
+</div>
+<!--_html_template_end_-->`}

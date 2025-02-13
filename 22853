@@ -1,0 +1,2 @@
+import{getTrustedHTML}from"//resources/js/static_types.js";export function getTemplate(){return getTrustedHTML`<!--_html_template_start_--><canvas width="600" height="600"></canvas>
+<!--_html_template_end_-->`}

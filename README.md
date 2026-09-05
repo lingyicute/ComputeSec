@@ -3,7 +3,7 @@
 # 计算安全小助手 · ComputeSec
 
 <p align="center">
-  <img src="data/icons/hicolor/scalable/apps/io.github.lingyicute.ComputeSec.svg" width="128" alt="ComputeSec 图标">
+  <img src="data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg" width="128" alt="ComputeSec 图标">
 </p>
 
 **一个基于 **GTK4 / libadwaita / Python** 的 Linux 桌面安全评估工具。它会读取你的系统状态，与安全基线对比，用通俗的语言解释每一项检查的意义与缺失的危害，并给出可以直接复制粘贴的修复方法。做得好的地方会用绿色告诉你：继续保持！🤗**
@@ -84,15 +84,15 @@ python3 run.py --uninstall   # 移除
 
 ```bash
 flatpak install --user ./ComputeSec-x86_64.flatpak
-flatpak run io.github.lingyicute.ComputeSec
+flatpak run uk._92li.lingyicute.ComputeSec
 ```
 
 ### 本地构建
 
 ```bash
 flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
-flatpak-builder --user --install --force-clean build-dir io.github.lingyicute.ComputeSec.json
-flatpak run io.github.lingyicute.ComputeSec
+flatpak-builder --user --install --force-clean build-dir uk._92li.lingyicute.ComputeSec.json
+flatpak run uk._92li.lingyicute.ComputeSec
 ```
 
 ### Flatpak 权限说明
@@ -119,7 +119,7 @@ computesec/
   └── data.py           知识库：HSI 说明、内核参数、sysctl、厂商信誉
 data/
   └── 图标和构建信息
-io.github.lingyicute.ComputeSec.json      Flatpak 清单
+uk._92li.lingyicute.ComputeSec.json      Flatpak 清单
 .github/workflows/build.yml               Build Workflow
 ```
 

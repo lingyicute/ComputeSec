@@ -3,7 +3,7 @@
 静态知识库：HSI 检测项说明、推荐内核参数、推荐 sysctl、硬件厂商信誉。
 """
 
-APP_ID = "io.github.lingyicute.ComputeSec"
+APP_ID = "uk._92li.lingyicute.ComputeSec"
 APP_NAME = "ComputeSec"
 VERSION = "1.0.0"
 AUTHOR = "lingyicute"

@@ -24,9 +24,9 @@ jobs:
           sudo apt-get install -y desktop-file-utils appstream libxml2-utils
       - name: 校验 .desktop / metainfo / SVG
         run: |
-          desktop-file-validate data/io.github.lingyicute.ComputeSec.desktop
-          appstreamcli validate --no-net data/io.github.lingyicute.ComputeSec.metainfo.xml || true
-          xmllint --noout data/icons/hicolor/scalable/apps/io.github.lingyicute.ComputeSec.svg
+          desktop-file-validate data/uk._92li.lingyicute.ComputeSec.desktop
+          appstreamcli validate --no-net data/uk._92li.lingyicute.ComputeSec.metainfo.xml || true
+          xmllint --noout data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg
 
   flatpak:
     name: 构建 Flatpak (${{ matrix.arch }})
@@ -49,7 +49,7 @@ jobs:
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: ComputeSec-${{ matrix.arch }}.flatpak
-          manifest-path: io.github.lingyicute.ComputeSec.json
+          manifest-path: uk._92li.lingyicute.ComputeSec.json
           cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
           arch: ${{ matrix.arch }}
           upload-artifact: true

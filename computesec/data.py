@@ -292,7 +292,7 @@ KERNEL_PARAMS = [
     dict(key="pti", value="on", arch=X, desc="强制页表隔离，缓解 Meltdown。"),
     dict(key="kpti", value="on", arch=A, desc="ARM64 内核页表隔离，缓解 Meltdown 类攻击。"),
     dict(key="random.trust_bootloader", value="off", arch=XA, desc="不信任引导程序提供的随机种子。"),
-    dict(key="random.trust_cpu", value="off", arch=XA, desc="不信任 CPU 硬件 RNG（RDRAND）作为唯一熵源。"),
+    dict(key="random.trust_cpu", value="off", arch=XA, desc="禁止使用 CPU 硬件 RNG（RDRAND）作为唯一熵源。"),
     dict(key="randomize_kstack_offset", value="on", arch=XA, desc="每次系统调用随机化内核栈偏移。"),
     dict(key="rd.emergency", value="halt", arch=XA, desc="initramfs 出错时直接关机而不进入紧急 shell。"),
     dict(key="rd.shell", value="0", arch=XA, desc="禁止 initramfs 提供 root shell（防物理攻击者绕过认证）。"),
@@ -314,8 +314,8 @@ KERNEL_PARAMS = [
     dict(key="irqchip.gicv3_pseudo_nmi", value="1", arch=A, desc="启用 GICv3 伪 NMI，改善 ARM64 上的 hardlockup 检测。"),
     dict(key="rodata", value="full", arch=A, desc="ARM64 上完整的只读数据保护（含 linear map）。"),
 ]
-KERNEL_MACHINE_SPECIFIC_NOTE = ("以下参数属于机器专属配置，不在推荐列表中评估：root=、rootflags=、rw、rhgb、quiet、vconsole.keymap 等。"
-                                "请不要照搬他人的 root=UUID=...。")
+KERNEL_MACHINE_SPECIFIC_NOTE = ("Tips: 以下参数属于系统启动配置: root=、rootflags=、rw、rhgb、quiet、vconsole.keymap，"
+                                "请勿修改或删除它们。")
 
 # ---------------------------------------------------------------------------
 # 推荐 sysctl

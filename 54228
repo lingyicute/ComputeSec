@@ -1,1 +1,0 @@
-.inline-spinner, .spinner{background-image: url(../images/throbber_small.svg);background-size: 100%}.inline-spinner{display: inline-block;height: 16px;width: 16px}.spinner{height: 22px;width: 22px}

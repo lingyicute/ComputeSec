@@ -1,9 +1,0 @@
-import{getTrustedHTML}from"//resources/js/static_types.js";export function getTemplate(){return getTrustedHTML`<!--_html_template_start_-->
-<style>:host{--green:#080;--yellow:#880;--red:#f00;--gray:#888;--bg-yellow:#ff0;display:block;flex:1;overflow:auto;padding:10px}@media (prefers-color-scheme:dark){:host{--green:#0F0;--yellow:#FF0;--red:#f00;--gray:#888;--bg-yellow:#880}}:host *{user-select:text}:host([selected]){display:flex;flex-direction:column}h3,ul{margin-bottom:0;margin-top:0}#content>div,#download-to-file{margin-bottom:1em}.feature-green{color:var(--green)}.feature-yellow{color:var(--yellow)}.feature-red{color:var(--red)}.feature-gray{color:var(--gray)}.bg-yellow{background-color:var(--bg-yellow)}#vulkan-info-value{white-space:pre}#download-to-file{font:inherit;min-height:2em;user-select:none}h4.dawn-info-header{color:var(--yellow);margin-bottom:2px;margin-top:10px}table.info-table{border-collapse:collapse;table-layout:fixed;width:100%}.info-table td{border:1px solid #777;vertical-align:top;overflow-x:auto}.info-table td:nth-child(1){font-weight:700;width:25%}.info-table td:nth-child(2){font-weight:700;width:75%}.copy{display:none}</style>
-<style id="dynamic-style"></style>
-<div>
-  <button id="download-to-file">Download Report to File</button>
-</div>
-<div id="content">
-  <script type="not-js" id="used-only-by-test">GPU Info</script>
-</div><!--_html_template_end_-->`}

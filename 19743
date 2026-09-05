@@ -1,4 +1,0 @@
-import{getTrustedHTML}from"//resources/js/static_types.js";export function getTemplate(){return getTrustedHTML`<!--_html_template_start_--><style>:host{overflow-x:auto}@media screen and (min-width:601px){:host{display:flex}}fieldset .status{align-items:center;display:flex;margin-bottom:.8em}fieldset .status div:first-child{margin-inline-end:1em;white-space:nowrap}fieldset .status:last-child{margin-bottom:0}fieldset .toggle-status{background-image:url(chrome://resources/images/cancel_red.svg);background-repeat:no-repeat;min-height:24px;min-width:24px}fieldset .toggle-status.checked{background-image:url(chrome://resources/images/check_circle_green.svg)}</style>
-<fieldset>
-</fieldset>
-<!--_html_template_end_-->`}

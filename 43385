@@ -1,1 +1,0 @@
-h2{margin-top: 2em}ul.expandable li{margin-bottom: 1em;padding: 0.5em 0}ul.expandable button{background: rgba(0, 0, 0, 0);border: 0;color: rgb(105, 105, 105);display: block;float: none;margin-top: 0.5em;padding: 0;text-align: start;text-decoration: underline;text-transform: uppercase}ul.expandable button:hover{box-shadow: none}

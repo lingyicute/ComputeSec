@@ -1,7 +1,0 @@
-import{html}from"//resources/polymer/v3_0/polymer/polymer_bundled.min.js";import"./cr_shared_vars.css.js";const styleMod=document.createElement("dom-module");styleMod.appendChild(html`
-  <template>
-    <style>
-:host{color:var(--cr-primary-text-color);line-height:154%;overflow:hidden;user-select:text}
-    </style>
-  </template>
-`.content);styleMod.register("cr-page-host-style");

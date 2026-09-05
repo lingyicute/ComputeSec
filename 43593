@@ -1,1 +1,0 @@
-import{css}from"//resources/lit/v3_0/lit.rollup.js";import{getCss as getSharedStyle}from"./shared_style.css.js";let instance=null;export function getCss(){return instance||(instance=[...[getSharedStyle()],css`.utils>*{display:block;margin-bottom:10px}#resetProductSpecsBtn{margin-top:10px}`])}

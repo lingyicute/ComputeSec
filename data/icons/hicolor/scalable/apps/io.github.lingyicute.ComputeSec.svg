@@ -17,16 +17,11 @@
       <stop offset="0" stop-color="#8ff0a4"/>
       <stop offset="1" stop-color="#2ec27e"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-      <feOffset dy="2"/>
-      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+
   </defs>
 
   <!-- 盾牌 -->
-  <g filter="url(#shadow)">
+  <g>
     <path d="M64 8 L110 24 V60 C110 88 90 108 64 120 C38 108 18 88 18 60 V24 Z" fill="url(#shieldDark)"/>
     <path d="M64 12 L106 26.5 V60 C106 85.5 87.5 104.5 64 115.5 C40.5 104.5 22 85.5 22 60 V26.5 Z" fill="url(#shield)"/>
     <!-- 高光 -->

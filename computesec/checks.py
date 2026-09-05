@@ -479,12 +479,10 @@ def check_flatpak() -> HabitCheck:
     if not source:
         return HabitCheck("flatpak", "Flatpak 应用使用情况", "unknown", "未能读取 Flatpak 安装列表",
                           ["可能未安装 flatpak，或本程序没有访问权限。"], "建议安装 flatpak 并尽量以 Flatpak 形式安装软件。" + "\n\n" + advice)
-    details = [f"共检测到 {len(apps)} 个 Flatpak 应用（排除运行时与 org.gnome.*/org.kde.* 等桌面环境自带包后：{len(user_apps)} 个）。"]
-    if user_apps:
-        details.append("用户安装的应用：" + "、".join(user_apps[:30]) + ("…" if len(user_apps) > 30 else ""))
+    details = [f"共检测到 {len(apps)} 个 Flatpak 应用（排除 runtime、桌面环境自带包以及 ComputeSec 后：{len(user_apps)} 个）。"]
     if len(user_apps) < 5:
         return HabitCheck("flatpak", "Flatpak 应用使用情况", "warn", f"仅有 {len(user_apps)} 个用户安装的 Flatpak 应用", details,
-                          "建议尽量使用 Flatpak 形式的软件。Flatpak 通过 bubblewrap 沙箱隔离应用，即便软件被攻破也难以触及您的整个家目录与系统。\n\n" + advice)
+                          "建议尽量使用 Flatpak 形式的软件。Flatpak 通过 bubblewrap 沙箱隔离应用，即便软件具有恶意或被攻击者控制，也难以触及您的系统和敏感数据。\n\n" + advice)
     return HabitCheck("flatpak", "Flatpak 应用使用情况", "good", f"很棒！您已安装 {len(user_apps)} 个 Flatpak 应用", details,
                       "您在使用沙箱化软件方面做得很好，请继续保持！\n\n" + advice)
 

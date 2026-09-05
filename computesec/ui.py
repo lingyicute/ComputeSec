@@ -19,7 +19,7 @@ def esc(s):
 
 
 STATUS_STYLE = {
-    "ok": ("emblem-ok-symbolic", "success"), "good": ("emblem-ok-symbolic", "success"),
+    "ok": ("object-select-symbolic", "success"), "good": ("object-select-symbolic", "success"),
     "missing": ("dialog-warning-symbolic", "warning"), "wrong": ("dialog-warning-symbolic", "warning"),
     "warn": ("dialog-warning-symbolic", "warning"),
     "bad": ("dialog-error-symbolic", "error"), "error": ("dialog-error-symbolic", "error"),
@@ -116,7 +116,7 @@ def page(children, max_width=920):
     return sw
 
 
-def banner(text, style="success", icon="emblem-ok-symbolic"):
+def banner(text, style="success", icon="object-select-symbolic"):
     box = Gtk.Box(spacing=12, margin_top=12, margin_bottom=12, margin_start=14, margin_end=14)
     img = Gtk.Image.new_from_icon_name(icon)
     img.set_pixel_size(28)
@@ -168,7 +168,7 @@ def build_dashboard(report, win, navigate):
     icon.set_pixel_size(96)
     head.append(icon)
     head.append(score_label(overall, big=True))
-    grade = "安全状况良好，请继续保持！" if overall >= 80 else ("还有一些可以改进的地方" if overall >= 50 else "存在多项需要处理的风险")
+    grade = "安全状况良好，请继续保持！" if overall >= 90 else ("还有一些可以改进的地方" if overall >= 70 else "存在多项需要处理的风险")
     head.append(wrapped_label(grade, css=("title-4",)))
     head.get_last_child().set_halign(Gtk.Align.CENTER)
     sub = wrapped_label(f"{report.os_name} · 内核 {report.kernel} · {report.arch} · {report.cpu}", css=("dim-label", "caption"))

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-计算安全小助手 启动器
+ComputeSec 启动器
 
   python3 run.py                # 直接运行
   python3 run.py --install      # 安装 .desktop 与图标到 ~/.local/share，使任务栏/启动器正确显示图标

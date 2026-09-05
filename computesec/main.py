@@ -211,17 +211,17 @@ class Application(Adw.Application):
 
     def on_about(self, *_):
         kwargs = dict(
-            application_name=data.APP_NAME, application_icon=data.APP_ID, developer_name=data.AUTHOR, version=data.VERSION,
+            application_name=data.APP_NAME, application_icon=data.APP_ID, developer_name="Made with ❤️ by lingyicute", version=data.VERSION,
             website=data.HOMEPAGE, issue_url=data.HOMEPAGE + "/issues", license_type=Gtk.License.GPL_3_0,
-            copyright="© 2025 lingyicute",
-            comments="评估固件安全 (HSI)、内核加固、硬件品牌信誉与使用习惯，帮助您把 Linux 设备打造成可信的计算环境。",
-            developers=["lingyicute https://github.com/lingyicute"], designers=["lingyicute"],
+            copyright="Copyright © 2025-2026 lingyicute",
+            comments="评估固件安全 (HSI)、内核加固、硬件品牌信誉与使用习惯，帮助您打造可信、安全的计算环境。",
         )
         if hasattr(Adw, "AboutDialog"):          # libadwaita >= 1.5
             dlg = Adw.AboutDialog(**kwargs)
         else:                                    # libadwaita 1.2 - 1.4
             dlg = Adw.AboutWindow(transient_for=self.props.active_window, **kwargs)
-        dlg.add_link("harden-flatpak", data.HARDEN_FLATPAK_URL)
+        dlg.add_link("lingyicute's Home", "https://92li.uk")
+        dlg.add_link("harden-flatpak 项目主页", data.HARDEN_FLATPAK_URL)
         dlg.add_link("fwupd HSI 规范", "https://fwupd.github.io/libfwupdplugin/hsi.html")
         dlg.add_acknowledgement_section("致谢", ["fwupd / LVFS 项目", "GNOME 与 libadwaita", "Kernel Self Protection Project"])
         if hasattr(Adw, "AboutDialog"):

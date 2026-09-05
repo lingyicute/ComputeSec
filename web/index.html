@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ComputeSec — 看懂你的 Linux 有多安全</title>
+<meta name="description" content="ComputeSec：基于 GTK4 / libadwaita / Python 的 Linux 桌面安全评估工具。读取系统状态，对比安全基线，用通俗语言解释每一项检查，并给出可直接复制的修复方法。">
+<link rel="icon" href="https://raw.githubusercontent.com/lingyicute/ComputeSec/main/data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600;8..144,700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ---------- Material 3 tokens ---------- */
+  :root {
+    --font: "Roboto Flex", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --shape-xs: 4px;
+    --shape-sm: 8px;
+    --shape-md: 12px;
+    --shape-lg: 16px;
+    --shape-xl: 28px;
+    --shape-full: 999px;
+
+    --motion-standard: cubic-bezier(0.2, 0, 0, 1);
+    --motion-emph: cubic-bezier(0.05, 0.7, 0.1, 1);
+
+    --elev-1: 0 1px 2px rgba(0,0,0,.14), 0 1px 3px 1px rgba(0,0,0,.08);
+    --elev-2: 0 1px 2px rgba(0,0,0,.14), 0 2px 6px 2px rgba(0,0,0,.10);
+    --elev-3: 0 4px 8px 3px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.20);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--surface);
+    color: var(--on-surface);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color .4s var(--motion-standard), color .4s var(--motion-standard);
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+
+  /* ---------- Typography ---------- */
+  .display { font-size: clamp(2.4rem, 5.5vw, 4rem); font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; margin: 0; }
+  .headline { font-size: clamp(1.6rem, 3vw, 2.25rem); font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; margin: 0; }
+  .title-lg { font-size: 1.375rem; font-weight: 500; line-height: 1.3; margin: 0; }
+  .title { font-size: 1.05rem; font-weight: 500; line-height: 1.4; margin: 0; }
+  .body-lg { font-size: 1.05rem; color: var(--on-surface-variant); }
+  .body { font-size: .95rem; color: var(--on-surface-variant); }
+  .label { font-size: .8rem; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--primary); }
+  .kicker { display:inline-flex; align-items:center; gap:.5rem; }
+  .kicker::before { content:""; width: 18px; height: 3px; border-radius: 2px; background: var(--primary); }
+
+  /* ---------- Layout ---------- */
+  .wrap { width: min(1180px, calc(100% - 2.5rem)); margin-inline: auto; }
+  section { padding-block: clamp(3.5rem, 8vw, 6.5rem); }
+  .section-head { max-width: 680px; margin-bottom: 2.5rem; }
+  .section-head p { margin: .75rem 0 0; }
+
+  /* ---------- Top app bar ---------- */
+  .appbar {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    background: color-mix(in oklab, var(--surface) 78%, transparent);
+    transition: background .3s, box-shadow .3s;
+  }
+  .appbar.scrolled { background: color-mix(in oklab, var(--surface-container) 88%, transparent); box-shadow: var(--elev-1); }
+  .appbar .inner { display: flex; align-items: center; gap: .75rem; height: 64px; }
+  .brand { display: flex; align-items: center; gap: .65rem; font-weight: 600; font-size: 1.1rem; }
+  .brand img { width: 32px; height: 32px; }
+  .nav { display: flex; gap: .25rem; margin-left: 1rem; }
+  .nav a {
+    padding: .5rem .9rem; border-radius: var(--shape-full);
+    font-size: .9rem; font-weight: 500; color: var(--on-surface-variant);
+    transition: background .2s, color .2s; position: relative; overflow: hidden;
+  }
+  .nav a:hover { background: color-mix(in oklab, var(--on-surface) 8%, transparent); color: var(--on-surface); }
+  .spacer { flex: 1; }
+  @media (max-width: 860px) { .nav { display: none; } }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    height: 40px; padding: 0 1.5rem; border-radius: var(--shape-full);
+    font: inherit; font-size: .9rem; font-weight: 500; cursor: pointer;
+    border: none; position: relative; overflow: hidden; white-space: nowrap;
+    transition: box-shadow .2s var(--motion-standard), background .25s, transform .15s;
+  }
+  .btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+  .btn-filled { background: var(--primary); color: var(--on-primary); }
+  .btn-filled:hover { box-shadow: var(--elev-1); background: color-mix(in oklab, var(--primary) 92%, var(--on-primary)); }
+  .btn-tonal { background: var(--secondary-container); color: var(--on-secondary-container); }
+  .btn-tonal:hover { box-shadow: var(--elev-1); background: color-mix(in oklab, var(--secondary-container) 92%, var(--on-secondary-container)); }
+  .btn-outlined { background: transparent; color: var(--primary); box-shadow: inset 0 0 0 1px var(--outline); }
+  .btn-outlined:hover { background: color-mix(in oklab, var(--primary) 8%, transparent); }
+  .btn-text { background: transparent; color: var(--primary); padding: 0 .75rem; }
+  .btn-text:hover { background: color-mix(in oklab, var(--primary) 8%, transparent); }
+  .btn-lg { height: 56px; padding: 0 2rem; font-size: 1rem; border-radius: var(--shape-lg); }
+  .btn-lg svg { width: 22px; height: 22px; }
+  .btn:active { transform: scale(.98); }
+
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent;
+    display: inline-grid; place-items: center; cursor: pointer; color: var(--on-surface-variant);
+    position: relative; overflow: hidden; transition: background .2s;
+  }
+  .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
+  .icon-btn:hover { background: color-mix(in oklab, var(--on-surface) 8%, transparent); }
+
+  /* Ripple */
+  .ripple { position: absolute; border-radius: 50%; transform: scale(0); animation: ripple .55s var(--motion-standard) forwards; background: currentColor; opacity: .18; pointer-events: none; }
+  @keyframes ripple { to { transform: scale(2.6); opacity: 0; } }
+
+  /* ---------- Chips ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .chip {
+    display: inline-flex; align-items: center; gap: .4rem; height: 32px; padding: 0 .9rem;
+    border-radius: var(--shape-sm); font-size: .82rem; font-weight: 500;
+    color: var(--on-surface-variant); box-shadow: inset 0 0 0 1px var(--outline-variant);
+    background: transparent;
+  }
+  .chip.filled { background: var(--secondary-container); color: var(--on-secondary-container); box-shadow: none; }
+  .chip svg { width: 16px; height: 16px; fill: currentColor; }
+
+  /* ---------- Hero ---------- */
+  .hero { padding-block: clamp(2.5rem, 6vw, 5rem) clamp(3rem, 6vw, 5rem); position: relative; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 3rem; align-items: center; }
+  @media (max-width: 960px) { .hero-grid { grid-template-columns: 1fr; } }
+  .hero-icon { width: 88px; height: 88px; border-radius: 26px; background: var(--primary-container); display: grid; place-items: center; margin-bottom: 1.5rem; box-shadow: var(--elev-1); }
+  .hero-icon img { width: 64px; height: 64px; }
+  .hero h1 span { color: var(--primary); }
+  .hero .lead { margin: 1.25rem 0 2rem; max-width: 560px; font-size: 1.1rem; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1.75rem; }
+
+  .shot-frame {
+    position: relative; border-radius: var(--shape-xl); padding: 14px;
+    background: var(--surface-container-high);
+    box-shadow: var(--elev-2);
+  }
+  .shot-frame::before {
+    content: ""; position: absolute; inset: -18%; z-index: -1; border-radius: 45% 55% 50% 50% / 55% 45% 55% 45%;
+    background: radial-gradient(closest-side, var(--primary-container), transparent 70%),
+                radial-gradient(closest-side at 70% 30%, var(--tertiary-container), transparent 70%);
+    opacity: .9; filter: blur(8px);
+    animation: blob 14s ease-in-out infinite alternate;
+  }
+  @keyframes blob { to { border-radius: 55% 45% 45% 55% / 45% 55% 45% 55%; transform: rotate(6deg) scale(1.04); } }
+  .shot-frame img { border-radius: 18px; width: 100%; }
+  .shot-bar { display:flex; gap:6px; padding: 0 4px 12px; }
+  .shot-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--outline-variant); }
+  .shot-bar i:first-child { background: var(--primary); }
+
+  /* score badge floating */
+  .score {
+    position: absolute; left: -18px; bottom: 28px;
+    background: var(--tertiary-container); color: var(--on-tertiary-container);
+    border-radius: var(--shape-lg); padding: .7rem 1rem; box-shadow: var(--elev-3);
+    display: flex; align-items: center; gap: .75rem; font-weight: 500; font-size: .85rem;
+    animation: float 6s ease-in-out infinite;
+  }
+  .score b { font-size: 1.5rem; font-weight: 700; line-height: 1; }
+  @keyframes float { 50% { transform: translateY(-8px); } }
+  @media (max-width: 600px) { .score { left: 8px; bottom: 8px; } }
+
+  /* ---------- Cards / surfaces ---------- */
+  .card {
+    background: var(--surface-container-low); border-radius: var(--shape-xl); padding: 1.75rem;
+    transition: background .3s, transform .35s var(--motion-emph), box-shadow .35s;
+  }
+  .card:hover { background: var(--surface-container); }
+  .card.elevated { background: var(--surface-container-lowest); box-shadow: var(--elev-1); }
+  .card.elevated:hover { box-shadow: var(--elev-2); transform: translateY(-3px); }
+  .card.filled-primary { background: var(--primary-container); color: var(--on-primary-container); }
+  .card.filled-primary .body, .card.filled-primary .body-lg { color: color-mix(in oklab, var(--on-primary-container) 80%, transparent); }
+  .card.filled-tertiary { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+  .card.filled-tertiary .body { color: color-mix(in oklab, var(--on-tertiary-container) 80%, transparent); }
+
+  .icon-box { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--primary-container); color: var(--on-primary-container); margin-bottom: 1.1rem; }
+  .icon-box svg { width: 26px; height: 26px; fill: currentColor; }
+  .icon-box.tertiary { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+  .icon-box.secondary { background: var(--secondary-container); color: var(--on-secondary-container); }
+  .icon-box.on-primary { background: color-mix(in oklab, var(--on-primary-container) 12%, transparent); }
+
+  /* ---------- How it works ---------- */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+  .step { position: relative; }
+  .step .num { position: absolute; top: 1.25rem; right: 1.5rem; font-size: 3.5rem; font-weight: 700; line-height: 1; color: color-mix(in oklab, var(--primary) 14%, transparent); letter-spacing: -.04em; }
+  .step p { margin: .5rem 0 0; }
+
+  /* ---------- Features bento ---------- */
+  .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; }
+  .bento > * { grid-column: span 2; }
+  .bento .span3 { grid-column: span 3; }
+  .bento .span4 { grid-column: span 4; }
+  @media (max-width: 960px) { .bento > *, .bento .span3, .bento .span4 { grid-column: span 3; } }
+  @media (max-width: 640px) { .bento > *, .bento .span3, .bento .span4 { grid-column: span 6; } }
+  .feature h3 { margin-bottom: .5rem; }
+  .feature ul { margin: .9rem 0 0; padding: 0; list-style: none; display: grid; gap: .5rem; }
+  .feature li { display: flex; gap: .6rem; font-size: .92rem; color: var(--on-surface-variant); }
+  .feature li svg { width: 18px; height: 18px; fill: var(--primary); flex: none; margin-top: 3px; }
+  .card.filled-primary li { color: color-mix(in oklab, var(--on-primary-container) 85%, transparent); }
+  .card.filled-primary li svg { fill: var(--on-primary-container); }
+  .tagline-pill { display: inline-block; padding: .25rem .7rem; border-radius: var(--shape-full); font-size: .75rem; font-weight: 600; background: color-mix(in oklab, var(--on-primary-container) 14%, transparent); margin-bottom: 1rem; }
+
+  /* Mock status list (in HSI card) */
+  .mock { margin-top: 1.25rem; background: var(--surface-container-lowest); border-radius: var(--shape-lg); padding: .5rem; display: grid; gap: .25rem; }
+  .mock .row { display: flex; align-items: center; gap: .75rem; padding: .6rem .8rem; border-radius: var(--shape-md); font-size: .85rem; color: var(--on-surface); }
+  .mock .row:hover { background: var(--surface-container); }
+  .mock .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .ok { background: #2e7d32; } .warn { background: #ed6c02; } .bad { background: #d32f2f; }
+  .mock .row span:last-child { margin-left: auto; font-size: .75rem; font-weight: 500; padding: .15rem .55rem; border-radius: var(--shape-full); background: var(--secondary-container); color: var(--on-secondary-container); }
+  .mock .row span.tag-ok { background: #c8e6c9; color: #1b5e20; }
+  .mock .row span.tag-warn { background: #ffe0b2; color: #7a3e00; }
+  .mock .row span.tag-bad { background: #ffcdd2; color: #8e0000; }
+
+  /* ---------- Install ---------- */
+  .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 900px) { .install-grid { grid-template-columns: 1fr; } }
+  .tabs { display: inline-flex; padding: 4px; background: var(--surface-container-highest); border-radius: var(--shape-full); gap: 2px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .tab { height: 36px; padding: 0 1rem; border-radius: var(--shape-full); border: none; background: transparent; font: inherit; font-size: .85rem; font-weight: 500; color: var(--on-surface-variant); cursor: pointer; transition: background .25s, color .25s; position: relative; overflow: hidden; }
+  .tab.active { background: var(--secondary-container); color: var(--on-secondary-container); }
+  .tab:not(.active):hover { background: color-mix(in oklab, var(--on-surface) 6%, transparent); }
+  .code {
+    position: relative; background: var(--inverse-surface); color: var(--inverse-on-surface);
+    border-radius: var(--shape-lg); padding: 1.1rem 3.25rem 1.1rem 1.25rem; font-family: var(--mono); font-size: .84rem; line-height: 1.7; overflow-x: auto; white-space: pre; margin: 0;
+  }
+  .code .c { opacity: .55; }
+  .code .k { color: var(--inverse-primary); }
+  .copy {
+    position: absolute; top: .6rem; right: .6rem; width: 36px; height: 36px; border-radius: 50%; border: none; background: color-mix(in oklab, var(--inverse-on-surface) 10%, transparent); color: var(--inverse-on-surface); cursor: pointer; display: grid; place-items: center; transition: background .2s;
+  }
+  .copy:hover { background: color-mix(in oklab, var(--inverse-on-surface) 20%, transparent); }
+  .copy svg { width: 18px; height: 18px; fill: currentColor; }
+  .pane { display: none; } .pane.active { display: block; animation: fadeUp .35s var(--motion-emph); }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } }
+  .req { margin: 0 0 1rem; font-size: .9rem; color: var(--on-surface-variant); }
+  .req code { font-family: var(--mono); font-size: .82rem; background: var(--surface-container-highest); padding: .1rem .4rem; border-radius: 6px; }
+
+  /* Permissions table */
+  .perm { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border-radius: var(--shape-lg); font-size: .88rem; }
+  .perm th, .perm td { text-align: left; padding: .85rem 1rem; vertical-align: top; }
+  .perm th { background: var(--surface-container-high); font-weight: 600; font-size: .8rem; letter-spacing: .03em; color: var(--on-surface-variant); }
+  .perm td { background: var(--surface-container-lowest); border-top: 1px solid var(--surface-container); color: var(--on-surface-variant); }
+  .perm td:first-child { font-family: var(--mono); font-size: .78rem; color: var(--on-surface); width: 42%; }
+  .perm tr:hover td { background: var(--surface-container-low); }
+
+  /* ---------- Notes ---------- */
+  .notes { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 860px) { .notes { grid-template-columns: 1fr; } }
+  .note { border-radius: var(--shape-xl); padding: 1.5rem 1.75rem; display: flex; gap: 1rem; align-items: flex-start; }
+  .note svg { width: 24px; height: 24px; flex: none; fill: currentColor; margin-top: 2px; }
+  .note.warn { background: var(--error-container); color: var(--on-error-container); }
+  .note.info { background: var(--secondary-container); color: var(--on-secondary-container); }
+  .note p { margin: .35rem 0 0; font-size: .92rem; opacity: .9; }
+  .note code { font-family: var(--mono); font-size: .8rem; background: color-mix(in oklab, currentColor 10%, transparent); padding: .05rem .35rem; border-radius: 5px; }
+
+  /* ---------- Structure tree ---------- */
+  .tree { font-family: var(--mono); font-size: .82rem; line-height: 1.8; background: var(--surface-container); border-radius: var(--shape-xl); padding: 1.5rem 1.75rem; overflow-x: auto; white-space: pre; margin: 0; color: var(--on-surface); }
+  .tree .d { color: var(--primary); font-weight: 500; } .tree .c { color: var(--on-surface-variant); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+
+  /* ---------- CTA ---------- */
+  .cta { background: var(--primary-container); color: var(--on-primary-container); border-radius: 36px; padding: clamp(2.5rem, 6vw, 4.5rem); position: relative; overflow: hidden; text-align: center; }
+  .cta::after { content: ""; position: absolute; width: 480px; height: 480px; border-radius: 50%; background: color-mix(in oklab, var(--primary) 18%, transparent); right: -160px; bottom: -260px; }
+  .cta::before { content: ""; position: absolute; width: 320px; height: 320px; border-radius: 50%; background: color-mix(in oklab, var(--tertiary-container) 70%, transparent); left: -120px; top: -160px; }
+  .cta > * { position: relative; z-index: 1; }
+  .cta p { max-width: 560px; margin: 1rem auto 2rem; color: color-mix(in oklab, var(--on-primary-container) 80%, transparent); }
+  .cta .btn-filled { background: var(--on-primary-container); color: var(--primary-container); }
+
+  /* ---------- Footer ---------- */
+  footer { padding: 3rem 0 2.5rem; color: var(--on-surface-variant); font-size: .88rem; }
+  footer .inner { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; justify-content: space-between; border-top: 1px solid var(--outline-variant); padding-top: 2rem; }
+  footer a:hover { color: var(--primary); }
+
+  /* ---------- Seed color picker (Material You) ---------- */
+  .palette-pop {
+    position: fixed; right: 1.25rem; bottom: 5.5rem; z-index: 60;
+    background: var(--surface-container-high); border-radius: var(--shape-lg); padding: .9rem; box-shadow: var(--elev-3);
+    display: grid; grid-template-columns: repeat(4, 36px); gap: .6rem;
+    transform-origin: bottom right; transform: scale(.6); opacity: 0; pointer-events: none; transition: transform .3s var(--motion-emph), opacity .2s;
+  }
+  .palette-pop.open { transform: scale(1); opacity: 1; pointer-events: auto; }
+  .swatch { width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer; position: relative; transition: transform .2s var(--motion-emph); }
+  .swatch:hover { transform: scale(1.12); }
+  .swatch.active::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--on-surface); }
+  .fab {
+    position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 60; width: 56px; height: 56px; border-radius: 16px; border: none;
+    background: var(--tertiary-container); color: var(--on-tertiary-container); box-shadow: var(--elev-3); cursor: pointer; display: grid; place-items: center; overflow: hidden; position: fixed; transition: box-shadow .2s, transform .2s;
+  }
+  .fab:hover { box-shadow: 0 6px 14px 4px rgba(0,0,0,.14), 0 2px 4px rgba(0,0,0,.2); transform: translateY(-1px); }
+  .fab svg { width: 24px; height: 24px; fill: currentColor; }
+
+  /* Snackbar */
+  .snack { position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 140%); background: var(--inverse-surface); color: var(--inverse-on-surface); padding: .8rem 1.2rem; border-radius: var(--shape-sm); font-size: .9rem; box-shadow: var(--elev-3); z-index: 70; transition: transform .35s var(--motion-emph); }
+  .snack.show { transform: translate(-50%, 0); }
+
+  /* Reveal */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .6s var(--motion-emph), transform .6s var(--motion-emph); }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .score, .shot-frame::before { animation: none; } }
+</style>
+<style>
+  @font-face{
+    font-family:"Nebulove";
+    src:url("https://raw.githubusercontent.com/lingyicute/Nebulove/main/Nebulove.ttf") format("truetype");
+    font-display:swap;
+  }
+  body{
+    font-family: "Nebulove", system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ Top App Bar ============ -->
+<header class="appbar" id="appbar">
+  <div class="wrap inner">
+    <a class="brand" href="#top">
+      <img src="https://raw.githubusercontent.com/lingyicute/ComputeSec/main/data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg" alt="ComputeSec 图标">
+      ComputeSec
+    </a>
+    <nav class="nav">
+      <a href="#how">工作原理</a>
+      <a href="#features">功能页面</a>
+      <a href="#install">安装</a>
+      <a href="#permissions">权限</a>
+      <a href="#notes">注意事项</a>
+    </nav>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="themeBtn" aria-label="切换明暗主题" title="切换明暗主题">
+      <svg viewBox="0 0 24 24" id="themeIcon"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+    </button>
+    <a class="btn btn-tonal" href="https://github.com/lingyicute/ComputeSec" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8 0 3.2.9.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1 .9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
+      GitHub
+    </a>
+  </div>
+</header>
+
+<main id="top">
+  <!-- ============ Hero ============ -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="hero-icon">
+          <img src="https://raw.githubusercontent.com/lingyicute/ComputeSec/main/data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg" alt="">
+        </div>
+        <h1 class="display">看懂你的 Linux<br>到底有<span>多安全</span>。</h1>
+        <p class="lead body-lg">ComputeSec 是一个基于 GTK4 的 Linux 桌面安全评估工具。它读取你的系统状态，与安全基线对比，用通俗的语言解释每一项检查的意义与缺失的危害，并给出可以直接复制粘贴的修复方法。做得好的地方会用绿色告诉你：继续保持！🤗</p>
+        <div class="hero-actions">
+          <a class="btn btn-filled btn-lg" href="https://github.com/lingyicute/ComputeSec/releases" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            下载 Flatpak
+          </a>
+          <a class="btn btn-outlined btn-lg" href="#install">
+            <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.41-1.41L8.67 13l-2.59-2.59L7.5 9l4 4-4 4z"/></svg>
+            从源码运行
+          </a>
+        </div>
+        <div class="chips">
+          <span class="chip filled">GTK 4</span>
+          <span class="chip filled">libadwaita</span>
+          <span class="chip filled">Python</span>
+          <span class="chip">GPL v3</span>
+          <span class="chip">amd64 / aarch64</span>
+          <span class="chip">Flatpak</span>
+        </div>
+      </div>
+      <div class="shot-frame reveal">
+        <div class="shot-bar"><i></i><i></i><i></i></div>
+        <img src="https://raw.githubusercontent.com/lingyicute/ComputeSec/main/screenshot/screenshot.png" alt="ComputeSec 应用截图" loading="eager">
+        <div class="score">
+          <b>68</b>
+          <div>综合评分<br><small style="opacity:.75">立即实施强化！</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ How it works ============ -->
+  <section id="how">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="label kicker">工作原理</span>
+        <h2 class="headline" style="margin-top:.6rem">三步，把「安全」讲成人话</h2>
+        <p class="body-lg">不是冷冰冰的一长串 PASS / FAIL，而是告诉你「这是什么、缺了会怎样、现在该怎么做」。</p>
+      </div>
+      <div class="steps">
+        <article class="card step reveal">
+          <span class="num">01</span>
+          <div class="icon-box">
+            <svg viewBox="0 0 24 24"><path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/></svg>
+          </div>
+          <h3 class="title-lg">读取系统状态</h3>
+          <p class="body">通过 fwupd D-Bus、/proc/cmdline、/proc/sys、DMI / 设备树、Flatpak 目录与 USB 总线等只读来源，采集当前机器的真实状态。</p>
+        </article>
+        <article class="card step reveal">
+          <span class="num">02</span>
+          <div class="icon-box secondary">
+            <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+          </div>
+          <h3 class="title-lg">与安全基线对比</h3>
+          <p class="body">内置 HSI 说明、按架构区分的内核参数与 sysctl 加固列表、厂商安全信誉库，逐项比对，找出缺失与风险。</p>
+        </article>
+        <article class="card step reveal">
+          <span class="num">03</span>
+          <div class="icon-box tertiary">
+            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          </div>
+          <h3 class="title-lg">解释并给出修复</h3>
+          <p class="body">用通俗语言解释每项检查的意义与危害，按「操作系统内 / 固件设置中」分组给出可直接复制粘贴的修复步骤。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Features ============ -->
+  <section id="features" style="background: var(--surface-container-low); border-radius: 36px 36px 0 0;">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="label kicker">功能页面</span>
+        <h2 class="headline" style="margin-top:.6rem">五个页面，覆盖固件到习惯</h2>
+        <p class="body-lg">从最底层的固件安全，到日常使用习惯，一站式呈现在一个原生 GNOME 风格的窗口里。</p>
+      </div>
+
+      <div class="bento">
+        <!-- 1 仪表盘 -->
+        <article class="card elevated feature span2 reveal">
+          <div class="icon-box">
+            <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+          </div>
+          <h3 class="title-lg">1 · 仪表盘</h3>
+          <p class="body">一眼看清整体状况。</p>
+          <ul>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>综合评分</li>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>四大板块卡片</li>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>待办摘要</li>
+          </ul>
+        </article>
+
+        <!-- 2 HSI -->
+        <article class="card filled-primary feature span4 reveal">
+          <span class="tagline-pill">Host Security ID</span>
+          <h3 class="title-lg">2 · HSI 固件安全</h3>
+          <p class="body">通过 fwupd D-Bus（或 <code>fwupdmgr security</code>）获取 HSI 检测结果，逐项解释含义与未开启时的危害；「您可以修复」栏目按「操作系统内」与「固件设置中」分组给出具体步骤，涵盖 IOMMU、Kernel Lockdown、加密 swap、Secure Boot、TPM、s2idle 等要点。</p>
+          <div class="mock" aria-hidden="true">
+            <div class="row"><i class="dot ok"></i>UEFI Secure Boot <span class="tag-ok">已开启 · 继续保持</span></div>
+            <div class="row"><i class="dot ok"></i>TPM 2.0 <span class="tag-ok">已开启 · 继续保持</span></div>
+            <div class="row"><i class="dot warn"></i>Kernel Lockdown <span class="tag-warn">未启用 · 您可以修复</span></div>
+            <div class="row"><i class="dot bad"></i>Encrypted swap <span class="tag-bad">缺失 · 您可以修复</span></div>
+          </div>
+        </article>
+
+        <!-- 3 内核加固 -->
+        <article class="card elevated feature span3 reveal">
+          <div class="icon-box secondary">
+            <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.41-1.41L8.67 13l-2.59-2.59L7.5 9l4 4-4 4z"/></svg>
+          </div>
+          <h3 class="title-lg">3 · 内核加固</h3>
+          <p class="body">读取 <code>/proc/cmdline</code> 与 <code>/proc/sys</code>（等价于 <code>sysctl -a</code>），按当前架构分别与内置 amd64 / aarch64 推荐 kargs 与 sysctl 加固列表对比。</p>
+          <ul>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>一键复制缺失参数</li>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>提供 grubby / GRUB / systemd-boot / rpm-ostree 配置方法</li>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><code>/etc/sysctl.d</code> 配置文件生成与设置指引</li>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>aarch64 平台提示手动探索 <code>vm.mmap_rnd_bits</code> 最大值</li>
+          </ul>
+        </article>
+
+        <!-- 4 硬件品牌 -->
+        <article class="card elevated feature span3 reveal">
+          <div class="icon-box tertiary">
+            <svg viewBox="0 0 24 24"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
+          </div>
+          <h3 class="title-lg">4 · 硬件品牌</h3>
+          <p class="body">读取 DMI / 设备树识别硬件厂商，并对照内置的厂商安全信誉库。对存在安全污点的品牌，提示不建议用于高安全性计算环境。</p>
+          <div class="chips" style="margin-top:1rem">
+            <span class="chip">联想 Superfish / LSE</span>
+            <span class="chip">华硕 ShadowHammer</span>
+            <span class="chip">MSI Boot Guard 私钥泄漏</span>
+            <span class="chip">技嘉 UEFI 后门式更新器</span>
+            <span class="chip">戴尔 eDellRoot</span>
+          </div>
+        </article>
+
+        <!-- 5 使用习惯 -->
+        <article class="card filled-tertiary feature span6 reveal" style="grid-column: span 6;">
+          <div style="display:grid; grid-template-columns: 1fr 2fr; gap: 2rem; align-items:start;" class="habit-grid">
+            <div>
+              <div class="icon-box on-primary" style="background: color-mix(in oklab, var(--on-tertiary-container) 12%, transparent); color: var(--on-tertiary-container);">
+                <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+              </div>
+              <h3 class="title-lg">5 · 使用习惯</h3>
+              <p class="body">安全不只是配置，也关乎日常。这一页关注那些容易被忽视的使用方式。</p>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: .75rem;" class="habit-items">
+              <div style="background: color-mix(in oklab, var(--on-tertiary-container) 8%, transparent); border-radius: var(--shape-lg); padding: 1rem 1.1rem;">
+                <strong style="display:block; margin-bottom:.25rem;">Flatpak 生态评估</strong>
+                <span style="font-size:.88rem; opacity:.85;">统计应用数量（自动排除运行时与桌面环境自带包），不足 5 个时建议多使用 Flatpak；推荐 <a href="https://github.com/lingyicute/harden-flatpak" target="_blank" rel="noopener" style="text-decoration: underline;">harden-flatpak</a> 默认拒绝所有权限，辅以 Flatseal 加固。</span>
+              </div>
+              <div style="background: color-mix(in oklab, var(--on-tertiary-container) 8%, transparent); border-radius: var(--shape-lg); padding: 1rem 1.1rem;">
+                <strong style="display:block; margin-bottom:.25rem;">运行时间提醒</strong>
+                <span style="font-size:.88rem; opacity:.85;">检测到系统 <code>uptime</code> 超过一天时，提醒进行更新和重启。</span>
+              </div>
+              <div style="background: color-mix(in oklab, var(--on-tertiary-container) 8%, transparent); border-radius: var(--shape-lg); padding: 1rem 1.1rem;">
+                <strong style="display:block; margin-bottom:.25rem;">外设安全检测</strong>
+                <span style="font-size:.88rem; opacity:.85;">检测是否存在 2.4G 无线接收器，提示潜在的按键嗅探风险。</span>
+              </div>
+              <div style="background: color-mix(in oklab, var(--on-tertiary-container) 8%, transparent); border-radius: var(--shape-lg); padding: 1rem 1.1rem;">
+                <strong style="display:block; margin-bottom:.25rem;">环境隔离检测</strong>
+                <span style="font-size:.88rem; opacity:.85;">检测是否存在 NTFS 分区或 Windows 系统安装（不可审计、可能污染 Linux 环境）。</span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Install ============ -->
+  <section id="install" style="background: var(--surface-container-low);">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="label kicker">安装</span>
+        <h2 class="headline" style="margin-top:.6rem">两种方式，任选其一</h2>
+        <p class="body-lg">克隆直接运行适合开发者，以及想随时跟进最新代码的人；Flatpak 更省心，权限可随时用 Flatseal 收回。</p>
+      </div>
+
+      <div class="install-grid">
+        <!-- 方式一 -->
+        <article class="card elevated reveal">
+          <span class="label">方式一</span>
+          <h3 class="title-lg" style="margin: .35rem 0 .75rem;">克隆直接运行</h3>
+          <p class="req">依赖：Python ≥ 3.9、PyGObject、GTK 4、libadwaita ≥ 1.4（Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch），以及 <code>fwupd</code>（用于 HSI）。</p>
+          <div class="tabs" role="tablist" data-tabs="distro">
+            <button class="tab active" role="tab" data-tab="fedora">Fedora</button>
+            <button class="tab" role="tab" data-tab="debian">Debian / Ubuntu</button>
+            <button class="tab" role="tab" data-tab="arch">Arch</button>
+          </div>
+          <div class="pane active" data-pane="fedora">
+            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="c"># Fedora</span>
+<span class="k">sudo</span> dnf install python3-gobject gtk4 libadwaita fwupd
+
+<span class="k">git</span> clone https://github.com/lingyicute/ComputeSec.git
+<span class="k">cd</span> ComputeSec
+<span class="k">python3</span> run.py</pre>
+          </div>
+          <div class="pane" data-pane="debian">
+            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="c"># Debian / Ubuntu</span>
+<span class="k">sudo</span> apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 fwupd
+
+<span class="k">git</span> clone https://github.com/lingyicute/ComputeSec.git
+<span class="k">cd</span> ComputeSec
+<span class="k">python3</span> run.py</pre>
+          </div>
+          <div class="pane" data-pane="arch">
+            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="c"># Arch</span>
+<span class="k">sudo</span> pacman -S python-gobject gtk4 libadwaita fwupd
+
+<span class="k">git</span> clone https://github.com/lingyicute/ComputeSec.git
+<span class="k">cd</span> ComputeSec
+<span class="k">python3</span> run.py</pre>
+          </div>
+          <p class="req" style="margin-top:1rem;">想让它出现在应用菜单里、并让任务栏 / Dock 正确显示图标（Wayland 下需要 <code>.desktop</code> 文件与 App ID 匹配）：</p>
+          <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">python3</span> run.py --install     <span class="c"># 安装 .desktop 与 SVG 图标到 ~/.local/share</span>
+<span class="k">python3</span> run.py --uninstall   <span class="c"># 移除</span></pre>
+        </article>
+
+        <!-- 方式二 -->
+        <article class="card elevated reveal">
+          <span class="label">方式二</span>
+          <h3 class="title-lg" style="margin: .35rem 0 .75rem;">Flatpak</h3>
+          <p class="req">在 <a href="https://github.com/lingyicute/ComputeSec/releases" target="_blank" rel="noopener" style="color: var(--primary); font-weight:500;">Releases</a> 下载对应架构的 <code>.flatpak</code>，或在本地构建。</p>
+          <div class="tabs" role="tablist" data-tabs="flatpak">
+            <button class="tab active" role="tab" data-tab="release">从 Release 安装</button>
+            <button class="tab" role="tab" data-tab="build">本地构建</button>
+          </div>
+          <div class="pane active" data-pane="release">
+            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">flatpak</span> install --user ./ComputeSec-x86_64.flatpak
+<span class="k">flatpak</span> run uk._92li.lingyicute.ComputeSec</pre>
+          </div>
+          <div class="pane" data-pane="build">
+            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">flatpak</span> install flathub org.gnome.Platform//50 org.gnome.Sdk//50
+<span class="k">flatpak-builder</span> --user --install --force-clean build-dir \
+    uk._92li.lingyicute.ComputeSec.json
+<span class="k">flatpak</span> run uk._92li.lingyicute.ComputeSec</pre>
+          </div>
+
+          <div style="margin-top:1.5rem; display:grid; gap:.6rem;">
+            <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
+              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+              <span>所有通过 <code style="font-family:var(--mono);font-size:.8rem;">flatpak-spawn --host</code> 执行的命令均为只读命令；收回任何权限后，对应功能只会显示「无法获取」，不影响其他检查。</span>
+            </div>
+            <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
+              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              <span>App ID：<code style="font-family:var(--mono);font-size:.8rem;">uk._92li.lingyicute.ComputeSec</code> · 由 GitHub Actions 自动构建 x86_64 / aarch64 包。</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Permissions + Structure ============ -->
+  <section id="permissions">
+    <div class="wrap">
+      <div class="two">
+        <div class="reveal">
+          <span class="label kicker">Flatpak 权限说明</span>
+          <h2 class="headline" style="margin:.6rem 0 .75rem;">只申请读取宿主机信息所需的权限</h2>
+          <p class="body" style="margin-bottom:1.25rem;">可用 Flatseal 随时收回，对应功能会显示「无法获取」。<code style="font-family:var(--mono);font-size:.8rem;">/proc/cmdline</code>、<code style="font-family:var(--mono);font-size:.8rem;">/proc/sys</code>、<code style="font-family:var(--mono);font-size:.8rem;">/sys/class/dmi</code>、<code style="font-family:var(--mono);font-size:.8rem;">/sys/bus/usb</code> 在沙箱内默认可读，无需额外权限。</p>
+          <table class="perm">
+            <thead><tr><th>权限</th><th>用途</th></tr></thead>
+            <tbody>
+              <tr><td>--system-talk-name=org.freedesktop.fwupd</td><td>通过 D-Bus 读取 HSI 结果</td></tr>
+              <tr><td>--talk-name=org.freedesktop.Flatpak</td><td>在 fwupdmgr、lsblk、flatpak list 需要时通过 flatpak-spawn --host 执行（仅只读命令）</td></tr>
+              <tr><td>--filesystem=/var/lib/flatpak:ro<br>--filesystem=~/.local/share/flatpak:ro</td><td>统计已安装的 Flatpak 应用</td></tr>
+              <tr><td>--filesystem=/run/udev:ro<br>--filesystem=/boot/efi:ro<br>--filesystem=/efi:ro</td><td>检测 NTFS 分区与 Windows 引导器</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="reveal">
+          <span class="label kicker">项目结构</span>
+          <h2 class="headline" style="margin:.6rem 0 .75rem;">小而清晰的代码组织</h2>
+          <p class="body" style="margin-bottom:1.25rem;">四个 Python 模块各司其职：窗口与导航、页面构建、数据采集比对、知识库。</p>
+<pre class="tree"><span class="d">run.py</span>                  <span class="c">启动器（克隆运行 / Flatpak 内为 /app/bin/computesec）</span>
+<span class="d">computesec/</span>
+  ├── main.py           <span class="c">应用与窗口、导航、后台检测线程</span>
+  ├── ui.py             <span class="c">五个页面的构建</span>
+  ├── checks.py         <span class="c">数据采集与比对（fwupd、cmdline、sysctl、DMI、Flatpak、uptime、USB、NTFS）</span>
+  └── data.py           <span class="c">知识库：HSI 说明、内核参数、sysctl、厂商信誉</span>
+<span class="d">data/</span>
+  └── <span class="c">图标和构建信息</span>
+<span class="d">uk._92li.lingyicute.ComputeSec.json</span>      <span class="c">Flatpak 清单</span>
+<span class="d">.github/workflows/build.yml</span>               <span class="c">Build Workflow</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Notes ============ -->
+  <section id="notes" style="padding-top:0;">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="label kicker">注意事项</span>
+        <h2 class="headline" style="margin-top:.6rem">动手之前，先看这几条</h2>
+      </div>
+      <div class="notes">
+        <div class="note warn reveal">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          <div>
+            <strong>机器专属启动配置</strong>
+            <p>内核参数列表中的 <code>root=</code>、<code>rootflags=</code>、<code>rw</code>、<code>rhgb</code>、<code>quiet</code>、<code>vconsole.keymap</code> 等条目是你的机器专属启动配置。ComputeSec 不会评估它们，也请您不要修改它们，尤其是不要照搬别人的系统中的 <code>root=UUID=...</code>。</p>
+          </div>
+        </div>
+        <div class="note info reveal">
+          <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+          <div>
+            <strong>部分加固参数有副作用（页面中已逐项标注 ⚠）</strong>
+            <p><code>module.sig_enforce=1</code> 会阻止 NVIDIA 私有驱动加载，<code>ia32_emulation=0</code> 会让 Steam / Wine 无法运行，<code>mitigations=auto,nosmt</code> 会关闭超线程。建议先在 GRUB 菜单按 <code>e</code> 临时添加试运行一次。出于安全性上的考虑，梨不建议您使用 NVIDIA 闭源驱动和闭源内核模块，也不建议您使用 Wine 运行来源未知的 Windows 程序。</p>
+          </div>
+        </div>
+        <div class="note info reveal">
+          <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+          <div>
+            <strong>厂商信誉信息仅供参考</strong>
+            <p>厂商信誉信息来自公开报道与 CVE 记录，仅供参考。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section style="padding-top:0;">
+    <div class="wrap">
+      <div class="cta reveal">
+        <h2 class="headline">现在就看看你的系统评分吧</h2>
+        <p>开源、免费、GPLv3。所有检查都在本地完成，不会上传任何数据。</p>
+        <div style="display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap;">
+          <a class="btn btn-filled btn-lg" href="https://github.com/lingyicute/ComputeSec/releases" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            前往 Releases
+          </a>
+          <a class="btn btn-tonal btn-lg" href="https://github.com/lingyicute/ComputeSec" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8 0 3.2.9.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1 .9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
+            查看源码
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap inner">
+    <div>
+      <strong style="color: var(--on-surface);">ComputeSec</strong> · Copyright © 2025-2026 lingyicute<br>
+      <span>本程序以 <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener" style="text-decoration:underline;">GNU General Public License v3.0</a> 发布，不提供任何担保。</span>
+    </div>
+    <div style="display:flex; gap:1.25rem; flex-wrap:wrap;">
+      <a href="https://github.com/lingyicute/ComputeSec" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/lingyicute/ComputeSec/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/lingyicute/harden-flatpak" target="_blank" rel="noopener">harden-flatpak</a>
+      <a href="https://github.com/lingyicute/ComputeSec/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+</footer>
+
+<!-- Material You seed color picker -->
+<div class="palette-pop" id="palettePop" role="group" aria-label="选择主题色"></div>
+<button class="fab" id="paletteFab" aria-label="更换主题色" title="更换主题色（Material You 动态取色）">
+  <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+</button>
+
+<div class="snack" id="snack">已复制到剪贴板</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =====================================================================
+   *  Material You dynamic color: build a tonal-palette-based scheme
+   *  from a seed hue using OKLCH (perceptual, close to HCT).
+   * ===================================================================== */
+  const root = document.documentElement;
+
+  // tone (0-100) -> OKLCH lightness
+  const toneL = t => 0.06 + (t / 100) * 0.93;
+  // reduce chroma near black/white so extreme tones stay clean
+  const toneC = (t, c) => c * Math.max(0.18, 1 - Math.abs(t - 55) / 60);
+  const col = (h, c, t) => `oklch(${toneL(t).toFixed(3)} ${toneC(t, c).toFixed(3)} ${h})`;
+
+  function buildScheme(hue, dark) {
+    const P = { h: hue, c: 0.14 };                    // primary
+    const S = { h: hue, c: 0.05 };                    // secondary (muted)
+    const T = { h: (hue + 60) % 360, c: 0.11 };       // tertiary (hue shift)
+    const N = { h: hue, c: 0.012 };                   // neutral
+    const NV = { h: hue, c: 0.024 };                  // neutral variant
+    const E = { h: 25, c: 0.16 };                     // error
+
+    const L = !dark;
+    const v = {
+      '--primary': col(P.h, P.c, L ? 40 : 80),
+      '--on-primary': col(P.h, P.c, L ? 100 : 20),
+      '--primary-container': col(P.h, P.c, L ? 90 : 30),
+      '--on-primary-container': col(P.h, P.c, L ? 10 : 90),
+      '--inverse-primary': col(P.h, P.c, L ? 80 : 40),
+
+      '--secondary': col(S.h, S.c, L ? 40 : 80),
+      '--secondary-container': col(S.h, S.c, L ? 90 : 30),
+      '--on-secondary-container': col(S.h, S.c, L ? 10 : 90),
+
+      '--tertiary': col(T.h, T.c, L ? 40 : 80),
+      '--tertiary-container': col(T.h, T.c, L ? 90 : 30),
+      '--on-tertiary-container': col(T.h, T.c, L ? 10 : 90),
+
+      '--error-container': col(E.h, E.c, L ? 90 : 30),
+      '--on-error-container': col(E.h, E.c, L ? 10 : 90),
+
+      '--surface': col(N.h, N.c, L ? 98 : 6),
+      '--surface-container-lowest': col(N.h, N.c, L ? 100 : 4),
+      '--surface-container-low': col(N.h, N.c, L ? 96 : 10),
+      '--surface-container': col(N.h, N.c, L ? 94 : 12),
+      '--surface-container-high': col(N.h, N.c, L ? 92 : 17),
+      '--surface-container-highest': col(N.h, N.c, L ? 90 : 22),
+      '--on-surface': col(N.h, N.c, L ? 10 : 90),
+      '--on-surface-variant': col(NV.h, NV.c, L ? 30 : 80),
+      '--inverse-surface': col(N.h, N.c, L ? 20 : 90),
+      '--inverse-on-surface': col(N.h, N.c, L ? 95 : 20),
+      '--outline': col(NV.h, NV.c, L ? 50 : 60),
+      '--outline-variant': col(NV.h, NV.c, L ? 80 : 30),
+    };
+    for (const k in v) root.style.setProperty(k, v[k]);
+    root.style.colorScheme = dark ? 'dark' : 'light';
+    document.querySelector('meta[name="theme-color"]')?.remove();
+    const m = document.createElement('meta'); m.name = 'theme-color'; m.content = v['--surface']; document.head.appendChild(m);
+  }
+
+  const SEEDS = [
+    { name: '守护绿', hue: 150 },
+    { name: '天青', hue: 230 },
+    { name: '紫罗兰', hue: 300 },
+    { name: '玫瑰', hue: 350 },
+    { name: '琥珀', hue: 70 },
+    { name: '青柠', hue: 115 },
+    { name: '湖蓝', hue: 195 },
+    { name: '珊瑚', hue: 35 },
+  ];
+
+  let state = {
+    hue: +(localStorage.getItem('cs-hue') ?? 150),
+    dark: localStorage.getItem('cs-dark') !== null
+      ? localStorage.getItem('cs-dark') === '1'
+      : matchMedia('(prefers-color-scheme: dark)').matches,
+  };
+
+  function apply() {
+    buildScheme(state.hue, state.dark);
+    themeIcon.innerHTML = state.dark
+      ? '<path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0a.996.996 0 0 0 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>'
+      : '<path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>';
+    document.querySelectorAll('.swatch').forEach(s => s.classList.toggle('active', +s.dataset.hue === state.hue));
+  }
+
+  /* ---------- Theme toggle ---------- */
+  const themeBtn = document.getElementById('themeBtn');
+  const themeIcon = document.getElementById('themeIcon');
+  themeBtn.addEventListener('click', () => {
+    state.dark = !state.dark;
+    localStorage.setItem('cs-dark', state.dark ? '1' : '0');
+    apply();
+  });
+
+  /* ---------- Seed color picker ---------- */
+  const pop = document.getElementById('palettePop');
+  const fab = document.getElementById('paletteFab');
+  SEEDS.forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'swatch';
+    b.dataset.hue = s.hue;
+    b.title = s.name;
+    b.setAttribute('aria-label', s.name);
+    b.style.background = `oklch(0.62 0.16 ${s.hue})`;
+    b.addEventListener('click', () => {
+      state.hue = s.hue;
+      localStorage.setItem('cs-hue', s.hue);
+      apply();
+    });
+    pop.appendChild(b);
+  });
+  fab.addEventListener('click', e => { e.stopPropagation(); pop.classList.toggle('open'); });
+  document.addEventListener('click', e => { if (!pop.contains(e.target)) pop.classList.remove('open'); });
+
+  apply();
+
+  /* ---------- Ripple (Material state layer) ---------- */
+  document.addEventListener('pointerdown', e => {
+    const el = e.target.closest('.btn, .icon-btn, .tab, .fab, .nav a, .swatch');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const size = Math.max(r.width, r.height);
+    const s = document.createElement('span');
+    s.className = 'ripple';
+    s.style.width = s.style.height = size + 'px';
+    s.style.left = (e.clientX - r.left - size / 2) + 'px';
+    s.style.top = (e.clientY - r.top - size / 2) + 'px';
+    el.appendChild(s);
+    s.addEventListener('animationend', () => s.remove());
+  });
+
+  /* ---------- Tabs ---------- */
+  document.querySelectorAll('[data-tabs]').forEach(group => {
+    const container = group.parentElement;
+    group.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        group.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        container.querySelectorAll('.pane').forEach(p => {
+          // only panes belonging to this tab group (siblings following the group)
+          if (group.querySelector(`[data-tab="${p.dataset.pane}"]`)) {
+            p.classList.toggle('active', p.dataset.pane === tab.dataset.tab);
+          }
+        });
+      });
+    });
+  });
+
+  /* ---------- Copy buttons ---------- */
+  const snack = document.getElementById('snack');
+  let snackTimer;
+  function toast(msg) {
+    snack.textContent = msg;
+    snack.classList.add('show');
+    clearTimeout(snackTimer);
+    snackTimer = setTimeout(() => snack.classList.remove('show'), 2200);
+  }
+  document.querySelectorAll('.copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const pre = btn.closest('.code').cloneNode(true);
+      pre.querySelector('.copy').remove();
+      // strip comments for a clean paste
+      const text = pre.textContent.split('\n').map(l => l.replace(/\s*#.*$/, '')).filter(l => l.trim()).join('\n');
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('已复制到剪贴板');
+        btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+        setTimeout(() => {
+          btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+        }, 1600);
+      } catch { toast('复制失败，请手动选择文本'); }
+    });
+  });
+
+  /* ---------- App bar elevation on scroll ---------- */
+  const appbar = document.getElementById('appbar');
+  const onScroll = () => appbar.classList.toggle('scrolled', scrollY > 8);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+  /* ---------- Scroll reveal ---------- */
+  const io = new IntersectionObserver(entries => {
+    entries.forEach((en, i) => {
+      if (en.isIntersecting) {
+        en.target.style.transitionDelay = Math.min(i * 60, 240) + 'ms';
+        en.target.classList.add('in');
+        io.unobserve(en.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  /* ---------- Responsive tweak for habit card ---------- */
+  const mq = matchMedia('(max-width: 760px)');
+  const fixHabit = () => {
+    document.querySelectorAll('.habit-grid').forEach(g => g.style.gridTemplateColumns = mq.matches ? '1fr' : '1fr 2fr');
+    document.querySelectorAll('.habit-items').forEach(g => g.style.gridTemplateColumns = mq.matches ? '1fr' : 'repeat(2, 1fr)');
+  };
+  mq.addEventListener('change', fixHabit); fixHabit();
+})();
+</script>
+</body>
+</html>

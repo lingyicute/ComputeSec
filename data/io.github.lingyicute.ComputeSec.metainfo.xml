@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.lingyicute.ComputeSec</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>ComputeSec</name>
+  <name xml:lang="zh_CN">计算安全小助手</name>
+  <summary>Evaluate firmware, kernel hardening, hardware vendor and usage habits</summary>
+  <summary xml:lang="zh_CN">评估固件安全、内核加固、硬件品牌与使用习惯</summary>
+  <developer id="io.github.lingyicute">
+    <name>lingyicute</name>
+  </developer>
+  <description>
+    <p>ComputeSec is a friendly GTK4/libadwaita assistant that helps you turn a Linux machine into a trustworthy computing environment.</p>
+    <ul>
+      <li>Dashboard with an overall score</li>
+      <li>fwupd Host Security ID (HSI) results with explanations and a "You can fix" section</li>
+      <li>Kernel command line and sysctl hardening comparison with copy-and-paste fixes</li>
+      <li>Hardware vendor reputation (Superfish, ShadowHammer, Boot Guard key leaks, ...)</li>
+      <li>Usage habits: Flatpak adoption, uptime, 2.4G receivers, NTFS/Windows presence</li>
+    </ul>
+    <p xml:lang="zh_CN">计算安全小助手是一个基于 GTK4/libadwaita 的桌面工具，帮助您评估固件安全 (HSI)、内核加固程度、硬件品牌信誉与日常使用习惯，并给出可操作的修复建议。</p>
+  </description>
+  <launchable type="desktop-id">io.github.lingyicute.ComputeSec.desktop</launchable>
+  <url type="homepage">https://github.com/lingyicute/ComputeSec</url>
+  <url type="bugtracker">https://github.com/lingyicute/ComputeSec/issues</url>
+  <url type="vcs-browser">https://github.com/lingyicute/ComputeSec</url>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <branding>
+    <color type="primary" scheme_preference="light">#99c1f1</color>
+    <color type="primary" scheme_preference="dark">#1a5fb4</color>
+  </branding>
+  <releases>
+    <release version="1.0.0" date="2025-06-01">
+      <description>
+        <p>Initial release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

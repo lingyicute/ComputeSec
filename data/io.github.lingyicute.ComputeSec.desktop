@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=ComputeSec
+Name[zh_CN]=计算安全小助手
+GenericName=Security Assistant
+GenericName[zh_CN]=安全评估工具
+Comment=Evaluate firmware (HSI), kernel hardening, hardware vendor reputation and usage habits
+Comment[zh_CN]=评估固件安全 (HSI)、内核加固、硬件品牌信誉与使用习惯
+Exec=computesec
+Icon=io.github.lingyicute.ComputeSec
+Terminal=false
+Categories=System;Security;GTK;GNOME;
+Keywords=security;hsi;fwupd;kernel;sysctl;hardening;flatpak;安全;加固;
+StartupNotify=true
+StartupWMClass=io.github.lingyicute.ComputeSec
+DBusActivatable=false

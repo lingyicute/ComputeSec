@@ -1,0 +1,73 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    name: Python 语法与元数据检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 编译检查
+        run: python -m compileall -q computesec run.py
+      - name: 安装校验工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y desktop-file-utils appstream libxml2-utils
+      - name: 校验 .desktop / metainfo / SVG
+        run: |
+          desktop-file-validate data/io.github.lingyicute.ComputeSec.desktop
+          appstreamcli validate --no-net data/io.github.lingyicute.ComputeSec.metainfo.xml || true
+          xmllint --noout data/icons/hicolor/scalable/apps/io.github.lingyicute.ComputeSec.svg
+
+  flatpak:
+    name: 构建 Flatpak (${{ matrix.arch }})
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: 构建并导出 bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ComputeSec-${{ matrix.arch }}.flatpak
+          manifest-path: io.github.lingyicute.ComputeSec.json
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
+          arch: ${{ matrix.arch }}
+          upload-artifact: true
+
+  release:
+    name: 发布 Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: flatpak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.flatpak
+          generate_release_notes: true

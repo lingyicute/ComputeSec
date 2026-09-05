@@ -4,7 +4,7 @@
 """
 
 APP_ID = "io.github.lingyicute.ComputeSec"
-APP_NAME = "计算安全小助手"
+APP_NAME = "ComputeSec"
 VERSION = "1.0.0"
 AUTHOR = "lingyicute"
 HOMEPAGE = "https://github.com/lingyicute/ComputeSec"

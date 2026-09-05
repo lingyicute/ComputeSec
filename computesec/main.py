@@ -69,7 +69,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.header.pack_start(self.refresh_btn)
         menu = Gio.Menu()
         menu.append("重新检测", "app.refresh")
-        menu.append("关于计算安全小助手", "app.about")
+        menu.append("关于", "app.about")
         menu.append("退出", "app.quit")
         self.header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="主菜单"))
         content.add_top_bar(self.header)

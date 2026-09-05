@@ -1,7 +1,6 @@
 [Desktop Entry]
 Type=Application
 Name=ComputeSec
-Name[zh_CN]=计算安全小助手
 GenericName=Security Assistant
 GenericName[zh_CN]=安全评估工具
 Comment=Evaluate firmware (HSI), kernel hardening, hardware vendor reputation and usage habits

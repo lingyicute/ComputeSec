@@ -4,7 +4,7 @@
   <img src="data/icons/hicolor/scalable/apps/io.github.lingyicute.ComputeSec.svg" width="128" alt="ComputeSec 图标">
 </p>
 
-一个基于 **GTK4 / libadwaita / Python** 的 Linux 桌面安全评估工具。它会读取你的系统状态，与安全基线对比，用通俗的语言解释每一项检查的意义与缺失的危害，并给出可以直接复制粘贴的修复方法。做得好的地方会用绿色告诉你：继续保持！
+一个基于 **GTK4 / libadwaita / Python** 的 Linux 桌面安全评估工具。它会读取你的系统状态，与安全基线对比，用通俗的语言解释每一项检查的意义与缺失的危害，并给出可以直接复制粘贴的修复方法。做得好的地方会用绿色告诉你：继续保持！🤗
 
 ## 功能页面
 
@@ -27,7 +27,9 @@ sudo dnf install python3-gobject gtk4 libadwaita fwupd
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 fwupd
 # Arch
 sudo pacman -S python-gobject gtk4 libadwaita fwupd
+```
 
+```bash
 git clone https://github.com/lingyicute/ComputeSec.git
 cd ComputeSec
 python3 run.py
@@ -54,7 +56,7 @@ flatpak run io.github.lingyicute.ComputeSec
 ### 本地构建
 
 ```bash
-flatpak install flathub org.gnome.Platform//48 org.gnome.Sdk//48
+flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
 flatpak-builder --user --install --force-clean build-dir io.github.lingyicute.ComputeSec.json
 flatpak run io.github.lingyicute.ComputeSec
 ```

@@ -12,9 +12,6 @@
 <style>
   /* ---------- Material 3 tokens ---------- */
   :root {
-    --font: "Roboto Flex", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-
     --shape-xs: 4px;
     --shape-sm: 8px;
     --shape-md: 12px;
@@ -300,8 +297,24 @@
   .fab svg { width: 24px; height: 24px; fill: currentColor; }
 
   /* Snackbar */
-  .snack { position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 140%); background: var(--inverse-surface); color: var(--inverse-on-surface); padding: .8rem 1.2rem; border-radius: var(--shape-sm); font-size: .9rem; box-shadow: var(--elev-3); z-index: 70; transition: transform .35s var(--motion-emph); }
-  .snack.show { transform: translate(-50%, 0); }
+  .snack {
+    position: fixed; left: 50%; bottom: 1.5rem;
+    transform: translate(-50%, calc(100% + 1.5rem + 24px));
+    visibility: hidden;
+    pointer-events: none;
+    background: var(--inverse-surface); color: var(--inverse-on-surface);
+    padding: .8rem 1.2rem; border-radius: var(--shape-sm); font-size: .9rem;
+    box-shadow: var(--elev-3); z-index: 70;
+    transition: transform .35s var(--motion-emph),
+              visibility 0s linear .35s;
+  }
+  .snack.show {
+    transform: translate(-50%, 0);
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform .35s var(--motion-emph),
+              visibility 0s;
+  }
 
   /* Reveal */
   .reveal { opacity: 0; transform: translateY(22px); transition: opacity .6s var(--motion-emph), transform .6s var(--motion-emph); }
@@ -451,7 +464,7 @@
         <article class="card filled-primary feature span4 reveal">
           <span class="tagline-pill">Host Security ID</span>
           <h3 class="title-lg">2 · HSI 固件安全</h3>
-          <p class="body">通过 fwupd D-Bus（或 <code>fwupdmgr security</code>）获取 HSI 检测结果，逐项解释含义与未开启时的危害；「您可以修复」栏目按「操作系统内」与「固件设置中」分组给出具体步骤，涵盖 IOMMU、Kernel Lockdown、加密 swap、Secure Boot、TPM、s2idle 等要点。</p>
+          <p class="body">通过 fwupd D-Bus（或 fwupdmgr security）获取 HSI 检测结果，逐项解释含义与未开启时的危害；「您可以修复」栏目按「操作系统内」与「固件设置中」分组给出具体步骤，涵盖 IOMMU、Kernel Lockdown、加密 swap、Secure Boot、TPM、s2idle 等要点。</p>
           <div class="mock" aria-hidden="true">
             <div class="row"><i class="dot ok"></i>UEFI Secure Boot <span class="tag-ok">已开启 · 继续保持</span></div>
             <div class="row"><i class="dot ok"></i>TPM 2.0 <span class="tag-ok">已开启 · 继续保持</span></div>
@@ -466,12 +479,12 @@
             <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.41-1.41L8.67 13l-2.59-2.59L7.5 9l4 4-4 4z"/></svg>
           </div>
           <h3 class="title-lg">3 · 内核加固</h3>
-          <p class="body">读取 <code>/proc/cmdline</code> 与 <code>/proc/sys</code>（等价于 <code>sysctl -a</code>），按当前架构分别与内置 amd64 / aarch64 推荐 kargs 与 sysctl 加固列表对比。</p>
+          <p class="body">读取 /proc/cmdline 与 /proc/sys（等价于 sysctl -a），按当前架构分别与内置 amd64 / aarch64 推荐 kargs 与 sysctl 加固列表对比。</p>
           <ul>
             <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>一键复制缺失参数</li>
             <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>提供 grubby / GRUB / systemd-boot / rpm-ostree 配置方法</li>
-            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><code>/etc/sysctl.d</code> 配置文件生成与设置指引</li>
-            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>aarch64 平台提示手动探索 <code>vm.mmap_rnd_bits</code> 最大值</li>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>/etc/sysctl.d 配置文件生成与设置指引</li>
+            <li><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>aarch64 平台提示手动探索 vm.mmap_rnd_bits 最大值</li>
           </ul>
         </article>
 
@@ -508,7 +521,7 @@
               </div>
               <div style="background: color-mix(in oklab, var(--on-tertiary-container) 8%, transparent); border-radius: var(--shape-lg); padding: 1rem 1.1rem;">
                 <strong style="display:block; margin-bottom:.25rem;">运行时间提醒</strong>
-                <span style="font-size:.88rem; opacity:.85;">检测到系统 <code>uptime</code> 超过一天时，提醒进行更新和重启。</span>
+                <span style="font-size:.88rem; opacity:.85;">检测到系统 uptime 超过一天时，提醒进行更新和重启。</span>
               </div>
               <div style="background: color-mix(in oklab, var(--on-tertiary-container) 8%, transparent); border-radius: var(--shape-lg); padding: 1rem 1.1rem;">
                 <strong style="display:block; margin-bottom:.25rem;">外设安全检测</strong>
@@ -665,7 +678,8 @@
           <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
           <div>
             <strong>部分加固参数有副作用（页面中已逐项标注 ⚠）</strong>
-            <p><code>module.sig_enforce=1</code> 会阻止 NVIDIA 私有驱动加载，<code>ia32_emulation=0</code> 会让 Steam / Wine 无法运行，<code>mitigations=auto,nosmt</code> 会关闭超线程。建议先在 GRUB 菜单按 <code>e</code> 临时添加试运行一次。出于安全性上的考虑，梨不建议您使用 NVIDIA 闭源驱动和闭源内核模块，也不建议您使用 Wine 运行来源未知的 Windows 程序。</p>
+            <p><code>module.sig_enforce=1</code> 会阻止 NVIDIA 私有驱动加载，<code>ia32_emulation=0</code> 会让 Steam / Wine 无法运行，<code>mitigations=auto,nosmt</code> 会关闭超线程。建议先在 GRUB 菜单按 <code>e</code> 临时添加试运行一次。
+              出于安全性上的考虑，梨不建议您使用 NVIDIA 闭源驱动和闭源内核模块，也不建议您使用 Wine 运行来源未知的 Windows 程序。</p>
           </div>
         </div>
         <div class="note info reveal">
@@ -684,7 +698,7 @@
     <div class="wrap">
       <div class="cta reveal">
         <h2 class="headline">现在就看看你的系统评分吧</h2>
-        <p>开源、免费、GPLv3。所有检查都在本地完成，不会上传任何数据。</p>
+        <p>开源、免费、无跟踪。所有检查都在本地完成，不会上传任何数据。</p>
         <div style="display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap;">
           <a class="btn btn-filled btn-lg" href="https://github.com/lingyicute/ComputeSec/releases" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>

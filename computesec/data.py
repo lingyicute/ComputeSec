@@ -314,7 +314,7 @@ KERNEL_PARAMS = [
     dict(key="irqchip.gicv3_pseudo_nmi", value="1", arch=A, desc="启用 GICv3 伪 NMI，改善 ARM64 上的 hardlockup 检测。"),
     dict(key="rodata", value="full", arch=A, desc="ARM64 上完整的只读数据保护（含 linear map）。"),
 ]
-KERNEL_MACHINE_SPECIFIC_NOTE = ("Tips: 以下参数属于系统启动配置: root=、rootflags=、rw、rhgb、quiet、vconsole.keymap，"
+KERNEL_MACHINE_SPECIFIC_NOTE = ("Tips：root、rootflags、rw、rhgb、quiet、vconsole.keymap 等参数属于系统启动配置，"
                                 "请勿修改或删除它们。")
 
 # ---------------------------------------------------------------------------

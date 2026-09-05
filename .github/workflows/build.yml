@@ -30,7 +30,6 @@ jobs:
 
   flatpak:
     name: 构建 Flatpak (${{ matrix.arch }})
-    needs: lint
     strategy:
       fail-fast: false
       matrix:

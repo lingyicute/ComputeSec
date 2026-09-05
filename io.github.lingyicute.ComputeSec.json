@@ -1,0 +1,46 @@
+{
+  "id": "io.github.lingyicute.ComputeSec",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "48",
+  "sdk": "org.gnome.Sdk",
+  "command": "computesec",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--device=dri",
+    "--system-talk-name=org.freedesktop.fwupd",
+    "--talk-name=org.freedesktop.Flatpak",
+    "--filesystem=/var/lib/flatpak:ro",
+    "--filesystem=~/.local/share/flatpak:ro",
+    "--filesystem=/run/udev:ro",
+    "--filesystem=/boot/efi:ro",
+    "--filesystem=/efi:ro"
+  ],
+  "cleanup": [
+    "*.pyc",
+    "__pycache__"
+  ],
+  "modules": [
+    {
+      "name": "computesec",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p /app/lib/computesec",
+        "cp -r computesec /app/lib/computesec/",
+        "cp -r data /app/lib/computesec/",
+        "install -Dm755 run.py /app/bin/computesec",
+        "install -Dm644 data/io.github.lingyicute.ComputeSec.desktop /app/share/applications/io.github.lingyicute.ComputeSec.desktop",
+        "install -Dm644 data/io.github.lingyicute.ComputeSec.metainfo.xml /app/share/metainfo/io.github.lingyicute.ComputeSec.metainfo.xml",
+        "install -Dm644 data/icons/hicolor/scalable/apps/io.github.lingyicute.ComputeSec.svg /app/share/icons/hicolor/scalable/apps/io.github.lingyicute.ComputeSec.svg"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": ".",
+          "skip": [".git", ".flatpak-builder", "build-dir", "repo", "*.flatpak", "index.html"]
+        }
+      ]
+    }
+  ]
+}

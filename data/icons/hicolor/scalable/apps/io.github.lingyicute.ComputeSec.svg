@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#1c71d8"/>
+    </linearGradient>
+    <linearGradient id="shieldDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a5fb4"/>
+      <stop offset="1" stop-color="#0f3f7a"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6f5f4"/>
+      <stop offset="1" stop-color="#deddda"/>
+    </linearGradient>
+    <linearGradient id="check" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8ff0a4"/>
+      <stop offset="1" stop-color="#2ec27e"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dy="2"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- 盾牌 -->
+  <g filter="url(#shadow)">
+    <path d="M64 8 L110 24 V60 C110 88 90 108 64 120 C38 108 18 88 18 60 V24 Z" fill="url(#shieldDark)"/>
+    <path d="M64 12 L106 26.5 V60 C106 85.5 87.5 104.5 64 115.5 C40.5 104.5 22 85.5 22 60 V26.5 Z" fill="url(#shield)"/>
+    <!-- 高光 -->
+    <path d="M64 12 L106 26.5 V40 C92 34 78 31 64 31 C50 31 36 34 22 40 V26.5 Z" fill="#ffffff" opacity="0.18"/>
+  </g>
+
+  <!-- 芯片引脚 -->
+  <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.85">
+    <path d="M52 40 V34 M64 40 V34 M76 40 V34"/>
+    <path d="M52 88 V94 M64 88 V94 M76 88 V94"/>
+    <path d="M40 52 H34 M40 64 H34 M40 76 H34"/>
+    <path d="M88 52 H94 M88 64 H94 M88 76 H94"/>
+  </g>
+
+  <!-- 芯片主体 -->
+  <rect x="40" y="40" width="48" height="48" rx="8" fill="url(#chip)"/>
+  <rect x="46" y="46" width="36" height="36" rx="5" fill="none" stroke="#1c71d8" stroke-width="2" opacity="0.35"/>
+
+  <!-- 对勾 -->
+  <path d="M52 64 L60.5 72.5 L77 54" fill="none" stroke="url(#check)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M52 64 L60.5 72.5 L77 54" fill="none" stroke="#26a269" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.25" transform="translate(0,1.2)"/>
+</svg>

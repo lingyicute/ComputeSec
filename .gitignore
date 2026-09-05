@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.flatpak-builder/
+build-dir/
+repo/
+*.flatpak
+.venv/

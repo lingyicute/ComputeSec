@@ -15,7 +15,7 @@ import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-APP_ID = "io.github.lingyicute.ComputeSec"
+APP_ID = "uk._92li.lingyicute.ComputeSec"
 
 # 定位程序包：源码目录 或 /app/lib/computesec
 for cand in (HERE, os.path.join(HERE, "..", "lib", "computesec")):

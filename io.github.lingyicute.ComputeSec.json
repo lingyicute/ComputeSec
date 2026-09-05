@@ -1,5 +1,5 @@
 {
-  "id": "io.github.lingyicute.ComputeSec",
+  "id": "uk._92li.lingyicute.ComputeSec",
   "runtime": "org.gnome.Platform",
   "runtime-version": "50",
   "sdk": "org.gnome.Sdk",
@@ -29,9 +29,9 @@
         "cp -r computesec /app/lib/computesec/",
         "cp -r data /app/lib/computesec/",
         "install -Dm755 run.py /app/bin/computesec",
-        "install -Dm644 data/io.github.lingyicute.ComputeSec.desktop /app/share/applications/io.github.lingyicute.ComputeSec.desktop",
-        "install -Dm644 data/io.github.lingyicute.ComputeSec.metainfo.xml /app/share/metainfo/io.github.lingyicute.ComputeSec.metainfo.xml",
-        "install -Dm644 data/icons/hicolor/scalable/apps/io.github.lingyicute.ComputeSec.svg /app/share/icons/hicolor/scalable/apps/io.github.lingyicute.ComputeSec.svg"
+        "install -Dm644 data/uk._92li.lingyicute.ComputeSec.desktop /app/share/applications/uk._92li.lingyicute.ComputeSec.desktop",
+        "install -Dm644 data/uk._92li.lingyicute.ComputeSec.metainfo.xml /app/share/metainfo/uk._92li.lingyicute.ComputeSec.metainfo.xml",
+        "install -Dm644 data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg /app/share/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg"
       ],
       "sources": [
         {

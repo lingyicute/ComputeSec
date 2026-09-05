@@ -1,1 +1,0 @@
-export class TableModel{cols=[];emptyRowText="";sortIdx=-1;rowsChangedListeners;constructor(){this.rowsChangedListeners=new Set}styleRow(_tr,_data){}getRows(){return[]}notifyRowsChanged(){this.rowsChangedListeners.forEach((f=>f()))}}

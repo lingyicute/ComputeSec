@@ -1,1 +1,0 @@
-import{mojo}from"//resources/mojo/mojo/public/js/bindings.js";import{FilePathSpec as mojoBase_mojom_FilePathSpec}from"./file_path.mojom-webui.js";export const SafeBaseNameSpec={$:{}};mojo.internal.Struct(SafeBaseNameSpec.$,"SafeBaseName",[mojo.internal.StructField("path",0,0,mojoBase_mojom_FilePathSpec.$,null,false,0)],[[0,16]]);

@@ -1,7 +1,0 @@
-import{html}from"//resources/polymer/v3_0/polymer/polymer_bundled.min.js";import"./cr_shared_vars.css.js";const styleMod=document.createElement("dom-module");styleMod.appendChild(html`
-  <template>
-    <style>
-.search-bubble{--search-bubble-color:#ffeb3b;position:absolute;z-index:1}.search-bubble-innards{align-items:center;background-color:var(--search-bubble-color);border-radius:2px;color:var(--google-grey-900);max-width:100px;min-width:64px;overflow:hidden;padding:4px 10px;text-align:center;text-overflow:ellipsis;white-space:nowrap}.search-bubble-innards::after{background-color:var(--search-bubble-color);content:'';height:10px;left:calc(50% - 5px);position:absolute;top:-5px;transform:rotate(-45deg);width:10px;z-index:-1}.search-bubble-innards.above::after{bottom:-5px;top:auto;transform:rotate(-135deg)}
-    </style>
-  </template>
-`.content);styleMod.register("search-highlight-style");

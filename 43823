@@ -1,1 +1,0 @@
-#invalidation-counters-table tr:nth-child(odd){background: rgb(239, 243, 255)}

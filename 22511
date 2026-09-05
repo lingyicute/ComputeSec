@@ -1,1 +1,0 @@
-import{DivView}from"./view.js";let instance=null;export class CrosView extends DivView{constructor(){super(CrosView.MAIN_BOX_ID)}static getInstance(){return instance||(instance=new CrosView)}}CrosView.TAB_ID="tab-handle-chromeos";CrosView.TAB_NAME="ChromeOS";CrosView.TAB_HASH="#chromeos";CrosView.MAIN_BOX_ID="chromeos-view-tab-content";

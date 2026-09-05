@@ -1,4 +1,0 @@
-import{html}from"//resources/lit/v3_0/lit.rollup.js";export function getHtml(){return html`${this.isManaged_?html`
-  <cr-icon .icon="${this.managedByIcon_}"></cr-icon>
-  <div id="content" .innerHTML="${this.getManagementString_()}"></div>
-`:""}`}

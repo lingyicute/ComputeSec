@@ -1,1 +1,0 @@
-#outer{min-width: 0; text-align: left;width: 90%}#inner{width: auto}#logo{float: none;margin-left: auto;margin-right: auto}tr, td{display: block;text-align: left !important}td:last-child{margin-bottom: 8px}

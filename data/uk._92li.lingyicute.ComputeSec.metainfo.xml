@@ -38,7 +38,7 @@
     <color type="primary" scheme_preference="dark">#1a5fb4</color>
   </branding>
   <releases>
-    <release version="1.0.0" date="2025-06-01">
+    <release version="1.0.2" date="2026-09-05">
       <description>
         <p>Initial release.</p>
       </description>

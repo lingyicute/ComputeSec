@@ -91,7 +91,7 @@ def copy_button(win, text, label="复制"):
     return btn
 
 
-def text_row(title, body, selectable=True):
+def text_row(title, body, selectable=False):
     row = Adw.ActionRow(title=esc(title), subtitle=esc(body))
     row.set_subtitle_selectable(selectable)
     return row
@@ -135,6 +135,28 @@ def praise_row(text):
     row.add_css_class("success")
     return row
 
+def hero(icon_name, title, description=None, css=None, desc_css=None):
+    """页面顶部的大图标 + 标题 + 副标题。
+    不使用 Adw.StatusPage：它内部自带 Clamp(400px) 与 ScrolledWindow，嵌套在可滚动页面里会被压窄而显示不全。"""
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=12, margin_bottom=6, hexpand=True)
+    img = Gtk.Image.new_from_icon_name(icon_name)
+    img.set_pixel_size(96)
+    img.set_halign(Gtk.Align.CENTER)
+    if css:
+        img.add_css_class(css)
+    box.append(img)
+    t = Gtk.Label(label=title, wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR, justify=Gtk.Justification.CENTER,
+                  halign=Gtk.Align.CENTER, margin_top=8)
+    t.add_css_class("title-1")
+    box.append(t)
+    if description:
+        d = Gtk.Label(label=description, wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR, justify=Gtk.Justification.CENTER,
+                      halign=Gtk.Align.CENTER)
+        d.add_css_class("title-4")
+        if desc_css:
+            d.add_css_class(desc_css)
+        box.append(d)
+    return box
 
 # ---------------------------------------------------------------------------
 # 仪表盘
@@ -254,19 +276,19 @@ def _hsi_item_row(it):
         row.add_row(text_row(f"修复方法（{data.HSI_KIND_ZH.get(info.get('kind'), '')}）", info["fix"]))
     if it.flags - {"success"}:
         row.add_row(text_row("fwupd 标记", ", ".join(sorted(it.flags))))
-    row.add_row(text_row("AppStream ID", it.id + (f"  ·  {it.uri}" if it.uri else "")))
+    row.add_row(text_row("AppStream ID", it.id + (f"  ·  {it.uri}" if it.uri else ""), selectable=True))
     return row
 
 
 def build_hsi(report, win):
     h = report.hsi
     if not h.ok:
-        sp = Adw.StatusPage(icon_name="dialog-error-symbolic", title="无法获取 HSI 结果", description=h.error)
+        sp = hero("dialog-error-symbolic", "无法获取 HSI 结果", h.error, "error", desc_css="dim-label")
         hint = group("如何安装 fwupd")
-        hint.add(text_row("Fedora / RHEL", "sudo dnf install fwupd && sudo systemctl enable --now fwupd"))
-        hint.add(text_row("Debian / Ubuntu", "sudo apt install fwupd && sudo systemctl enable --now fwupd"))
-        hint.add(text_row("Arch Linux", "sudo pacman -S fwupd && sudo systemctl enable --now fwupd"))
-        hint.add(text_row("手动查看", "fwupdmgr security"))
+        hint.add(text_row("Fedora / RHEL", "sudo dnf install fwupd && sudo systemctl enable --now fwupd", selectable=True))
+        hint.add(text_row("Debian / Ubuntu", "sudo apt install fwupd && sudo systemctl enable --now fwupd", selectable=True))
+        hint.add(text_row("Arch Linux", "sudo pacman -S fwupd && sudo systemctl enable --now fwupd", selectable=True))
+        hint.add(text_row("手动查看", "fwupdmgr security", selectable=True))
         return page([sp, hint])
 
     overview = group("总览", "HSI (Host Security ID) 由 fwupd 项目定义，用于衡量平台固件与硬件的安全基线。等级越高越安全，末尾带 ! 表示存在运行时问题。")
@@ -334,14 +356,18 @@ def build_kernel(report, win):
     g_fix = None
     if c.missing:
         tokens = " ".join(i.token for i in c.missing)
-        g_fix = group("如何设置内核参数", "先把缺失参数一次性加入试运行一次；若启动失败，可在 GRUB 菜单按 e 临时删除参数。")
+        g_fix = group("如何设置内核参数", "缺失的参数见下方代码块；各发行版的命令请用右侧按钮复制（已自动带上参数）。先把缺失参数一次性加入试运行一次；若启动失败，可在 GRUB 菜单按 e 临时删除参数。")
         g_fix.set_header_suffix(copy_button(win, tokens, "复制缺失参数"))
         g_fix.add(code_block(tokens))
-        g_fix.add(text_row("Fedora / RHEL / 使用 grubby 的系统", f'sudo grubby --update-kernel=ALL --args="{tokens}"'))
+        r = text_row("Fedora / RHEL / 使用 grubby 的系统", 'sudo grubby --update-kernel=ALL --args="<上方参数>"')
+        r.add_suffix(copy_button(win, f'sudo grubby --update-kernel=ALL --args="{tokens}"', "复制命令"))
+        g_fix.add(r)
         g_fix.add(text_row("Debian / Ubuntu / Arch (GRUB)", "编辑 /etc/default/grub，把参数追加到 GRUB_CMDLINE_LINUX_DEFAULT=\"...\" 中，然后运行 sudo update-grub（Arch: sudo grub-mkconfig -o /boot/grub/grub.cfg）。"))
         g_fix.add(text_row("systemd-boot / UKI", "把参数追加到 /etc/kernel/cmdline，然后运行 sudo kernel-install add-all（或重新生成 UKI）。也可编辑 /boot/loader/entries/*.conf 的 options 行。"))
-        ostree_args = " ".join(f'--append-if-missing="{i.token}"' for i in c.missing)
-        g_fix.add(text_row("Fedora Silverblue / Kinoite", f"sudo rpm-ostree kargs {ostree_args}"))
+        ostree_cmd = "sudo rpm-ostree kargs " + " ".join(f'--append-if-missing="{i.token}"' for i in c.missing)
+        r = text_row("Fedora Silverblue / Kinoite", 'sudo rpm-ostree kargs --append-if-missing="<参数>" …（每个缺失参数一项）')
+        r.add_suffix(copy_button(win, ostree_cmd, "复制命令"))
+        g_fix.add(r)
         notes = [i for i in c.missing if i.note]
         if notes:
             g_fix.add(text_row("⚠ 副作用提醒", "\n".join(f"{i.token}：{i.note}" for i in notes)))
@@ -372,7 +398,7 @@ def build_kernel(report, win):
         g_sfix.set_header_suffix(copy_button(win, conf, "复制配置"))
         g_sfix.add(code_block(conf.strip()))
         cmd = f"sudo tee /etc/sysctl.d/99-computesec-hardening.conf > /dev/null <<'EOF'\n{conf}EOF\nsudo sysctl --system"
-        r = text_row("一键写入命令", cmd)
+        r = text_row("一键写入命令", "用 sudo tee 把上方配置写入 /etc/sysctl.d/99-computesec-hardening.conf，然后执行 sudo sysctl --system。点击右侧按钮复制完整命令（已包含上方配置内容）。")
         r.add_suffix(copy_button(win, cmd, "复制命令"))
         g_sfix.add(r)
         notes = [i for i in s.missing if i.note]
@@ -397,15 +423,13 @@ def build_hardware(report, win):
     hw = report.hardware
     v = hw.vendor
     icon, css = RATING_STYLE[v["rating"]]
-    sp = Adw.StatusPage(icon_name=icon, title=v["name"], description=data.RATING_ZH[v["rating"]])
-    sp.add_css_class("compact")
-    sp.add_css_class(css)
+    sp = hero(icon, v["name"], data.RATING_ZH[v["rating"]], css, desc_css=css)
 
     info = group("检测到的硬件信息")
     for label, val in (("系统厂商", hw.sys_vendor), ("产品名称", hw.product), ("主板厂商", hw.board_vendor),
                        ("固件厂商", hw.bios_vendor), ("固件版本", hw.bios_version), ("设备树型号", hw.model), ("匹配依据", hw.matched_on)):
         if val:
-            info.add(text_row(label, val))
+            info.add(text_row(label, val, selectable=True))
     if not (hw.sys_vendor or hw.product or hw.model):
         info.add(text_row("提示", "无法读取 DMI/设备树信息。"))
 
@@ -449,11 +473,11 @@ def build_habits(report, win):
         if c.advice:
             g.add(text_row("建议" if c.status != "good" else "继续保持", c.advice))
         if c.key == "flatpak":
-            r = text_row("harden-flatpak", data.HARDEN_FLATPAK_URL)
+            r = text_row("harden-flatpak", data.HARDEN_FLATPAK_URL, selectable=True)
             btn = Gtk.Button(valign=Gtk.Align.CENTER, icon_name="external-link-symbolic" if Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).has_icon("external-link-symbolic") else "web-browser-symbolic")
             btn.connect("clicked", lambda *_: Gtk.UriLauncher.new(data.HARDEN_FLATPAK_URL).launch(win, None, None, None))
             r.add_suffix(btn)
             g.add(r)
-            g.add(text_row("快速上手", "git clone https://github.com/lingyicute/harden-flatpak && cd harden-flatpak && ./lockdown.sh\n之后安装 Flatseal（com.github.tchx84.Flatseal）逐个应用按需放开权限。"))
+            g.add(text_row("快速上手", "git clone https://github.com/lingyicute/harden-flatpak && cd harden-flatpak && ./lockdown.sh\n之后安装 Flatseal（com.github.tchx84.Flatseal）逐个应用按需放开权限。", selectable=True))
         groups.append(g)
     return page([top] + groups)

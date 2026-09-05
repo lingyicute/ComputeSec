@@ -38,7 +38,7 @@ class MainWindow(Adw.ApplicationWindow):
         # ---- 侧边栏 ----
         side = Adw.ToolbarView()
         side_hb = Adw.HeaderBar()
-        side_hb.set_title_widget(Adw.WindowTitle(title=data.APP_NAME, subtitle="ComputeSec"))
+        side_hb.set_title_widget(Adw.WindowTitle(title=data.APP_NAME))
         side.add_top_bar(side_hb)
         self.listbox = Gtk.ListBox()
         self.listbox.add_css_class("navigation-sidebar")

@@ -5,7 +5,7 @@
 
 APP_ID = "uk._92li.lingyicute.ComputeSec"
 APP_NAME = "ComputeSec"
-VERSION = "1.0.0"
+VERSION = "1.0.2"
 AUTHOR = "lingyicute"
 HOMEPAGE = "https://github.com/lingyicute/ComputeSec"
 HARDEN_FLATPAK_URL = "https://github.com/lingyicute/harden-flatpak"
@@ -261,7 +261,6 @@ HSI_KIND_ZH = {"os": "在操作系统中修复", "bios": "在固件设置 (BIOS/
 # ---------------------------------------------------------------------------
 # 推荐内核参数
 # arch: 适用架构集合； cpu: None / "intel" / "amd" 仅在对应 CPU 上评估
-# 注意：root=、rootflags=、rw、rhgb、quiet、vconsole.keymap 等属于机器专属参数，已从推荐列表中排除。
 # ---------------------------------------------------------------------------
 X = ("x86_64",)
 A = ("aarch64",)

@@ -125,7 +125,7 @@ uk._92li.lingyicute.ComputeSec.json      Flatpak 清单
 
 ## 注意事项
 
-- 内核参数列表中的 `root=`、`rootflags=`、`rw`、`rhgb`、`quiet`、`vconsole.keymap` 等机器专属项不会被评估，请勿照搬他人的 `root=UUID=...`。
+- 内核参数列表中的 `root=`、`rootflags=`、`rw`、`rhgb`、`quiet`、`vconsole.keymap` 等机器专属启动配置项不会被评估，请勿照搬他人的 `root=UUID=...`。
 - 部分加固参数有微小副作用（例如 `module.sig_enforce=1` 会阻止 NVIDIA 私有驱动加载，`ia32_emulation=0` 会让 Steam/Wine 无法运行，`mitigations=auto,nosmt` 会关闭超线程），页面中已逐项标注 ⚠。建议先在 GRUB 菜单按 `e` 临时添加试运行一次。
 
 > [!IMPORTANT]

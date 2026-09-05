@@ -337,7 +337,7 @@ def build_kernel(report, win):
     c, s = report.cmdline, report.sysctl
     cpu_zh = {"intel": "Intel", "amd": "AMD"}.get(c.cpu, "未知/非 x86")
     # ---- cmdline ----
-    g1 = group("内核当前启动参数和加固状态", f"架构 {c.arch} · CPU {cpu_zh}。{data.KERNEL_MACHINE_SPECIFIC_NOTE}")
+    g1 = group("内核当前启动参数和加固状态", f"架构: {c.arch} · CPU 制造商: {cpu_zh}\n{data.KERNEL_MACHINE_SPECIFIC_NOTE}")
     g1.set_header_suffix(score_label(c.score))
     g1.add(code_block(c.cmdline or "（无法读取）"))
     for it in sorted(c.items, key=lambda i: ({"missing": 0, "wrong": 0, "ok": 1, "na": 2}[i.status], i.key)):

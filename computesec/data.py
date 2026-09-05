@@ -398,7 +398,7 @@ VENDORS = [
              ("2018 · Fingerprint Manager Pro", "指纹管理软件使用硬编码口令并以弱加密方式存储 Windows 登录凭据。"),
              ("2022 · UEFI 固件漏洞", "ESET 披露 100 余款联想笔记本存在可绕过安全启动的 UEFI 漏洞 (CVE-2022-3430/3431/3432)。"),
          ],
-         advice="联想的固件层曾出现过厂商主动植入的持久化组件。不建议将此硬件用于高安全性计算。若必须使用，请刷入 coreboot（部分老款 ThinkPad 支持）或至少启用安全启动并保持固件更新，完全重装系统并拒绝所有厂商预装服务。"),
+         advice="联想的固件层曾出现过厂商主动植入的 Rootkit 式持久化组件，强烈不建议将此硬件用于高安全性计算。若必须使用，请刷入 coreboot（部分老款 ThinkPad 支持）或至少启用安全启动并保持固件更新，完全重装系统并拒绝所有厂商预装服务。"),
     dict(match=["asus", "asustek"], name="华硕 ASUS", rating="bad",
          incidents=[
              ("2019 · ShadowHammer", "华硕 Live Update 更新服务器被攻陷，攻击者用华硕合法证书签名的后门程序被推送给约 100 万台电脑，属于典型的供应链攻击。"),
@@ -406,7 +406,7 @@ VENDORS = [
              ("2025 · DriverHub RCE", "预装的 DriverHub 存在一键式远程代码执行漏洞 (CVE-2025-3462/3463)，任意网站可诱导安装驱动。"),
              ("2025 · Armoury Crate LPE", "Armoury Crate 驱动存在本地提权漏洞 (CVE-2025-3464)。"),
          ],
-         advice="华硕的官方更新渠道曾被用于分发签名后门，意味着“来自厂商的更新”本身不可信。不建议用于高安全性计算；若使用，请禁用/卸载所有 ASUS 预装工具与 Armoury Crate，只使用发行版及 LVFS 提供的更新。"),
+         advice="华硕的官方更新渠道曾被用于分发签名后门，意味着“来自厂商的更新”本身都已不再可信，不建议用于高安全性计算。若一定要使用，请完整重装系统，并拒装 Armoury Crate 等华硕厂商软件，只使用发行版及 LVFS 提供的更新。"),
     dict(match=["msi", "micro-star"], name="微星 MSI", rating="bad",
          incidents=[
              ("2023 · Boot Guard 私钥泄漏", "MSI 遭 Money Message 勒索组织入侵，泄漏了 Intel Boot Guard 的 OEM 私钥和固件签名密钥，涉及数十款 MSI 主板/笔记本；攻击者可用泄漏密钥签署恶意固件，硬件信任根被永久破坏。"),

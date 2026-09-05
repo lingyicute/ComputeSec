@@ -2,9 +2,6 @@ name: Build
 
 on:
   push:
-    branches: [main, master]
-    tags: ["v*"]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -63,11 +60,17 @@ jobs:
     needs: flatpak
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: 上传到 GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*.flatpak
-          generate_release_notes: true
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "nightly-${{ github.run_number }}"  artifacts/**/*.flatpak \
+            --title "Nightly No.${{ github.run_number }}" \
+            --notes-file - << 'EOF'
+          自动构建 No.${{ github.run_number }}
+          EOF
+          

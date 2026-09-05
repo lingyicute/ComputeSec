@@ -6,7 +6,6 @@
   "command": "computesec",
   "finish-args": [
     "--share=ipc",
-    "--socket=fallback-x11",
     "--socket=wayland",
     "--device=dri",
     "--system-talk-name=org.freedesktop.fwupd",

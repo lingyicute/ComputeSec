@@ -8,7 +8,7 @@
     "--socket=wayland",
     "--device=dri",
     "--system-talk-name=org.freedesktop.fwupd",
-    "--talk-name=org.freedesktop.Flatpak",
+    "--system-talk-name=org.freedesktop.hostname1",
     "--filesystem=/var/lib/flatpak:ro",
     "--filesystem=~/.local/share/flatpak:ro",
     "--filesystem=/run/udev:ro",

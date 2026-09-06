@@ -11,7 +11,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import checks, data, ui  # noqa: E402
+from . import checks, data, hostdata, ui, wizard  # noqa: E402
 
 PAGES = [
     ("dashboard", "仪表盘", "go-home-symbolic"),
@@ -69,6 +69,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.header.pack_start(self.refresh_btn)
         menu = Gio.Menu()
         menu.append("重新检测", "app.refresh")
+        menu.append("重新采集系统数据…", "app.collect")
         menu.append("关于", "app.about")
         menu.append("退出", "app.quit")
         self.header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="主菜单"))
@@ -91,11 +92,29 @@ class MainWindow(Adw.ApplicationWindow):
 
         self.listbox.select_row(self.listbox.get_row_at_index(0))
         self.show_loading()
-        self.refresh()
+        # 启动时：若本次开机尚未采集过宿主机数据，先弹出采集向导
+        cached = hostdata.HostData.load()
+        if cached.fresh:
+            hostdata.set_current(cached)
+            self.refresh()
+        else:
+            hostdata.set_current(hostdata.HostData())
+            GLib.idle_add(self.open_wizard)
 
     # ---- 交互 ----
     def toast(self, text):
         self.toast_overlay.add_toast(Adw.Toast.new(text))
+
+    def open_wizard(self, *_):
+        """打开数据采集向导。向导保证 on_finish 恰好回调一次（完成或被关闭）。"""
+        existing = hostdata.CURRENT if hostdata.CURRENT.any_data else hostdata.HostData.load()
+        if not existing.fresh:
+            existing = hostdata.HostData()
+        wizard.CollectWizard(self, host_data=existing, on_finish=self.on_wizard_finish).present()
+        return False
+
+    def on_wizard_finish(self, _hd):
+        self.refresh()
 
     def on_row_selected(self, _lb, row):
         if row is None:
@@ -193,7 +212,7 @@ class Application(Adw.Application):
                     theme.add_search_path(p)
         Gtk.Window.set_default_icon_name(data.APP_ID)
         for name, cb, accel in (("about", self.on_about, None), ("quit", lambda *_: self.quit(), "<Primary>q"),
-                                ("refresh", self.on_refresh, "<Primary>r")):
+                                ("refresh", self.on_refresh, "<Primary>r"), ("collect", self.on_collect, "<Primary>d")):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", cb)
             self.add_action(act)
@@ -208,6 +227,11 @@ class Application(Adw.Application):
         win = self.props.active_window
         if win:
             win.refresh()
+
+    def on_collect(self, *_):
+        win = self.props.active_window
+        if win:
+            win.open_wizard()
 
     def on_about(self, *_):
         kwargs = dict(

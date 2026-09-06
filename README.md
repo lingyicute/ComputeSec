@@ -10,6 +10,13 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](./LICENSE)
 
+<p align="center">
+  [🇨🇳 中文] • <a href="README.en.md">🇺🇸 English</a> •
+  <a href="https://s.92li.uk/">🌐 官方网站</a> •
+  <a href="https://github.com/lingyicute/ComputeSec/releases">📦 获取</a> •
+  <a href="https://github.com/lingyicute/ComputeSec/issues">🐛 报告问题</a>
+</p>
+
 ![Screenshot](./screenshot/screenshot.png)
 
 </div>

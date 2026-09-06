@@ -5,7 +5,7 @@
 
 APP_ID = "uk._92li.lingyicute.ComputeSec"
 APP_NAME = "ComputeSec"
-VERSION = "1.0.2"
+VERSION = "1.1.0"
 AUTHOR = "lingyicute"
 HOMEPAGE = "https://github.com/lingyicute/ComputeSec"
 HARDEN_FLATPAK_URL = "https://github.com/lingyicute/harden-flatpak"

@@ -38,6 +38,7 @@
 ### 3. 内核加固
 * **状态读取与对比**：
   * 读取 `/proc/cmdline` 与 `/proc/sys`（等价于 `sysctl -a`）。
+  * 对于仅 root 可读的条目（`vm.mmap_rnd_bits` 等），通过「数据采集向导」由您粘贴 `sudo sysctl -a` 的结果补全；未提供时该项显示为「无法读取」并**不计入评分**。
   * 程序会根据您的当前架构，分别与内置 amd64 / aarch64 推荐 kargs 列表及 sysctl 加固列表进行对比。
 * **快速修复与指引**：
   * 支持一键复制缺失参数。
@@ -111,11 +112,31 @@ flatpak run uk._92li.lingyicute.ComputeSec
 | 权限 | 用途 |
 | --- | --- |
 | `--system-talk-name=org.freedesktop.fwupd` | 通过 D-Bus 读取 HSI 结果 |
-| `--talk-name=org.freedesktop.Flatpak` | 在 `fwupdmgr`、`lsblk`、`flatpak list` 需要时通过 `flatpak-spawn --host` 执行（仅只读命令） |
+| `--system-talk-name=org.freedesktop.hostname1` | 通过 D-Bus 读取**宿主机**的发行版名称、内核版本与机型（沙箱内 `/etc/os-release` 是 runtime 的字段） |
 | `--filesystem=/var/lib/flatpak:ro`、`~/.local/share/flatpak:ro` | 统计已安装的 Flatpak 应用 |
 | `--filesystem=/run/udev:ro`、`/boot/efi:ro`、`/efi:ro` | 检测 NTFS 分区与 Windows 引导器 |
 
 `/proc/cmdline`、`/proc/sys`、`/sys/class/dmi`、`/sys/bus/usb` 在沙箱内默认可读，无需额外权限。
+
+> **本工具不请求 `--talk-name=org.freedesktop.Flatpak`。**
+> 该权限允许通过 `flatpak-spawn --host` 在宿主机上以您的身份执行任意命令，等同于沙箱逃逸，
+> 对一个只读检测工具来说过于侵入。需要更高权限才能获得的信息，改由「数据采集向导」引导您自己执行只读命令并粘贴结果。
+
+### 数据采集向导
+
+有一部分信息普通用户权限读不到，例如 `vm.mmap_rnd_bits` 与 `vm.mmap_rnd_compat_bits`
+对应的 `/proc/sys` 文件权限是 `0600 root:root`；在 Flatpak 沙箱内还有更多条目不可见。
+
+因此 ComputeSec 在启动时会弹出一个分步向导：
+
+1. 每一步给出一条**只读命令**（如 `sudo sysctl -a`），可一键复制；
+2. 您在自己的终端里执行并确认输出；
+3. 复制输出后回到窗口点击「**我已复制结果**」——程序直接从剪贴板读取并解析，无需粘贴框。
+
+采集结果只保存在 `~/.local/share/computesec/hostdata.json`，并记录 `boot_id`：
+**重启后自动失效**（因为 sysctl 可能已改变），同一次开机内不会重复打扰您。
+任何一步都可以跳过，跳过的项目会显示为「无法读取」且不计入评分；
+随时可以从主菜单的「重新采集系统数据」（Ctrl+D）重新运行向导。
 
 ## 项目结构
 
@@ -125,6 +146,9 @@ computesec/
   ├── main.py           应用与窗口、导航、后台检测线程
   ├── ui.py             五个页面的构建
   ├── checks.py         数据采集与比对（fwupd、cmdline、sysctl、DMI、Flatpak、uptime、USB、NTFS）
+  ├── wizard.py         数据采集向导（分步执行只读命令 + 读取剪贴板）
+  ├── hostdata.py       用户协助采集的数据：解析、校验、缓存（按 boot_id 失效）
+  ├── hostinfo.py       宿主机身份信息（D-Bus org.freedesktop.hostname1）
   └── data.py           知识库：HSI 说明、内核参数、sysctl、厂商信誉
 data/
   └── 图标和构建信息

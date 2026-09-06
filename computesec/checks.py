@@ -22,7 +22,7 @@ MISSING = object()
 def run(cmd, timeout=40):
     """在本沙箱内执行只读命令。返回 (rc, stdout)，不可用返回 (None, '')。
 
-    注意：本程序**不使用** flatpak-spawn --host。持有 org.freedesktop.Flatpak
+    注意：本程序**已不再使用** flatpak-spawn --host。持有 org.freedesktop.Flatpak
     的 talk 权限等同于沙箱逃逸，对一个只读检测工具而言过于侵入。宿主机上才有的
     信息改由用户在“数据采集向导”中手动执行命令并粘贴（见 hostdata.py）。
     """
@@ -667,14 +667,14 @@ def check_ntfs() -> HabitCheck:
     win = _windows_installed()
     if not parts and not win and IN_FLATPAK and not hostdata.CURRENT.has("lsblk"):
         return HabitCheck("ntfs", "NTFS / Windows 检测", "unknown", "未能完整枚举磁盘分区",
-                          ["Flatpak 沙箱内看不到宿主机的块设备信息，且本程序不使用 flatpak-spawn 代您执行命令。"],
+                          ["Flatpak 沙箱内看不到宿主机的块设备信息。"],
                           "请从主菜单选择「重新采集系统数据」，按向导执行 lsblk 并粘贴结果，即可完成此项检测。")
     if parts or win:
         details = parts + win
         if win:
             summary = "检测到 Windows 安装" + (f"及 {len(parts)} 个 NTFS 分区" if parts else "")
             advice = ("Windows 是闭源系统，无法审计，存在被植入后门的风险，不应当用于高安全性计算。"
-                      "更严重的是：当前设备上安装了 Windows，那么 Windows 中的恶意软件或后门可能已经污染了固件、引导分区乃至这套 Linux 环境本身（例如篡改 EFI 分区、写入 UEFI 变量）。"
+                      "更严重的是：当前设备上安装了 Windows，那么 Windows 中的恶意软件或后门可能已经污染了这套 Linux 环境本身、引导分区甚至固件（例如篡改 EFI 分区、写入 UEFI 变量、乃至利用 SMM 漏洞向固件植入 Rootkit）。"
                       "在完全重装系统（最好同时重新刷写固件并重置 UEFI 密钥）之前，此硬件不应当用于高安全性计算。")
         else:
             summary = f"检测到 {len(parts)} 个 NTFS 分区"

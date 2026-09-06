@@ -118,7 +118,7 @@ The tool has to read information from the host, so it requests the permissions b
 
 `/proc/cmdline`, `/proc/sys`, `/sys/class/dmi` and `/sys/bus/usb` are readable inside the sandbox by default and need no extra permissions.
 
-> **This tool does not request `--talk-name=org.freedesktop.Flatpak`.**
+> **This tool does not request `--talk-name=org.freedesktop.Flatpak`from version 1.0.3.**
 > That permission allows running arbitrary commands on the host as you via `flatpak-spawn --host`,
 > which is equivalent to a sandbox escape and far too invasive for a read-only auditing tool.
 > Anything that needs higher privileges is instead gathered through the data collection wizard.

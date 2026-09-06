@@ -270,8 +270,8 @@ def build_dashboard(report, win, navigate):
         ident = report.identity
         src = f"系统信息来源：{ident.source}。" if ident is not None and ident.source else ""
         note = wrapped_label(
-            "提示：当前运行在 Flatpak 沙箱中。ComputeSec 仅通过只读 D-Bus 接口（fwupd、hostname1）与沙箱内可读的 /proc、/sys 采集数据，"
-            "不使用 flatpak-spawn 在宿主机上执行命令。" + src, css=("dim-label", "caption"))
+            "提示：当前运行在 Flatpak 沙箱中。ComputeSec 仅能通过只读 D-Bus 接口（fwupd、hostname1）与沙箱内可读的 /proc、/sys 采集数据，"
+            "无法在宿主机上执行命令。" + src, css=("dim-label", "caption"))
     return page([head, flow, todo] + extras + [note])
 
 

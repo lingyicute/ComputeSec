@@ -38,6 +38,7 @@
 ### 3. Kernel Hardening
 * **Reading and comparing state**:
   * Reads `/proc/cmdline` and `/proc/sys` (the equivalent of `sysctl -a`).
+  * Root-only entries (such as `vm.mmap_rnd_bits`) are filled in from the `sudo sysctl -a` output you paste via the data collection wizard; without it they are reported as "cannot read" and are **excluded from scoring**.
   * Compares them against the built-in recommended kargs list and sysctl hardening list for your architecture (amd64 / aarch64).
 * **Quick fixes and guidance**:
   * One-click copy of the missing parameters.
@@ -111,11 +112,35 @@ The tool has to read information from the host, so it requests the permissions b
 | Permission | Purpose |
 | --- | --- |
 | `--system-talk-name=org.freedesktop.fwupd` | Read HSI results over D-Bus |
-| `--talk-name=org.freedesktop.Flatpak` | Run `fwupdmgr`, `lsblk` and `flatpak list` via `flatpak-spawn --host` when needed (read-only commands only) |
+| `--system-talk-name=org.freedesktop.hostname1` | Read the **host's** distro name, kernel version and machine model over D-Bus (inside the sandbox `/etc/os-release` describes the runtime, not your system) |
 | `--filesystem=/var/lib/flatpak:ro`, `~/.local/share/flatpak:ro` | Count installed Flatpak apps |
 | `--filesystem=/run/udev:ro`, `/boot/efi:ro`, `/efi:ro` | Detect NTFS partitions and the Windows boot loader |
 
 `/proc/cmdline`, `/proc/sys`, `/sys/class/dmi` and `/sys/bus/usb` are readable inside the sandbox by default and need no extra permissions.
+
+> **This tool does not request `--talk-name=org.freedesktop.Flatpak`.**
+> That permission allows running arbitrary commands on the host as you via `flatpak-spawn --host`,
+> which is equivalent to a sandbox escape and far too invasive for a read-only auditing tool.
+> Anything that needs higher privileges is instead gathered through the data collection wizard.
+
+### Data collection wizard
+
+Some values simply cannot be read as a normal user: the `/proc/sys` files behind
+`vm.mmap_rnd_bits` and `vm.mmap_rnd_compat_bits` are `0600 root:root`, and more entries
+are hidden inside the Flatpak sandbox.
+
+So ComputeSec shows a step-by-step wizard at startup:
+
+1. Each step shows one **read-only command** (e.g. `sudo sysctl -a`) that you can copy with one click.
+2. You run it in your own terminal and check the output.
+3. Copy the output, come back and press "**I've copied the result**" — the app reads the
+   clipboard directly and parses it. No ugly paste box.
+
+Results are stored only in `~/.local/share/computesec/hostdata.json` together with the current
+`boot_id`, so they **expire automatically on reboot** (sysctl values may have changed) and you are
+not asked again during the same boot. Every step can be skipped; skipped checks are shown as
+"cannot read" and are **excluded from scoring**. You can re-run the wizard any time from the main
+menu ("Re-collect system data", Ctrl+D).
 
 ## Project layout
 

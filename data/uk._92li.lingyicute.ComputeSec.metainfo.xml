@@ -38,6 +38,17 @@
     <color type="primary" scheme_preference="dark">#1a5fb4</color>
   </branding>
   <releases>
+    <release version="1.1.0" date="2026-09-06">
+      <description>
+        <p>Privacy and accuracy improvements.</p>
+        <ul>
+          <li>Removed the invasive flatpak-spawn (org.freedesktop.Flatpak) permission</li>
+          <li>New step-by-step data collection wizard that reads results from the clipboard</li>
+          <li>Root-only sysctl values such as vm.mmap_rnd_bits are now reported instead of silently misjudged</li>
+          <li>Host OS name and kernel are read over the org.freedesktop.hostname1 D-Bus interface instead of the runtime's /etc/os-release</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.2" date="2026-09-05">
       <description>
         <p>Initial release.</p>

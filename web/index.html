@@ -414,7 +414,7 @@
             <svg viewBox="0 0 24 24"><path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/></svg>
           </div>
           <h3 class="title-lg">读取系统状态</h3>
-          <p class="body">通过 fwupd D-Bus、/proc/cmdline、/proc/sys、DMI / 设备树、Flatpak 目录与 USB 总线等只读来源，采集当前机器的真实状态。</p>
+          <p class="body">通过 fwupd 与 hostname1 D-Bus 接口、/proc/cmdline、/proc/sys、DMI / 设备树、Flatpak 目录与 USB 总线等只读来源，采集当前机器的真实状态；root 专属的条目由您在采集向导中授权提供。</p>
         </article>
         <article class="card step reveal">
           <span class="num">02</span>
@@ -610,7 +610,7 @@
           <div style="margin-top:1.5rem; display:grid; gap:.6rem;">
             <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
               <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-              <span>所有通过 <code style="font-family:var(--mono);font-size:.8rem;">flatpak-spawn --host</code> 执行的命令均为只读命令；收回任何权限后，对应功能只会显示「无法获取」，不影响其他检查。</span>
+              <span>本工具<strong>不请求</strong> <code style="font-family:var(--mono);font-size:.8rem;">--talk-name=org.freedesktop.Flatpak</code>——它等同于沙箱逃逸。需要 root 才能读取的信息（如 <code style="font-family:var(--mono);font-size:.8rem;">vm.mmap_rnd_bits</code>）由「数据采集向导」引导您自己执行只读命令并复制结果，点击「我已复制结果」即可。收回任何权限后，对应功能只会显示「无法获取」。</span>
             </div>
             <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
               <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
@@ -634,7 +634,7 @@
             <thead><tr><th>权限</th><th>用途</th></tr></thead>
             <tbody>
               <tr><td>--system-talk-name=org.freedesktop.fwupd</td><td>通过 D-Bus 读取 HSI 结果</td></tr>
-              <tr><td>--talk-name=org.freedesktop.Flatpak</td><td>在 fwupdmgr、lsblk、flatpak list 需要时通过 flatpak-spawn --host 执行（仅只读命令）</td></tr>
+              <tr><td>--system-talk-name=org.freedesktop.hostname1</td><td>读取宿主机的发行版名称、内核版本与机型（沙箱内 /etc/os-release 是 runtime 的字段）</td></tr>
               <tr><td>--filesystem=/var/lib/flatpak:ro<br>--filesystem=~/.local/share/flatpak:ro</td><td>统计已安装的 Flatpak 应用</td></tr>
               <tr><td>--filesystem=/run/udev:ro<br>--filesystem=/boot/efi:ro<br>--filesystem=/efi:ro</td><td>检测 NTFS 分区与 Windows 引导器</td></tr>
             </tbody>

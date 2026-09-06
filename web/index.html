@@ -320,6 +320,25 @@
   .reveal { opacity: 0; transform: translateY(22px); transition: opacity .6s var(--motion-emph), transform .6s var(--motion-emph); }
   .reveal.in { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .score, .shot-frame::before { animation: none; } }
+
+  /* ---------- Page loading overlay ---------- */
+  .page-loader {
+    position: fixed; inset: 0; z-index: 1000;
+    display: grid; place-items: center;
+    background: var(--surface, #fbf9f7);
+    transition: opacity .4s var(--motion-standard), visibility 0s linear .4s;
+  }
+  @media (prefers-color-scheme: dark) { .page-loader { background: var(--surface, #111312); } }
+  .page-loader.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .loader-ring {
+    width: 48px; height: 48px; border-radius: 50%;
+    border: 4px solid color-mix(in oklab, var(--primary, #2e7d32) 18%, transparent);
+    border-top-color: var(--primary, #2e7d32);
+    animation: loader-spin .9s linear infinite;
+  }
+  @keyframes loader-spin { to { transform: rotate(360deg); } }
+  .loader-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { .page-loader { transition: none; } .loader-ring { animation-duration: 1.6s; } }
 </style>
 <style>
   @font-face{
@@ -333,6 +352,12 @@
 </style>
 </head>
 <body>
+
+<!-- ============ Page loading overlay ============ -->
+<div class="page-loader" id="pageLoader" role="status" aria-live="polite">
+  <div class="loader-ring" aria-hidden="true"></div>
+  <span class="loader-text">页面加载中…</span>
+</div>
 
 <!-- ============ Top App Bar ============ -->
 <header class="appbar" id="appbar">
@@ -938,6 +963,47 @@
     document.querySelectorAll('.habit-items').forEach(g => g.style.gridTemplateColumns = mq.matches ? '1fr' : 'repeat(2, 1fr)');
   };
   mq.addEventListener('change', fixHabit); fixHabit();
+})();
+</script>
+<script>
+/* ---------- Page loading overlay ---------- */
+(function () {
+  'use strict';
+  const loader = document.getElementById('pageLoader');
+  if (!loader) return;
+
+  let hidden = false;
+  function hide() {
+    if (hidden) return;
+    hidden = true;
+    loader.classList.add('is-hidden');
+    // remove from the DOM once the fade-out (.4s) has finished
+    setTimeout(() => loader.remove(), 500);
+  }
+
+  // 1) every <img> in the document has finished loading (or failed)
+  const images = Array.from(document.images).map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise(resolve => {
+      img.addEventListener('load', resolve, { once: true });
+      img.addEventListener('error', resolve, { once: true });
+    });
+  });
+
+  // 2) window "load": stylesheets, icons and all other sub-resources are done
+  const windowLoaded = document.readyState === 'complete'
+    ? Promise.resolve()
+    : new Promise(resolve => window.addEventListener('load', resolve, { once: true }));
+
+  // 3) web fonts (checked after "load", when every font request has been issued)
+  const fontsReady = windowLoaded.then(() =>
+    (document.fonts && document.fonts.ready) ? document.fonts.ready : undefined
+  ).catch(() => {});
+
+  Promise.all([...images, windowLoaded, fontsReady]).then(hide, hide);
+
+  // safety net: never leave the page blocked if a resource hangs
+  setTimeout(hide, 15000);
 })();
 </script>
 </body>

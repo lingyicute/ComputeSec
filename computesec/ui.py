@@ -24,6 +24,7 @@ STATUS_STYLE = {
     "warn": ("dialog-warning-symbolic", "warning"),
     "bad": ("dialog-error-symbolic", "error"), "error": ("dialog-error-symbolic", "error"),
     "na": ("dialog-question-symbolic", "dim-label"), "unknown": ("dialog-question-symbolic", "dim-label"),
+    "locked": ("channel-secure-symbolic", "dim-label"),
 }
 RATING_STYLE = {"good": ("security-high-symbolic", "success"), "neutral": ("security-medium-symbolic", "accent"),
                 "caution": ("security-medium-symbolic", "warning"), "bad": ("security-low-symbolic", "error")}
@@ -251,10 +252,27 @@ def build_dashboard(report, win, navigate):
     if n == 0:
         todo.add(praise_row("没有待办事项，您的安全配置非常出色，请继续保持！"))
 
+    extras = []
+    hd = report.hostdata
+    if hd is not None and not hd.any_data:
+        g = group("补全检测数据", "有几项信息普通用户权限读不到（如 vm.mmap_rnd_bits）。ComputeSec 不请求提权、也不在宿主机上代您执行命令，"
+                                 "而是引导您自己执行一条只读命令并复制结果。")
+        r = Adw.ActionRow(title="运行数据采集向导", subtitle="约 30 秒，结果只保存在本机，重启后自动失效")
+        r.add_prefix(status_icon("warn"))
+        r.add_suffix(_collect_button(win))
+        r.set_activatable(True)
+        r.connect("activated", lambda *_: win.open_wizard())
+        g.add(r)
+        extras.append(g)
+
     note = None
     if report.in_flatpak:
-        note = wrapped_label("提示：当前运行在 Flatpak 沙箱中。部分检测通过 D-Bus 与 flatpak-spawn 在宿主机上执行，若结果显示“无法获取”，请确认已授予相应权限。", css=("dim-label", "caption"))
-    return page([head, flow, todo, note])
+        ident = report.identity
+        src = f"系统信息来源：{ident.source}。" if ident is not None and ident.source else ""
+        note = wrapped_label(
+            "提示：当前运行在 Flatpak 沙箱中。ComputeSec 仅通过只读 D-Bus 接口（fwupd、hostname1）与沙箱内可读的 /proc、/sys 采集数据，"
+            "不使用 flatpak-spawn 在宿主机上执行命令。" + src, css=("dim-label", "caption"))
+    return page([head, flow, todo] + extras + [note])
 
 
 # ---------------------------------------------------------------------------
@@ -333,9 +351,34 @@ def build_hsi(report, win):
 # ---------------------------------------------------------------------------
 # 内核加固
 # ---------------------------------------------------------------------------
+def _collect_button(win, label="采集系统数据"):
+    btn = Gtk.Button(valign=Gtk.Align.CENTER)
+    btn.set_child(Adw.ButtonContent(icon_name="utilities-terminal-symbolic", label=label))
+    btn.add_css_class("suggested-action")
+    btn.connect("clicked", lambda *_: win.open_wizard())
+    return btn
+
+
 def build_kernel(report, win):
     c, s = report.cmdline, report.sysctl
     cpu_zh = {"intel": "Intel", "amd": "AMD"}.get(c.cpu, "未知/非 x86")
+
+    # ---- 数据来源 / 采集提示 ----
+    g_src = None
+    if s.unknown or not s.user_supplied:
+        n = len(s.unknown)
+        if s.user_supplied:
+            desc = (f"已使用您提供的 sysctl 输出（{report.hostdata.age_text if report.hostdata else ''}采集）。"
+                    + (f"仍有 {n} 项无法判定，可能是您执行命令时没有加 sudo。" if n else ""))
+            title, icon = "数据来源：您提供的 sysctl -a", "object-select-symbolic"
+        else:
+            desc = (f"当前有 {n} 项 sysctl 因为文件仅 root 可读而无法判定（例如 vm.mmap_rnd_bits），未计入评分。"
+                    if n else "部分 sysctl 条目在当前权限或 Flatpak 沙箱内不可见。")
+            desc += "点击右侧按钮，按向导在终端执行一条只读命令并复制结果，即可得到完整准确的评估。"
+            title, icon = "部分数据不完整", "dialog-information-symbolic"
+        g_src = group(title, desc)
+        g_src.set_header_suffix(_collect_button(win, "重新采集" if s.user_supplied else "采集系统数据"))
+
     # ---- cmdline ----
     g1 = group("内核当前启动参数和加固状态", f"架构: {c.arch} · CPU 制造商: {cpu_zh}\n{data.KERNEL_MACHINE_SPECIFIC_NOTE}")
     g1.set_header_suffix(score_label(c.score))
@@ -377,17 +420,25 @@ def build_kernel(report, win):
 
     # ---- sysctl ----
     sys_groups = []
+    order = {"missing": 0, "unknown": 1, "ok": 2, "na": 3}
     for title, items in s.groups:
-        g = group(f"sysctl · {title}", f"{sum(1 for i in items if i.status == 'ok')} / {sum(1 for i in items if i.status != 'na')} 项已设置")
-        for it in sorted(items, key=lambda i: ({"missing": 0, "ok": 1, "na": 2}[i.status])):
+        g = group(f"sysctl · {title}", f"{sum(1 for i in items if i.status == 'ok')} / {sum(1 for i in items if i.status not in ('na', 'unknown'))} 项已设置")
+        for it in sorted(items, key=lambda i: (order.get(i.status, 9), i.key)):
             row = Adw.ActionRow(title=f"<tt>{esc(it.key)}</tt> = <tt>{esc(it.expected)}</tt>" + (" <small>(≥)</small>" if it.cmp == "ge" else ""))
             sub = it.desc + (f"  ⚠ {it.note}" if it.note else "")
             if it.status == "missing":
                 sub += f"  （当前：{it.actual_text}）"
             elif it.status == "na":
                 sub += "  （内核不支持或模块未加载）"
+            elif it.status == "unknown":
+                sub += "  （该文件仅 root 可读，未参与评分；请用主菜单的「重新采集系统数据」提供 sudo sysctl -a 的结果）"
             row.set_subtitle(esc(sub))
-            row.add_prefix(status_icon(it.status))
+            row.add_prefix(status_icon("locked" if it.status == "unknown" else it.status))
+            if it.source == "用户提供":
+                tag = Gtk.Label(label="您提供", valign=Gtk.Align.CENTER)
+                tag.add_css_class("caption")
+                tag.add_css_class("dim-label")
+                row.add_suffix(tag)
             g.add(row)
         sys_groups.append(g)
 
@@ -413,7 +464,7 @@ def build_kernel(report, win):
     if s.arch == "aarch64":
         g_arm = group("aarch64 ASLR 提示")
         g_arm.add(code_block(data.SYSCTL_AARCH64_NOTE))
-    return page([g1, g_fix] + sys_groups + [g_sfix, g_arm])
+    return page([g_src, g1, g_fix] + sys_groups + [g_sfix, g_arm])
 
 
 # ---------------------------------------------------------------------------
@@ -433,6 +484,22 @@ def build_hardware(report, win):
     if not (hw.sys_vendor or hw.product or hw.model):
         info.add(text_row("提示", "无法读取 DMI/设备树信息。"))
 
+    ident = report.identity
+    if ident is not None:
+        sysinfo = group("宿主机系统信息", "通过 D-Bus 接口 org.freedesktop.hostname1 读取，因此在 Flatpak 内也是您真实的发行版，"
+                                          "而不是 runtime（org.gnome.Platform）的字段。")
+        for label, val in (("操作系统", ident.pretty_name), ("CPE 名称", ident.cpe_name),
+                           ("内核", " ".join(x for x in (ident.kernel_name, ident.kernel_release) if x)),
+                           ("机箱类型", ident.chassis), ("主机名", ident.static_hostname or ident.hostname),
+                           ("数据来源", ident.source)):
+            if val:
+                sysinfo.add(text_row(label, val, selectable=True))
+        if ident.dbus_error:
+            sysinfo.add(text_row("⚠ D-Bus 读取失败", ident.dbus_error + "（已回退到 /run/host/os-release）"))
+        info_extra = sysinfo
+    else:
+        info_extra = None
+
     hist = group("历史安全 / 隐私事件", "信息来自公开报道与 CVE 记录，仅供参考。")
     for title, desc in v["incidents"]:
         hist.add(text_row(title, desc))
@@ -449,7 +516,7 @@ def build_hardware(report, win):
     general = group("通用建议")
     general.add(text_row("固件更新", "无论品牌如何，都请通过 fwupdmgr update / GNOME 软件保持固件最新，并在固件设置中启用安全启动、TPM 与 IOMMU。"))
     general.add(text_row("开源固件", "若机型支持 coreboot / Dasharo / Heads，刷入开源固件能显著提高可审计性。"))
-    return page([sp, info, hist, adv, general])
+    return page([sp, info, info_extra, hist, adv, general])
 
 
 # ---------------------------------------------------------------------------

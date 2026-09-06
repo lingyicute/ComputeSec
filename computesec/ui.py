@@ -18,6 +18,60 @@ def esc(s):
     return GLib.markup_escape_text(str(s))
 
 
+# ---------------------------------------------------------------------------
+# 应用级样式
+# ---------------------------------------------------------------------------
+# GtkFlowBox 会把每个子控件自动包进一层 GtkFlowBoxChild，而 libadwaita 为它定义了
+# （src/stylesheet/widgets/_views.scss）：
+#
+#     flowbox > flowboxchild, gridview > child { padding: 3px; border-radius: 9px; }
+#     flowbox > flowboxchild,
+#     gridview > child.activatable            { &:hover { background-color: …; } }
+#
+# 注意 .activatable 只限定了 gridview > child，flowboxchild 是无条件匹配的，
+# 因此即便 selection-mode=NONE 也会画出悬浮高亮。于是仪表盘上的评分卡片出现两个问题：
+#   1. 尺寸：包装层比卡片四周各大 3px（padding），高亮因此“超出”卡片；
+#   2. 形状：包装层圆角 9px，而 button.card 是 12px，方角会从圆角外露出来。
+#
+# 卡片本身（button.card:hover）已经有正确对齐、正确圆角的悬浮效果，包装层那层是多余的。
+# 这里只去掉包装层的 padding 与背景，保留焦点框（键盘导航仍需要它）。
+_CSS = b"""
+flowbox.cards > flowboxchild {
+  padding: 0;
+  border-radius: 12px;
+}
+flowbox.cards > flowboxchild:hover,
+flowbox.cards > flowboxchild:active,
+flowbox.cards > flowboxchild:selected {
+  background-color: transparent;
+  background-image: none;
+}
+"""
+_css_loaded = False
+
+
+def ensure_css():
+    """把上面的样式挂到默认 display 上（只需一次）。"""
+    global _css_loaded
+    if _css_loaded:
+        return
+    display = Gdk.Display.get_default()
+    if display is None:
+        return
+    provider = Gtk.CssProvider()
+    try:
+        # GTK ≥ 4.12 弃用了带长度参数的 load_from_data，改用 load_from_string
+        if hasattr(provider, "load_from_string"):
+            provider.load_from_string(_CSS.decode())
+        else:
+            provider.load_from_data(_CSS)
+    except Exception:
+        return
+    Gtk.StyleContext.add_provider_for_display(
+        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    _css_loaded = True
+
+
 STATUS_STYLE = {
     "ok": ("object-select-symbolic", "success"), "good": ("object-select-symbolic", "success"),
     "missing": ("dialog-warning-symbolic", "warning"), "wrong": ("dialog-warning-symbolic", "warning"),
@@ -177,8 +231,11 @@ def build_dashboard(report, win, navigate):
     sub.set_justify(Gtk.Justification.CENTER)
     head.append(sub)
 
+    ensure_css()
     flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True, max_children_per_line=2, min_children_per_line=1,
                        column_spacing=12, row_spacing=12)
+    # 配合 _CSS：去掉 flowboxchild 那层多余且比卡片大一圈的悬浮高亮
+    flow.add_css_class("cards")
     hsi_txt = (report.hsi.host_id or "已检测") if report.hsi.ok else "无法获取"
     hsi_score = report.hsi.score if report.hsi.ok else 0
     cards = [
@@ -209,6 +266,11 @@ def build_dashboard(report, win, navigate):
         btn.set_child(box)
         btn.connect("clicked", lambda _b, k=key: navigate(k))
         flow.append(btn)
+        # 包装层默认也可获得焦点，Tab 导航时会在按钮自身的焦点框之外再画一个；
+        # 让焦点直接落到按钮上。
+        child = flow.get_last_child()
+        if child is not None:
+            child.set_focusable(False)
 
     todo = group("待办摘要", "点击上方卡片查看详情与修复方法")
     n = 0

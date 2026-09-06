@@ -10,7 +10,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
-from . import data
+from . import data, hostdata, hostinfo
 
 IN_FLATPAK = os.path.exists("/.flatpak-info")
 MISSING = object()
@@ -20,9 +20,14 @@ MISSING = object()
 # 工具函数
 # ---------------------------------------------------------------------------
 def run(cmd, timeout=40):
-    """执行命令；Flatpak 内通过 flatpak-spawn --host 在宿主机执行。返回 (rc, stdout)，不可用返回 (None, '')。"""
+    """在本沙箱内执行只读命令。返回 (rc, stdout)，不可用返回 (None, '')。
+
+    注意：本程序**不使用** flatpak-spawn --host。持有 org.freedesktop.Flatpak
+    的 talk 权限等同于沙箱逃逸，对一个只读检测工具而言过于侵入。宿主机上才有的
+    信息改由用户在“数据采集向导”中手动执行命令并粘贴（见 hostdata.py）。
+    """
     if IN_FLATPAK:
-        cmd = ["flatpak-spawn", "--host"] + list(cmd)
+        return None, ""
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return p.returncode, p.stdout
@@ -72,12 +77,12 @@ def cpu_model():
 
 
 def os_release():
-    d = {}
-    for line in read("/etc/os-release").splitlines():
-        if "=" in line:
-            k, v = line.split("=", 1)
-            d[k] = v.strip().strip('"')
-    return d
+    """宿主机 os-release 字段。
+
+    Flatpak 内 /etc/os-release 是 runtime 的（"GNOME Platform"），
+    因此统一走 hostinfo（D-Bus org.freedesktop.hostname1 → /run/host/os-release）。
+    """
+    return hostinfo.get_identity().os_release
 
 
 def kernel_version():
@@ -218,8 +223,8 @@ def get_hsi() -> HsiReport:
         except ValueError:
             pass
     err = "无法获取 HSI 数据。请确认已安装并启动 fwupd（sudo systemctl start fwupd）。"
-    if rc is None and IN_FLATPAK:
-        err += " Flatpak 版本需要 org.freedesktop.fwupd D-Bus 访问权限或 flatpak-spawn 权限。"
+    if IN_FLATPAK:
+        err += " Flatpak 版本通过 D-Bus 读取，需要 org.freedesktop.fwupd 的系统总线访问权限（可用 Flatseal 查看）。"
     return HsiReport(ok=False, error=err)
 
 
@@ -309,12 +314,15 @@ class SysctlItem:
     expected: str
     cmp: str
     actual: dict            # 具体键 -> 值 (None 表示不存在)
-    status: str             # ok / missing / na
+    status: str             # ok / missing / na / unknown
     desc: str
     note: str = ""
+    source: str = ""        # proc / 用户提供
 
     @property
     def actual_text(self):
+        if self.status == "unknown":
+            return "（无法读取，需要 root 权限）"
         if not self.actual:
             return "（内核不支持）"
         vals = {v for v in self.actual.values()}
@@ -328,6 +336,8 @@ class SysctlItem:
 class SysctlReport:
     arch: str
     groups: list        # [(title, [SysctlItem])]
+    source: str = "/proc/sys"
+    user_supplied: bool = False
 
     @property
     def all_items(self):
@@ -338,8 +348,13 @@ class SysctlReport:
         return [i for i in self.all_items if i.status == "missing"]
 
     @property
+    def unknown(self):
+        """因权限不足而无法判定的条目。"""
+        return [i for i in self.all_items if i.status == "unknown"]
+
+    @property
     def score(self):
-        ap = [i for i in self.all_items if i.status != "na"]
+        ap = [i for i in self.all_items if i.status not in ("na", "unknown")]
         return int(100 * sum(1 for i in ap if i.status == "ok") / len(ap)) if ap else 0
 
 
@@ -363,31 +378,60 @@ def _sysctl_value_ok(actual, expected, cmp):
     return a == e
 
 
+def _sysctl_from_proc(key):
+    """从 /proc/sys 读取。返回 (actual, unreadable)。
+
+    unreadable=True 表示文件存在但因权限（EACCES/EPERM）读不到，
+    典型例子是 vm.mmap_rnd_bits / vm.mmap_rnd_compat_bits（0600 root:root）。
+    """
+    actual, unreadable = {}, False
+    for p in _sysctl_paths(key):
+        k = p[len("/proc/sys/"):].replace("/", ".")
+        try:
+            with open(p) as f:
+                actual[k] = f.read().strip()
+        except PermissionError:
+            unreadable = True
+        except OSError:
+            actual[k] = None
+    return actual, unreadable
+
+
 def get_sysctl_report() -> SysctlReport:
+    hd = hostdata.CURRENT
+    user_values = hd.sysctl_values
     groups = []
     for title, entries in data.SYSCTL_GROUPS:
         items = []
         for e in entries:
-            paths = _sysctl_paths(e["key"])
-            actual = {}
-            for p in paths:
-                k = p[len("/proc/sys/"):].replace("/", ".")
-                try:
-                    with open(p) as f:
-                        actual[k] = f.read().strip()
-                except OSError:
-                    actual[k] = None
+            key = e["key"]
             cmp = e.get("cmp", "eq")
-            if not actual:
+            actual, unreadable = _sysctl_from_proc(key)
+            source = "proc"
+            # 用户提供的 sysctl -a（以 root 执行、在宿主机上执行）优先级更高：
+            # 它既能补上权限不足的条目，也能补上被 Flatpak 沙箱屏蔽的条目。
+            if user_values:
+                supplied = hd.sysctl_lookup(key)
+                if supplied:
+                    merged = dict(actual)
+                    merged.update(supplied)      # 用户值覆盖沙箱内读到的值
+                    if unreadable or merged != actual:
+                        source = "用户提供"
+                    actual = merged
+                    unreadable = False
+            if unreadable and not actual:
+                status = "unknown"
+            elif not actual:
                 status = "na"
             elif all(_sysctl_value_ok(v, e["value"], cmp) for v in actual.values()):
                 status = "ok"
             else:
                 status = "missing"
-            items.append(SysctlItem(key=e["key"], expected=e["value"], cmp=cmp, actual=actual, status=status,
-                                    desc=e["desc"], note=e.get("note", "")))
+            items.append(SysctlItem(key=key, expected=e["value"], cmp=cmp, actual=actual, status=status,
+                                    desc=e["desc"], note=e.get("note", ""), source=source))
         groups.append((title, items))
-    return SysctlReport(arch=arch(), groups=groups)
+    src = "/proc/sys + 用户提供的 sysctl -a" if user_values else "/proc/sys"
+    return SysctlReport(arch=arch(), groups=groups, source=src, user_supplied=bool(user_values))
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +457,15 @@ def get_hardware() -> HardwareReport:
     dmi = lambda n: read(f"/sys/class/dmi/id/{n}").strip()
     sv, pn, bv, biosv, biosver = dmi("sys_vendor"), dmi("product_name"), dmi("board_vendor"), dmi("bios_vendor"), dmi("bios_version")
     model = read("/proc/device-tree/model").strip("\x00\n ")
+    # D-Bus hostname1 也提供厂商/型号/固件版本（宿主机视角），用于补全沙箱内读不到的字段
+    try:
+        ident = hostinfo.get_identity()
+        sv = sv or ident.hw_vendor
+        pn = pn or ident.hw_model
+        biosver = biosver or ident.firmware_version
+        model = model or ident.hw_model
+    except Exception:
+        pass
     candidates = [("系统厂商", sv), ("产品名称", pn), ("主板厂商", bv), ("设备型号", model)]
     vendor, matched = data.DEFAULT_VENDOR, ""
     for label, text in candidates:
@@ -552,17 +605,31 @@ def check_usb() -> HabitCheck:
                       "很好！有线或蓝牙安全连接的输入设备能有效防止按键被嗅探，请继续保持。")
 
 
+def _ntfs_from_lsblk_json(j):
+    found = []
+
+    def walk(nodes):
+        for n in nodes:
+            if (n.get("fstype") or "").lower() in ("ntfs", "ntfs3", "exfat-ntfs"):
+                found.append(f"/dev/{n.get('name')}  {n.get('size', '')}  标签: {n.get('label') or '-'}  挂载: {n.get('mountpoint') or '-'}")
+            walk(n.get("children", []) or [])
+
+    walk(j.get("blockdevices", []) or [])
+    return found
+
+
 def _ntfs_partitions():
     found, source = [], ""
+    # 1) 用户在采集向导中提供的 lsblk -J 输出（Flatpak 内唯一可靠的来源）
+    supplied = hostdata.CURRENT.lsblk
+    if supplied:
+        found = _ntfs_from_lsblk_json(supplied)
+        source = "lsblk（用户提供）"
+        return found, source
     rc, out = run(["lsblk", "-J", "-o", "NAME,FSTYPE,LABEL,SIZE,MOUNTPOINT"])
     if out.strip():
         try:
-            def walk(nodes):
-                for n in nodes:
-                    if (n.get("fstype") or "").lower() in ("ntfs", "ntfs3", "exfat-ntfs"):
-                        found.append(f"/dev/{n.get('name')}  {n.get('size', '')}  标签: {n.get('label') or '-'}  挂载: {n.get('mountpoint') or '-'}")
-                    walk(n.get("children", []) or [])
-            walk(json.loads(out).get("blockdevices", []))
+            found = _ntfs_from_lsblk_json(json.loads(out))
             source = "lsblk"
         except ValueError:
             pass
@@ -598,6 +665,10 @@ def _windows_installed():
 def check_ntfs() -> HabitCheck:
     parts, source = _ntfs_partitions()
     win = _windows_installed()
+    if not parts and not win and IN_FLATPAK and not hostdata.CURRENT.has("lsblk"):
+        return HabitCheck("ntfs", "NTFS / Windows 检测", "unknown", "未能完整枚举磁盘分区",
+                          ["Flatpak 沙箱内看不到宿主机的块设备信息，且本程序不使用 flatpak-spawn 代您执行命令。"],
+                          "请从主菜单选择「重新采集系统数据」，按向导执行 lsblk 并粘贴结果，即可完成此项检测。")
     if parts or win:
         details = parts + win
         if win:
@@ -633,6 +704,8 @@ class Report:
     os_name: str
     kernel: str
     in_flatpak: bool
+    identity: object = None         # hostinfo.HostIdentity
+    hostdata: object = None         # hostdata.HostData
 
     @property
     def kernel_score(self):
@@ -652,12 +725,13 @@ def _safe(fn, fallback):
 
 
 def collect() -> Report:
-    osr = os_release()
+    ident = _safe(hostinfo.get_identity, lambda e: hostinfo.HostIdentity(dbus_error=str(e)))
     return Report(
         hsi=_safe(get_hsi, lambda e: HsiReport(ok=False, error=f"检测时出错：{e}")),
         cmdline=_safe(get_cmdline_report, lambda e: CmdlineReport(arch=arch(), cpu=cpu_vendor(), cmdline=f"读取失败：{e}", items=[])),
         sysctl=_safe(get_sysctl_report, lambda e: SysctlReport(arch=arch(), groups=[])),
         hardware=_safe(get_hardware, lambda e: HardwareReport("", "", "", "", "", "", data.DEFAULT_VENDOR, "")),
         habits=_safe(get_habits, lambda e: HabitsReport(checks=[HabitCheck("err", "检测出错", "unknown", str(e), [], "")])),
-        arch=arch(), cpu=cpu_model(), os_name=osr.get("PRETTY_NAME", "Linux"), kernel=kernel_version(), in_flatpak=IN_FLATPAK,
+        arch=arch(), cpu=cpu_model(), os_name=ident.os_name, kernel=ident.kernel, in_flatpak=IN_FLATPAK,
+        identity=ident, hostdata=hostdata.CURRENT,
     )

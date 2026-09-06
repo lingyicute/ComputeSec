@@ -74,7 +74,7 @@ def parse_sysctl(text):
             continue
         values[key] = " ".join(val.split())
     if len(values) < 30 or not any(a in values for a in SYSCTL_ANCHORS):
-        return None, ("剪贴板里的内容看起来不是 sysctl 的输出（只解析出 %d 个条目）。"
+        return None, ("剪贴板里的内容看起来不是 sysctl 的完整输出（只解析出 %d 个条目）。"
                       "请确认已执行上面的命令，并复制了它打印的全部内容。" % len(values))
     meta = {}
     if denied:

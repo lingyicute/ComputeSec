@@ -118,7 +118,7 @@ flatpak run uk._92li.lingyicute.ComputeSec
 
 `/proc/cmdline`、`/proc/sys`、`/sys/class/dmi`、`/sys/bus/usb` 在沙箱内默认可读，无需额外权限。
 
-> **本工具不请求 `--talk-name=org.freedesktop.Flatpak`。**
+> **从 v1.0.3 开始，本工具已不再请求 `--talk-name=org.freedesktop.Flatpak`。**
 > 该权限允许通过 `flatpak-spawn --host` 在宿主机上以您的身份执行任意命令，等同于沙箱逃逸，
 > 对一个只读检测工具来说过于侵入。需要更高权限才能获得的信息，改由「数据采集向导」引导您自己执行只读命令并粘贴结果。
 

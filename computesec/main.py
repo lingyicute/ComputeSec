@@ -29,6 +29,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.set_icon_name(data.APP_ID)
         self.report = None
         self.bins = {}
+        self.built = set()          # 已构建的页面
+        self._idle_build_id = 0     # 空闲增量构建的 source id
 
         self.toast_overlay = Adw.ToastOverlay()
         self.set_content(self.toast_overlay)
@@ -90,6 +92,9 @@ class MainWindow(Adw.ApplicationWindow):
         except Exception:
             pass
 
+        # 窗口关闭时取消待执行的空闲构建，避免回调操作已销毁的控件
+        self.connect("close-request", self._on_close)
+
         self.listbox.select_row(self.listbox.get_row_at_index(0))
         self.show_loading()
         # 启动时：若本次开机尚未采集过宿主机数据，先弹出采集向导
@@ -119,6 +124,8 @@ class MainWindow(Adw.ApplicationWindow):
     def on_row_selected(self, _lb, row):
         if row is None:
             return
+        # 若该页尚未构建（空闲队列还没轮到），立刻构建，避免切过去是空白
+        self.build_page(row.page_key)
         self.stack.set_visible_child_name(row.page_key)
         title = next(t for k, t, _ in PAGES if k == row.page_key)
         self.title_widget.set_title(title)
@@ -161,8 +168,17 @@ class MainWindow(Adw.ApplicationWindow):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def render(self, report):
-        self.report = report
+    def _on_close(self, *_):
+        if self._idle_build_id:
+            GLib.source_remove(self._idle_build_id)
+            self._idle_build_id = 0
+        return False
+
+    def build_page(self, key):
+        """按需构建某一页。已构建过则直接返回。"""
+        if key in self.built or self.report is None:
+            return
+        report = self.report
         builders = {
             "dashboard": lambda: ui.build_dashboard(report, self, self.navigate),
             "hsi": lambda: ui.build_hsi(report, self),
@@ -170,13 +186,35 @@ class MainWindow(Adw.ApplicationWindow):
             "hardware": lambda: ui.build_hardware(report, self),
             "habits": lambda: ui.build_habits(report, self),
         }
-        for key, build in builders.items():
-            try:
-                self.bins[key].set_child(build())
-            except Exception as e:  # 页面构建失败时给出可见错误而非崩溃
-                import traceback
-                traceback.print_exc()
-                self.bins[key].set_child(Adw.StatusPage(icon_name="dialog-error-symbolic", title="页面渲染失败", description=str(e)))
+        try:
+            self.bins[key].set_child(builders[key]())
+        except Exception as e:  # 页面构建失败时给出可见错误而非崩溃
+            import traceback
+            traceback.print_exc()
+            self.bins[key].set_child(Adw.StatusPage(icon_name="dialog-error-symbolic", title="页面渲染失败", description=str(e)))
+        self.built.add(key)
+
+    def _build_pending(self):
+        """空闲时逐页构建剩余页面：每次只做一页，让主循环有机会处理输入与绘制。"""
+        for key, _, _ in PAGES:
+            if key not in self.built:
+                self.build_page(key)
+                return True        # 还有剩余，下次空闲继续
+        self._idle_build_id = 0
+        return False
+
+    def render(self, report):
+        self.report = report
+        # 只构建当前可见的页面，其余留到空闲时增量构建。
+        # 一次性构建全部五页会在一个主循环回调里创建数千个控件，
+        # 导致窗口在首次绘制前长时间无响应。
+        sel = self.listbox.get_selected_row()
+        current = sel.page_key if sel else "dashboard"
+        self.built = set()
+        self.build_page(current)
+        if self._idle_build_id:
+            GLib.source_remove(self._idle_build_id)
+        self._idle_build_id = GLib.idle_add(self._build_pending, priority=GLib.PRIORITY_LOW)
         scores = {"dashboard": report.overall, "hsi": report.hsi.score if report.hsi.ok else None, "kernel": report.kernel_score,
                   "hardware": report.hardware.score, "habits": report.habits.score}
         i = 0

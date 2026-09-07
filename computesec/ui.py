@@ -340,6 +340,29 @@ def build_dashboard(report, win, navigate):
 # ---------------------------------------------------------------------------
 # HSI
 # ---------------------------------------------------------------------------
+def lazy_expander(row, populate):
+    """让 Adw.ExpanderRow 的子行在首次展开时才构建。
+
+    折叠状态下这些子行是看不见的，但仍会被创建并参与尺寸计算。HSI 页面上有
+    几十个这样的展开行，每行 3-5 个子行，一次性构建会明显拖慢首次绘制。
+    """
+    # 状态保存在闭包里，而不是往 GObject 上挂属性：PyGObject 的 Python 包装对象
+    # 不保证跨 C 边界存活，属性丢失会导致再次展开时重复插入子行。
+    done = []
+
+    def on_expanded(r, _pspec):
+        if done or not r.get_expanded():
+            return
+        done.append(True)
+        populate(r)
+        if handler:
+            r.disconnect(handler[0])        # 只需触发一次
+
+    handler = []
+    handler.append(row.connect("notify::expanded", on_expanded))
+    return row
+
+
 def _hsi_item_row(it):
     row = Adw.ExpanderRow(title=esc(it.name))
     res = data.HSI_RESULT_ZH.get(it.result, it.result)
@@ -349,15 +372,18 @@ def _hsi_item_row(it):
     lvl.add_css_class("dim-label")
     lvl.add_css_class("caption")
     row.add_suffix(lvl)
-    info = it.info
-    row.add_row(text_row("检测项含义", info.get("meaning") or it.summary or "fwupd 未提供说明。"))
-    row.add_row(text_row("缺失的危害", info.get("risk") or "该项未通过会削弱平台信任链。"))
-    if info.get("fix"):
-        row.add_row(text_row(f"修复方法（{data.HSI_KIND_ZH.get(info.get('kind'), '')}）", info["fix"]))
-    if it.flags - {"success"}:
-        row.add_row(text_row("fwupd 标记", ", ".join(sorted(it.flags))))
-    row.add_row(text_row("AppStream ID", it.id + (f"  ·  {it.uri}" if it.uri else ""), selectable=True))
-    return row
+
+    def populate(r):
+        info = it.info
+        r.add_row(text_row("检测项含义", info.get("meaning") or it.summary or "fwupd 未提供说明。"))
+        r.add_row(text_row("缺失的危害", info.get("risk") or "该项未通过会削弱平台信任链。"))
+        if info.get("fix"):
+            r.add_row(text_row(f"修复方法（{data.HSI_KIND_ZH.get(info.get('kind'), '')}）", info["fix"]))
+        if it.flags - {"success"}:
+            r.add_row(text_row("fwupd 标记", ", ".join(sorted(it.flags))))
+        r.add_row(text_row("AppStream ID", it.id + (f"  ·  {it.uri}" if it.uri else ""), selectable=True))
+
+    return lazy_expander(row, populate)
 
 
 def build_hsi(report, win):
@@ -387,9 +413,12 @@ def build_hsi(report, win):
         for it in [i for i in fixable if i.info.get("kind") == kind]:
             row = Adw.ExpanderRow(title=esc(it.name), subtitle=esc(data.HSI_KIND_ZH[kind]))
             row.add_prefix(status_icon("warn"))
-            row.add_row(text_row("为什么要修", it.info.get("risk", "")))
-            row.add_row(text_row("如何修复", it.info["fix"]))
-            fix.add(row)
+
+            def populate(r, it=it):
+                r.add_row(text_row("为什么要修", it.info.get("risk", "")))
+                r.add_row(text_row("如何修复", it.info["fix"]))
+
+            fix.add(lazy_expander(row, populate))
 
     others = [i for i in h.failed if i not in fixable]
     unfix = None

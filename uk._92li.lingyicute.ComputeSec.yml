@@ -37,7 +37,7 @@ modules:
     sources:
       - type: archive
         url: https://github.com/lingyicute/ComputeSec/archive/refs/tags/v1.1.0.tar.gz
-        sha256: f09dc1b057a2408370c5bd8eb61290721d25abfc3ac161cfad94301be5bd280d
+        sha256: 85002bf8d92a3fd15aaff03da19f0cbfef1990ca94cefd6aaf92124fa4f0149e
         x-checker-data:
           type: github
           owner: lingyicute

@@ -362,7 +362,8 @@ SYSCTL_GROUPS = [
         dict(key="kernel.io_uring_disabled", value="2", desc="彻底禁用 io_uring（近年大量提权漏洞的来源，内核 ≥ 6.6）。", note="少数高性能应用依赖 io_uring。"),
     ]),
     ("文件系统安全", [
-        dict(key="fs.binfmt_misc.status", value="0", desc="禁用 binfmt_misc，防止注册恶意解释器。"),
+        dict(key="fs.binfmt_misc.status", value="0", desc="禁用 binfmt_misc，防止注册恶意解释器。",
+             note="该项读出来是 enabled / disabled，写入时用 1 / 0；disabled 即等于 0。"),
         dict(key="fs.suid_dumpable", value="0", desc="SUID 程序不生成核心转储。"),
         dict(key="fs.protected_regular", value="2", desc="限制在全局可写目录中打开他人创建的普通文件。"),
         dict(key="fs.protected_fifos", value="2", desc="限制在全局可写目录中打开他人创建的 FIFO。"),

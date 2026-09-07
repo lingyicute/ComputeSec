@@ -365,11 +365,27 @@ def _sysctl_paths(key):
     return [path] if os.path.exists(path) else []
 
 
+# 少数 sysctl 读出来是单词、写进去却是数字，两者含义相同。
+# 例如 fs.binfmt_misc.status：内核 bm_status_read() 固定返回 "enabled"/"disabled"，
+# 而 bm_status_write() 只接受 0 / 1 / -1（parse_command()，写单词会得到 -EINVAL）。
+# 因此 "disabled" 与我们期望的 "0" 完全等价，不做归一化会把已加固的机器误报为未设置。
+_SYSCTL_WORD_ALIASES = {
+    "disabled": "0",
+    "enabled": "1",
+}
+
+
+def _sysctl_norm(v):
+    """把读到的值归一化，便于与期望值比较。"""
+    v = " ".join(v.split())
+    return _SYSCTL_WORD_ALIASES.get(v.lower(), v)
+
+
 def _sysctl_value_ok(actual, expected, cmp):
     if actual is None:
         return False
-    a = " ".join(actual.split())
-    e = " ".join(expected.split())
+    a = _sysctl_norm(actual)
+    e = _sysctl_norm(expected)
     if cmp == "ge":
         try:
             return int(a) >= int(e)

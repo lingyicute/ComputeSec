@@ -599,10 +599,10 @@ def check_usb() -> HabitCheck:
             suspects.append(f"{d['vid']}:{d['pid']} {d['manufacturer']} {d['product']} — {hit}")
     if suspects:
         return HabitCheck("usb", "2.4G 无线接收器", "bad", f"发现 {len(suspects)} 个 2.4G 无线接收器", suspects,
-                          "大多数 2.4G 无线键鼠不加密或使用弱加密，攻击者在数十米外即可嗅探您输入的每一个字符（包括密码、密钥口令），甚至注入按键（MouseJack）。"
-                          "高安全性计算请改用有线键鼠；蓝牙 LE Secure Connections 是次优选择。")
+                          "绝大多数 2.4G 无线键鼠不加密或使用弱加密，攻击者在数十米外即可嗅探您输入的每一个字符（包括密码、密钥口令），甚至注入按键（MouseJack）。"
+                          "高安全性计算请改用有线键鼠；支持蓝牙 LE Secure Connections 的输入设备是次优选择。")
     return HabitCheck("usb", "2.4G 无线接收器", "good", "未发现 2.4G 无线接收器", [f"共枚举 {len(devs)} 个 USB 设备（{source}）。"],
-                      "很好！有线或蓝牙安全连接的输入设备能有效防止按键被嗅探，请继续保持。")
+                      "很好！有线或支持蓝牙 LE Secure Connections 的输入设备能有效防止按键被嗅探，请继续保持。")
 
 
 def _ntfs_from_lsblk_json(j):

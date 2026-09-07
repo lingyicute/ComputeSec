@@ -577,7 +577,7 @@ def build_hardware(report, win):
 
     ident = report.identity
     if ident is not None:
-        sysinfo = group("宿主机系统信息", "通过 D-Bus 接口 org.freedesktop.hostname1 读取，因此在 Flatpak 内也是您真实的发行版，"
+        sysinfo = group("宿主机系统信息", "通过 D-Bus 接口 org.freedesktop.hostname1 读取，因此在 Flatpak 内也是您真实的系统信息，"
                                           "而不是 runtime（org.gnome.Platform）的字段。")
         for label, val in (("操作系统", ident.pretty_name), ("CPE 名称", ident.cpe_name),
                            ("内核", " ".join(x for x in (ident.kernel_name, ident.kernel_release) if x)),

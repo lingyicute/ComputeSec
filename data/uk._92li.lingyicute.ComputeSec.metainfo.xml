@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2025-2026 lingyicute -->
 <component type="desktop-application">
   <id>uk._92li.lingyicute.ComputeSec</id>
   <metadata_license>CC0-1.0</metadata_license>
@@ -12,19 +13,52 @@
   <description>
     <p>ComputeSec is a friendly GTK4/libadwaita assistant that helps you turn a Linux machine into a trustworthy computing environment.</p>
     <ul>
-      <li>Dashboard with an overall score</li>
-      <li>fwupd Host Security ID (HSI) results with explanations and a "You can fix" section</li>
+      <li>Dashboard with an overall security score</li>
+      <li>fwupd Host Security ID (HSI) results with plain-language explanations and a “You can fix” section</li>
       <li>Kernel command line and sysctl hardening comparison with copy-and-paste fixes</li>
-      <li>Hardware vendor reputation (Superfish, ShadowHammer, Boot Guard key leaks, ...)</li>
-      <li>Usage habits: Flatpak adoption, uptime, 2.4G receivers, NTFS/Windows presence</li>
+      <li>Hardware vendor reputation database (Superfish, ShadowHammer, Boot Guard key leaks, etc.)</li>
+      <li>Usage habits: Flatpak adoption, uptime, 2.4G wireless receivers, NTFS/Windows presence</li>
     </ul>
-    <p xml:lang="zh_CN">ComputeSec 是一个基于 GTK4/libadwaita 的桌面小工具，帮助您评估固件安全 (HSI)、内核加固程度、硬件品牌信誉与日常使用习惯，并给出可操作的修复建议。</p>
+    <p>All checks run locally and never upload data. Results that need root privileges are collected via a step-by-step wizard that reads from the clipboard, without requesting invasive permissions like flatpak-spawn.</p>
+    <p xml:lang="zh_CN">ComputeSec 是一个基于 GTK4/libadwaita 的桌面小工具，帮助您评估固件安全 (HSI)、内核加固程度、硬件品牌信誉与日常使用习惯，并给出可操作的修复建议。所有检测均在本地完成，不会上传任何数据；对于需要 root 权限的信息，我们会通过分步向导引导您自行执行只读命令并复制结果。</p>
   </description>
   <launchable type="desktop-id">uk._92li.lingyicute.ComputeSec.desktop</launchable>
-  <url type="homepage">https://github.com/lingyicute/ComputeSec</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/lingyicute/ComputeSec/7e6037757377c1bf6913056d92d1e810af1b7c87/screenshot/screenshot.png</image>
+      <caption>Dashboard with overall score and security sections</caption>
+      <caption xml:lang="zh_CN">仪表盘展示综合评分与四大安全板块</caption>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://s.92li.uk/</url>
+  <url type="help">https://github.com/lingyicute/ComputeSec#readme</url>
   <url type="bugtracker">https://github.com/lingyicute/ComputeSec/issues</url>
   <url type="vcs-browser">https://github.com/lingyicute/ComputeSec</url>
-  <content_rating type="oars-1.1"/>
+  <content_rating type="oars-1.1">
+    <content_attribute id="money-advertising" type="none"/>
+    <content_attribute id="money-gambling" type="none"/>
+    <content_attribute id="money-purchasing" type="none"/>
+    <content_attribute id="violence-cartoon" type="none"/>
+    <content_attribute id="violence-fantasy" type="none"/>
+    <content_attribute id="violence-realistic" type="none"/>
+    <content_attribute id="violence-bloodshed" type="none"/>
+    <content_attribute id="violence-desecration" type="none"/>
+    <content_attribute id="violence-worship" type="none"/>
+    <content_attribute id="drugs-alcohol" type="none"/>
+    <content_attribute id="drugs-narcotics" type="none"/>
+    <content_attribute id="drugs-tobacco" type="none"/>
+    <content_attribute id="language-profanity" type="none"/>
+    <content_attribute id="language-humor" type="none"/>
+    <content_attribute id="language-discrimination" type="none"/>
+    <content_attribute id="sex-nudity" type="none"/>
+    <content_attribute id="sex-themes" type="none"/>
+    <content_attribute id="sex-profanity" type="none"/>
+    <content_attribute id="social-chat" type="none"/>
+    <content_attribute id="social-audio" type="none"/>
+    <content_attribute id="social-contacts" type="none"/>
+    <content_attribute id="social-info" type="none"/>
+    <content_attribute id="social-location" type="none"/>
+  </content_rating>
   <supports>
     <control>pointing</control>
     <control>keyboard</control>
@@ -55,4 +89,19 @@
       </description>
     </release>
   </releases>
+  <categories>
+    <category>System</category>
+    <category>Security</category>
+  </categories>
+  <keywords>
+    <keyword>security</keyword>
+    <keyword>hsi</keyword>
+    <keyword>fwupd</keyword>
+    <keyword>kernel</keyword>
+    <keyword>sysctl</keyword>
+    <keyword>hardening</keyword>
+    <keyword>flatpak</keyword>
+    <keyword>安全</keyword>
+    <keyword>加固</keyword>
+  </keywords>
 </component>

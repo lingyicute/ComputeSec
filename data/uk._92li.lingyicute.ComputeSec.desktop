@@ -10,6 +10,7 @@ Icon=uk._92li.lingyicute.ComputeSec
 Terminal=false
 Categories=System;Security;GTK;GNOME;
 Keywords=security;hsi;fwupd;kernel;sysctl;hardening;flatpak;安全;加固;
+Keywords[zh_CN]=安全;加固;固件;内核;隐私;hsi;fwupd;
 StartupNotify=true
 StartupWMClass=uk._92li.lingyicute.ComputeSec
 DBusActivatable=false

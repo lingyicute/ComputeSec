@@ -8,7 +8,6 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk, Pango  # noqa: E402
 
 from . import data  # noqa: E402
-from .checks import MISSING  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -461,12 +460,12 @@ def build_kernel(report, win):
         if s.user_supplied:
             desc = (f"已使用您提供的 sysctl 输出（{report.hostdata.age_text if report.hostdata else ''}采集）。"
                     + (f"仍有 {n} 项无法判定，可能是您执行命令时没有加 sudo。" if n else ""))
-            title, icon = "数据来源：您提供的 sysctl -a", "object-select-symbolic"
+            title = "数据来源：您提供的 sysctl -a"
         else:
             desc = (f"当前有 {n} 项 sysctl 因为文件仅 root 可读而无法判定（例如 vm.mmap_rnd_bits），未计入评分。"
                     if n else "部分 sysctl 条目在当前权限或 Flatpak 沙箱内不可见。")
             desc += "点击右侧按钮，按向导在终端执行一条只读命令并复制结果，即可得到完整准确的评估。"
-            title, icon = "部分数据不完整", "dialog-information-symbolic"
+            title = "部分数据不完整"
         g_src = group(title, desc)
         g_src.set_header_suffix(_collect_button(win, "重新采集" if s.user_supplied else "采集系统数据"))
 

@@ -5,3 +5,5 @@ build-dir/
 repo/
 *.flatpak
 .venv/
+.pytest_cache/
+.ruff_cache/

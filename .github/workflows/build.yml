@@ -2,6 +2,14 @@ name: Build
 
 on:
   push:
+      paths:
+      - 'computesec/**'
+      - 'run.py'
+      - 'tests/**'
+      - 'data/**'
+      - '*.json'
+      - '*.yml'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 permissions:
@@ -18,6 +26,10 @@ jobs:
           python-version: "3.12"
       - name: 编译检查
         run: python -m compileall -q computesec run.py
+      - name: 运行单元测试
+        run: |
+          pip install pytest
+          python -m pytest -q
       - name: 安装校验工具
         run: |
           sudo apt-get update
@@ -54,7 +66,8 @@ jobs:
           upload-artifact: true
 
   release:
-    name: 发布 Release
+    name: 发布 Nightly
+    if: github.ref == 'refs/heads/main'
     needs: flatpak
     runs-on: ubuntu-latest
     steps:
@@ -62,13 +75,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Create Release
+      - name: 删除旧 nightly 并重建
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "nightly-${{ github.run_number }}"  artifacts/**/*.flatpak \
-            --title "Nightly No.${{ github.run_number }}" \
-            --notes-file - << 'EOF'
-          自动构建 No.${{ github.run_number }}
-          EOF
-          
+          gh release delete nightly --yes --cleanup-tag || true
+          gh release create nightly artifacts/**/*.flatpak \
+            --target "${{ github.sha }}" \
+            --title "Nightly Build" \
+            --prerelease \
+            --notes "Nightly 自动构建：Run #${{ github.run_number }}，commit ${{ github.sha }}"
+

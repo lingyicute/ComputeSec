@@ -31,6 +31,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.bins = {}
         self.built = set()          # 已构建的页面
         self._idle_build_id = 0     # 空闲增量构建的 source id
+        self._refreshing = False    # 是否有检测线程正在运行（防止菜单/快捷键重入）
+        self._refresh_pending = False  # 检测进行中时又收到了刷新请求，结束后补跑一次
 
         self.toast_overlay = Adw.ToastOverlay()
         self.set_content(self.toast_overlay)
@@ -159,12 +161,26 @@ class MainWindow(Adw.ApplicationWindow):
             b.set_child(sp)
 
     def refresh(self):
+        # 刷新按钮在检测期间会被禁用，但菜单项 / 快捷键 / 向导回调仍可重入。
+        # 用标志位串行化：若已有检测在跑，只记一个 pending，等它结束后再跑一次，
+        # 这样向导采集到新数据后一定能反映到结果里。
+        if self._refreshing:
+            self._refresh_pending = True
+            return
+        self._refreshing = True
+        self._refresh_pending = False
         self.refresh_btn.set_sensitive(False)
         self.title_widget.set_subtitle("正在检测…")
 
         def worker():
-            report = checks.collect()
-            GLib.idle_add(self.render, report)
+            try:
+                report = checks.collect()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                GLib.idle_add(self.render_error, e)
+            else:
+                GLib.idle_add(self.render, report)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -204,6 +220,8 @@ class MainWindow(Adw.ApplicationWindow):
         return False
 
     def render(self, report):
+        # 第一时间复位标志：即使下面的渲染代码中途抛异常，也不会锁死后续刷新
+        self._refreshing = False
         self.report = report
         # 只构建当前可见的页面，其余留到空闲时增量构建。
         # 一次性构建全部五页会在一个主循环回调里创建数千个控件，
@@ -231,7 +249,25 @@ class MainWindow(Adw.ApplicationWindow):
         sel = self.listbox.get_selected_row()
         self.update_subtitle(sel.page_key if sel else "dashboard")
         self.refresh_btn.set_sensitive(True)
+        self._run_pending_refresh()
         return False
+
+    def render_error(self, error):
+        self._refreshing = False
+        self.title_widget.set_subtitle("检测失败")
+        sel = self.listbox.get_selected_row()
+        current = sel.page_key if sel else "dashboard"
+        self.bins[current].set_child(Adw.StatusPage(
+            icon_name="dialog-error-symbolic", title="检测时发生错误",
+            description=f"{error}\n\n点击刷新按钮重试。"))
+        self.refresh_btn.set_sensitive(True)
+        self._run_pending_refresh()
+        return False
+
+    def _run_pending_refresh(self):
+        if self._refresh_pending:
+            self._refresh_pending = False
+            self.refresh()
 
 
 class Application(Adw.Application):

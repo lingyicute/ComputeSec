@@ -150,7 +150,12 @@ computesec/
   ├── main.py           Application and window, navigation, background scanning threads
   ├── ui.py             Construction of the five pages
   ├── checks.py         Data collection and comparison (fwupd, cmdline, sysctl, DMI, Flatpak, uptime, USB, NTFS)
+  ├── wizard.py         Data collection wizard (run read-only commands step by step + read clipboard)
+  ├── hostdata.py       User-assisted host data: parsing, validation, caching (expires by boot_id)
+  ├── hostinfo.py       Host identity (D-Bus org.freedesktop.hostname1)
   └── data.py           Knowledge base: HSI descriptions, kernel parameters, sysctl, vendor reputation
+tests/                  Unit tests (pytest, no GTK/D-Bus needed, run: python -m pytest)
+pyproject.toml          pytest / ruff project config
 data/
   └── Icons and build metadata
 uk._92li.lingyicute.ComputeSec.json      Flatpak manifest

@@ -76,19 +76,6 @@ def cpu_model():
     return platform.processor() or platform.machine()
 
 
-def os_release():
-    """宿主机 os-release 字段。
-
-    Flatpak 内 /etc/os-release 是 runtime 的（"GNOME Platform"），
-    因此统一走 hostinfo（D-Bus org.freedesktop.hostname1 → /run/host/os-release）。
-    """
-    return hostinfo.get_identity().os_release
-
-
-def kernel_version():
-    return platform.release()
-
-
 # ---------------------------------------------------------------------------
 # HSI
 # ---------------------------------------------------------------------------

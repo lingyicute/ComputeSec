@@ -58,33 +58,13 @@
 * **外设安全检测**：检测是否存在 2.4G 无线接收器，提示潜在的按键嗅探风险。
 * **环境隔离检测**：检测是否存在 NTFS 分区或 Windows 系统安装（提示不可审计、可能污染 Linux 环境）。
 
-## 方式一：克隆直接运行
+## 方式一：Flatpak（推荐 ⭐）
 
-依赖：Python ≥ 3.9、PyGObject、GTK 4、libadwaita ≥ 1.4（Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch），以及 `fwupd`（用于 HSI）。
-
-```bash
-# Fedora
-sudo dnf install python3-gobject gtk4 libadwaita fwupd
-# Debian / Ubuntu
-sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 fwupd
-# Arch
-sudo pacman -S python-gobject gtk4 libadwaita fwupd
-```
-
-```bash
-git clone https://github.com/lingyicute/ComputeSec.git
-cd ComputeSec
-python3 run.py
-```
-
-想让它出现在应用菜单里、并让任务栏/Dock 正确显示图标（Wayland 下需要 `.desktop` 文件与 App ID 匹配）：
-
-```bash
-python3 run.py --install     # 安装 .desktop 与 SVG 图标到 ~/.local/share
-python3 run.py --uninstall   # 移除
-```
-
-## 方式二：Flatpak
+> [!TIP]
+> **为什么推荐用 Flatpak 运行？**
+> ComputeSec 自己也是一个软件，也有可能存在漏洞。国家级定向攻击者可能会攻击此软件，
+> 进而在用户的电脑上执行代码。把此软件用 Flatpak 隔离起来、运行在沙箱之中，
+> 可以起到纵深防御的作用——即使本软件被攻破，攻击者能造成的破坏也会受到沙箱的限制。
 
 ### 从 Release 安装
 
@@ -135,6 +115,34 @@ flatpak run uk._92li.lingyicute.ComputeSec
 **重启后自动失效**（因为 sysctl 可能已改变），同一次开机内不会重复打扰您。
 任何一步都可以跳过，跳过的项目会显示为「无法读取」且不计入评分；
 随时可以从主菜单的「重新采集系统数据」（Ctrl+D）重新运行向导。
+
+## 方式二：克隆直接运行
+
+适合想随时跟进最新代码的开发者。请注意：此方式下程序直接以您的用户权限运行，**没有沙箱隔离**；日常使用请选择方式一。
+
+依赖：Python ≥ 3.9、PyGObject、GTK 4、libadwaita ≥ 1.4（Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch），以及 `fwupd`（用于 HSI）。
+
+```bash
+# Fedora
+sudo dnf install python3-gobject gtk4 libadwaita fwupd
+# Debian / Ubuntu
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 fwupd
+# Arch
+sudo pacman -S python-gobject gtk4 libadwaita fwupd
+```
+
+```bash
+git clone https://github.com/lingyicute/ComputeSec.git
+cd ComputeSec
+python3 run.py
+```
+
+想让它出现在应用菜单里、并让任务栏/Dock 正确显示图标（Wayland 下需要 `.desktop` 文件与 App ID 匹配）：
+
+```bash
+python3 run.py --install     # 安装 .desktop 与 SVG 图标到 ~/.local/share
+python3 run.py --uninstall   # 移除
+```
 
 ## 项目结构
 

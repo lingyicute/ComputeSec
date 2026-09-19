@@ -240,6 +240,14 @@
   @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } }
   .req { margin: 0 0 1rem; font-size: .9rem; color: var(--on-surface-variant); }
   .req code { font-family: var(--mono); font-size: .82rem; background: var(--surface-container-highest); padding: .1rem .4rem; border-radius: 6px; }
+  .badge-recommend {
+    display: inline-flex; align-items: center; gap: .35rem;
+    background: var(--primary); color: var(--on-primary);
+    font-size: .78rem; font-weight: 600; letter-spacing: .03em;
+    padding: .3rem .8rem; border-radius: var(--shape-full); box-shadow: var(--elev-1);
+  }
+  .badge-recommend svg { width: 14px; height: 14px; fill: currentColor; }
+  .card.recommended { outline: 2px solid var(--primary); outline-offset: -2px; }
 
   /* Permissions table */
   .perm { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border-radius: var(--shape-lg); font-size: .88rem; }
@@ -568,15 +576,58 @@
     <div class="wrap">
       <div class="section-head reveal">
         <span class="label kicker">安装</span>
-        <h2 class="headline" style="margin-top:.6rem">两种方式，任选其一</h2>
-        <p class="body-lg">克隆直接运行适合开发者，以及想随时跟进最新代码的人；Flatpak 更省心，权限可随时用 Flatseal 收回。</p>
+        <h2 class="headline" style="margin-top:.6rem">推荐以 Flatpak 运行：给安全工具也加一层沙箱</h2>
+        <p class="body-lg">ComputeSec 自己也是软件，也可能存在漏洞——国家级定向攻击者可能会攻击本软件，进而在你的电脑上执行代码。把它装进 Flatpak 沙箱隔离起来，就是一道纵深防御。克隆直接运行则适合想随时跟进最新代码的开发者。</p>
       </div>
 
       <div class="install-grid">
-        <!-- 方式一 -->
+        <!-- 方式一：Flatpak（推荐） -->
+        <article class="card elevated recommended reveal">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+            <span class="label">方式一</span>
+            <span class="badge-recommend">
+              <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              推荐
+            </span>
+          </div>
+          <h3 class="title-lg" style="margin: .35rem 0 .75rem;">Flatpak</h3>
+          <p class="req">在 <a href="https://github.com/lingyicute/ComputeSec/releases" target="_blank" rel="noopener" style="color: var(--primary); font-weight:500;">Releases</a> 下载对应架构的 <code>.flatpak</code>，或在本地构建。</p>
+          <div class="tabs" role="tablist" data-tabs="flatpak">
+            <button class="tab active" role="tab" data-tab="release">从 Release 安装</button>
+            <button class="tab" role="tab" data-tab="build">本地构建</button>
+          </div>
+          <div class="pane active" data-pane="release">
+            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">flatpak</span> install --user ./ComputeSec-x86_64.flatpak
+<span class="k">flatpak</span> run uk._92li.lingyicute.ComputeSec</pre>
+          </div>
+          <div class="pane" data-pane="build">
+            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">flatpak</span> install flathub org.gnome.Platform//50 org.gnome.Sdk//50
+<span class="k">flatpak-builder</span> --user --install --force-clean build-dir \
+    uk._92li.lingyicute.ComputeSec.json
+<span class="k">flatpak</span> run uk._92li.lingyicute.ComputeSec</pre>
+          </div>
+
+          <div style="margin-top:1.5rem; display:grid; gap:.6rem;">
+            <div style="display:flex; gap:.75rem; align-items:flex-start; background: color-mix(in oklab, var(--primary) 10%, var(--surface-container)); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
+              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+              <span><strong style="color: var(--on-surface);">为什么推荐 Flatpak？</strong>ComputeSec 自己也是软件，也可能存在漏洞。国家级定向攻击者可能会攻击本软件，进而在您的电脑上执行代码。把此软件运行在 Flatpak 沙箱中、与系统隔离起来，可以起到纵深防御的作用——即使本软件被攻破，攻击者能造成的破坏也会受到沙箱的限制。</span>
+            </div>
+            <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
+              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+              <span>本工具<strong>已不再请求</strong> <code style="font-family:var(--mono);font-size:.8rem;">--talk-name=org.freedesktop.Flatpak</code>——此权限可在宿主机上执行任意代码，那样就失去了作为 flatpak 运行的意义。需要 root 才能读取的信息（如 <code style="font-family:var(--mono);font-size:.8rem;">vm.mmap_rnd_bits</code>）由「数据采集向导」引导您自己执行只读命令并复制结果，点击「我已复制结果」即可。收回任何权限后，对应功能只会显示「无法获取」。</span>
+            </div>
+            <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
+              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              <span>App ID：<code style="font-family:var(--mono);font-size:.8rem;">uk._92li.lingyicute.ComputeSec</code> · 由 GitHub Actions 自动构建 x86_64 / aarch64 包。</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 方式二 -->
         <article class="card elevated reveal">
-          <span class="label">方式一</span>
+          <span class="label">方式二</span>
           <h3 class="title-lg" style="margin: .35rem 0 .75rem;">克隆直接运行</h3>
+          <p class="req">适合想随时跟进最新代码的开发者。此方式下程序直接以您的用户权限运行，<strong>没有沙箱隔离</strong>；日常使用请选择方式一。</p>
           <p class="req">依赖：Python ≥ 3.9、PyGObject、GTK 4、libadwaita ≥ 1.4（Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch），以及 <code>fwupd</code>（用于 HSI）。</p>
           <div class="tabs" role="tablist" data-tabs="distro">
             <button class="tab active" role="tab" data-tab="fedora">Fedora</button>
@@ -610,38 +661,6 @@
           <p class="req" style="margin-top:1rem;">想让它出现在应用菜单里、并让任务栏 / Dock 正确显示图标（Wayland 下需要 <code>.desktop</code> 文件与 App ID 匹配）：</p>
           <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">python3</span> run.py --install     <span class="c"># 安装 .desktop 与 SVG 图标到 ~/.local/share</span>
 <span class="k">python3</span> run.py --uninstall   <span class="c"># 移除</span></pre>
-        </article>
-
-        <!-- 方式二 -->
-        <article class="card elevated reveal">
-          <span class="label">方式二</span>
-          <h3 class="title-lg" style="margin: .35rem 0 .75rem;">Flatpak</h3>
-          <p class="req">在 <a href="https://github.com/lingyicute/ComputeSec/releases" target="_blank" rel="noopener" style="color: var(--primary); font-weight:500;">Releases</a> 下载对应架构的 <code>.flatpak</code>，或在本地构建。</p>
-          <div class="tabs" role="tablist" data-tabs="flatpak">
-            <button class="tab active" role="tab" data-tab="release">从 Release 安装</button>
-            <button class="tab" role="tab" data-tab="build">本地构建</button>
-          </div>
-          <div class="pane active" data-pane="release">
-            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">flatpak</span> install --user ./ComputeSec-x86_64.flatpak
-<span class="k">flatpak</span> run uk._92li.lingyicute.ComputeSec</pre>
-          </div>
-          <div class="pane" data-pane="build">
-            <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">flatpak</span> install flathub org.gnome.Platform//50 org.gnome.Sdk//50
-<span class="k">flatpak-builder</span> --user --install --force-clean build-dir \
-    uk._92li.lingyicute.ComputeSec.json
-<span class="k">flatpak</span> run uk._92li.lingyicute.ComputeSec</pre>
-          </div>
-
-          <div style="margin-top:1.5rem; display:grid; gap:.6rem;">
-            <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
-              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-              <span>本工具<strong>已不再请求</strong> <code style="font-family:var(--mono);font-size:.8rem;">--talk-name=org.freedesktop.Flatpak</code>——它等同于沙箱逃逸，多少有些越界了。需要 root 才能读取的信息（如 <code style="font-family:var(--mono);font-size:.8rem;">vm.mmap_rnd_bits</code>）由「数据采集向导」引导您自己执行只读命令并复制结果，点击「我已复制结果」即可。收回任何权限后，对应功能只会显示「无法获取」。</span>
-            </div>
-            <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
-              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-              <span>App ID：<code style="font-family:var(--mono);font-size:.8rem;">uk._92li.lingyicute.ComputeSec</code> · 由 GitHub Actions 自动构建 x86_64 / aarch64 包。</span>
-            </div>
-          </div>
         </article>
       </div>
     </div>

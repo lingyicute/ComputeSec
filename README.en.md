@@ -61,7 +61,8 @@
 ## Option 1: Flatpak (recommended ⭐)
 
 > [!TIP]
-> **Why Flatpak is the recommended way to run ComputeSec**
+> **Why Flatpak is the recommended way to run ComputeSec？**
+> 
 > ComputeSec is software too, and it may contain vulnerabilities. State-sponsored targeted
 > attackers may attack this software in order to execute code on your computer. Running
 > ComputeSec inside the Flatpak sandbox isolates it from the rest of your system and serves

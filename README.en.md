@@ -58,33 +58,15 @@
 * **Peripheral security check**: detects 2.4 GHz wireless receivers and warns about potential keystroke sniffing.
 * **Environment isolation check**: detects NTFS partitions or a Windows installation (unauditable, and liable to contaminate your Linux environment).
 
-## Option 1: Clone and run directly
+## Option 1: Flatpak (recommended ⭐)
 
-Requirements: Python ≥ 3.9, PyGObject, GTK 4, libadwaita ≥ 1.4 (Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch), and `fwupd` for HSI.
-
-```bash
-# Fedora
-sudo dnf install python3-gobject gtk4 libadwaita fwupd
-# Debian / Ubuntu
-sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 fwupd
-# Arch
-sudo pacman -S python-gobject gtk4 libadwaita fwupd
-```
-
-```bash
-git clone https://github.com/lingyicute/ComputeSec.git
-cd ComputeSec
-python3 run.py
-```
-
-To make it show up in your app menu and display the correct icon in the taskbar/dock (on Wayland the `.desktop` file must match the App ID):
-
-```bash
-python3 run.py --install     # install the .desktop file and SVG icons into ~/.local/share
-python3 run.py --uninstall   # remove them
-```
-
-## Option 2: Flatpak
+> [!TIP]
+> **Why Flatpak is the recommended way to run ComputeSec**
+> ComputeSec is software too, and it may contain vulnerabilities. State-sponsored targeted
+> attackers may attack this software in order to execute code on your computer. Running
+> ComputeSec inside the Flatpak sandbox isolates it from the rest of your system and serves
+> as defense in depth — even if the application itself is compromised, the sandbox limits
+> the damage an attacker can do. 
 
 ### Install from a release
 
@@ -139,6 +121,36 @@ Results are stored only in `~/.local/share/computesec/hostdata.json` together wi
 not asked again during the same boot. Every step can be skipped; skipped checks are shown as
 "cannot read" and are **excluded from scoring**. You can re-run the wizard any time from the main
 menu ("Re-collect system data", Ctrl+D).
+
+## Option 2: Clone and run directly
+
+Best suited for developers who want to follow the latest code. Note that this way the program
+runs directly with your user permissions, **without any sandbox isolation**; for everyday use,
+please prefer Option 1.
+
+Requirements: Python ≥ 3.9, PyGObject, GTK 4, libadwaita ≥ 1.4 (Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch), and `fwupd` for HSI.
+
+```bash
+# Fedora
+sudo dnf install python3-gobject gtk4 libadwaita fwupd
+# Debian / Ubuntu
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 fwupd
+# Arch
+sudo pacman -S python-gobject gtk4 libadwaita fwupd
+```
+
+```bash
+git clone https://github.com/lingyicute/ComputeSec.git
+cd ComputeSec
+python3 run.py
+```
+
+To make it show up in your app menu and display the correct icon in the taskbar/dock (on Wayland the `.desktop` file must match the App ID):
+
+```bash
+python3 run.py --install     # install the .desktop file and SVG icons into ~/.local/share
+python3 run.py --uninstall   # remove them
+```
 
 ## Project layout
 

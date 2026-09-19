@@ -217,8 +217,10 @@
   .mock .row span.tag-bad { background: #ffcdd2; color: #8e0000; }
 
   /* ---------- Install ---------- */
-  .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  @media (max-width: 900px) { .install-grid { grid-template-columns: 1fr; } }
+  /* minmax(0, 1fr)：允许网格项收缩到小于内容的最小宽度（min-content），
+     否则内含 white-space:pre 的 .code 长行会把卡片撑出视口 */
+  .install-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  @media (max-width: 900px) { .install-grid { grid-template-columns: minmax(0, 1fr); } }
   .tabs { display: inline-flex; padding: 4px; background: var(--surface-container-highest); border-radius: var(--shape-full); gap: 2px; margin-bottom: 1rem; flex-wrap: wrap; }
   .tab { height: 36px; padding: 0 1rem; border-radius: var(--shape-full); border: none; background: transparent; font: inherit; font-size: .85rem; font-weight: 500; color: var(--on-surface-variant); cursor: pointer; transition: background .25s, color .25s; position: relative; overflow: hidden; }
   .tab.active { background: var(--secondary-container); color: var(--on-secondary-container); }
@@ -260,8 +262,8 @@
   /* ---------- Structure tree ---------- */
   .tree { font-family: var(--mono); font-size: .82rem; line-height: 1.8; background: var(--surface-container); border-radius: var(--shape-xl); padding: 1.5rem 1.75rem; overflow-x: auto; white-space: pre; margin: 0; color: var(--on-surface); }
   .tree .d { color: var(--primary); font-weight: 500; } .tree .c { color: var(--on-surface-variant); }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
-  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+  .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+  @media (max-width: 900px) { .two { grid-template-columns: minmax(0, 1fr); } }
 
   /* ---------- CTA ---------- */
   .cta { background: var(--primary-container); color: var(--on-primary-container); border-radius: 36px; padding: clamp(2.5rem, 6vw, 4.5rem); position: relative; overflow: hidden; text-align: center; }

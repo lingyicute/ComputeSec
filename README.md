@@ -93,7 +93,7 @@ flatpak run uk._92li.lingyicute.ComputeSec
 | `--system-talk-name=org.freedesktop.fwupd` | 通过 D-Bus 读取 HSI 结果 |
 | `--system-talk-name=org.freedesktop.hostname1` | 通过 D-Bus 读取**宿主机**的发行版名称、内核版本与机型（沙箱内 `/etc/os-release` 是 runtime 的字段） |
 | `--filesystem=/var/lib/flatpak:ro`、`~/.local/share/flatpak:ro` | 统计已安装的 Flatpak 应用 |
-| `--filesystem=/run/udev:ro`、`/boot/efi:ro`、`/efi:ro` | 检测 NTFS 分区与 Windows 引导器 |
+| `--filesystem=/run/udev:ro`、`/boot:ro`、`/efi:ro` | 检测 NTFS 分区与 Windows 引导器（`/boot:ro` 覆盖 `/boot/efi` 与 `/boot/EFI` 两种 ESP 挂载方式） |
 
 `/proc/cmdline`、`/proc/sys`、`/sys/class/dmi`、`/sys/bus/usb` 在沙箱内默认可读，无需额外权限。
 

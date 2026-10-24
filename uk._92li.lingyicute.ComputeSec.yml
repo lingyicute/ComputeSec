@@ -16,7 +16,9 @@ finish-args:
   # Enumerate USB devices to detect 2.4G wireless receivers. Read-only.
   - --filesystem=/run/udev:ro
   # Detect Windows bootloader. Read-only.
-  - --filesystem=/boot/efi:ro
+  # /boot 覆盖了 /boot/efi 与 /boot/EFI（不同发行版把 ESP 挂在不同位置），
+  # 单独的 /efi 是部分发行版的 ESP 挂载点，仍需单独授权。
+  - --filesystem=/boot:ro
   - --filesystem=/efi:ro
 
 cleanup:

@@ -95,7 +95,7 @@ The tool has to read information from the host, so it requests the permissions b
 | `--system-talk-name=org.freedesktop.fwupd` | Read HSI results over D-Bus |
 | `--system-talk-name=org.freedesktop.hostname1` | Read the **host's** distro name, kernel version and machine model over D-Bus (inside the sandbox `/etc/os-release` describes the runtime, not your system) |
 | `--filesystem=/var/lib/flatpak:ro`, `~/.local/share/flatpak:ro` | Count installed Flatpak apps |
-| `--filesystem=/run/udev:ro`, `/boot/efi:ro`, `/efi:ro` | Detect NTFS partitions and the Windows boot loader |
+| `--filesystem=/run/udev:ro`, `/boot:ro`, `/efi:ro` | Detect NTFS partitions and the Windows boot loader (`/boot:ro` covers both `/boot/efi` and `/boot/EFI` ESP layouts) |
 
 `/proc/cmdline`, `/proc/sys`, `/sys/class/dmi` and `/sys/bus/usb` are readable inside the sandbox by default and need no extra permissions.
 

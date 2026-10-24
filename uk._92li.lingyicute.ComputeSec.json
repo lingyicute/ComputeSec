@@ -12,7 +12,7 @@
         "--filesystem=/var/lib/flatpak:ro",
         "--filesystem=~/.local/share/flatpak:ro",
         "--filesystem=/run/udev:ro",
-        "--filesystem=/boot/efi:ro",
+        "--filesystem=/boot:ro",
         "--filesystem=/efi:ro"
     ],
     "//": "Permissions justification:",
@@ -20,7 +20,8 @@
     "//-hostname1": "Read host OS pretty name, kernel, hw vendor/model via systemd-hostnamed",
     "//-flatpak-ro": "Count installed Flatpak apps to evaluate sandbox adoption - read-only",
     "//-udev": "Enumerate USB devices from /run/udev to detect 2.4G wireless receivers",
-    "//-efi": "Detect Windows bootloader presence - read-only",
+    "//-boot": "Detect the Windows boot loader at /boot/efi, /boot/EFI (covers every ESP mount layout under /boot) - read-only",
+    "//-efi": "Detect the Windows boot loader when the ESP is mounted at /efi - read-only",
     "cleanup": [
         "*.pyc",
         "__pycache__"

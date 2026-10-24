@@ -144,6 +144,48 @@ def test_get_status_uses_stale_cache_when_offline(tmp_path):
     assert st.tier == "stable"
 
 
+def test_fresh_cache_keeps_its_own_timestamp(tmp_path):
+    """命中仍在 TTL 内的缓存时，checked_at 应当还是当初取到版本号的时刻。"""
+    cache = tmp_path / "kv.json"
+    kv.get_status(release="6.1.158+", now=1000, fetcher=_fetcher_returning(RELEASES_JSON), cache_path=str(cache))
+    st = kv.get_status(release="6.1.158+", now=2000, fetcher=_fetcher_failing("应当走缓存"), cache_path=str(cache))
+    assert st.stale is False
+    assert st.checked_at == 1000
+
+
+def test_stale_cache_is_flagged(tmp_path):
+    """过期缓存 + 断网：结论可以给，但必须标明它来自旧数据、且带上失败原因。"""
+    cache = tmp_path / "kv.json"
+    kv.get_status(release="6.1.158+", now=1000, fetcher=_fetcher_returning(RELEASES_JSON), cache_path=str(cache))
+    now = 1000 + kv.CACHE_TTL + 86400
+    st = kv.get_status(release="6.1.158+", now=now, fetcher=_fetcher_failing(), cache_path=str(cache))
+    assert st.known is True and st.supported is False
+    assert st.stale is True
+    assert st.checked_at == 1000            # 不能被改写成 now
+    assert st.error                         # 失败原因要留下来给 tooltip
+    assert st.age_text(now) == "2 天前"      # TTL(1 天) + 额外 1 天
+
+
+def test_online_result_is_not_stale(tmp_path):
+    st = kv.get_status(release="7.2.12", now=1000, fetcher=_fetcher_returning(RELEASES_JSON),
+                       cache_path=str(tmp_path / "kv.json"))
+    assert st.stale is False
+    assert st.error == ""
+
+
+@pytest.mark.parametrize("secs,want", [
+    (0, "刚刚"), (59, "刚刚"), (60, "1 分钟前"), (3599, "59 分钟前"),
+    (3600, "1 小时前"), (86400, "1 天前"), (3 * 86400, "3 天前"),
+])
+def test_age_text(secs, want):
+    st = kv.KernelSupport(release="6.1.158+", checked_at=1_000_000)
+    assert st.age_text(1_000_000 + secs) == want
+
+
+def test_age_text_without_timestamp():
+    assert kv.KernelSupport(release="6.1.158+").age_text() == ""
+
+
 def test_cache_is_not_world_readable(tmp_path):
     import os
     cache = tmp_path / "kv.json"

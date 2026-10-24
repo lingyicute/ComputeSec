@@ -122,13 +122,17 @@ def classify(release, mainline, stable):
 class KernelSupport:
     """本机内核的版本线信息。"""
 
-    def __init__(self, release="", mainline="", stable="", tier="unknown", checked_at=0, error=""):
+    def __init__(self, release="", mainline="", stable="", tier="unknown", checked_at=0,
+                 error="", stale=False):
         self.release = release or ""
         self.mainline = mainline or ""
         self.stable = stable or ""
         self.tier = tier
         self.checked_at = checked_at
         self.error = error
+        # 版本号来自过期缓存、且本次没能连上 kernel.org。此时结论可能已经过时，
+        # 界面上必须说明，不能伪装成"刚刚查过"。
+        self.stale = bool(stale)
 
     @property
     def major_minor(self):
@@ -147,6 +151,20 @@ class KernelSupport:
     @property
     def tier_text(self):
         return TIER_ZH.get(self.tier, TIER_ZH["unknown"])
+
+    def age_text(self, now=None):
+        """版本号是多久以前拿到的；没有时间戳时返回空串。"""
+        if not self.checked_at:
+            return ""
+        now = int(time.time()) if now is None else int(now)
+        secs = max(0, now - int(self.checked_at))
+        if secs < 60:
+            return "刚刚"
+        if secs < 3600:
+            return f"{secs // 60} 分钟前"
+        if secs < 86400:
+            return f"{secs // 3600} 小时前"
+        return f"{secs // 86400} 天前"
 
     def to_dict(self):
         return dict(release=self.release, mainline=self.mainline, stable=self.stable,
@@ -214,31 +232,41 @@ def save_cache(st, path=None):
 
 
 def get_status(release=None, now=None, fetcher=None, cache_path=None, use_cache=True):
-    """汇总本机内核的版本线信息。永不抛异常，失败时 KernelSupport.error 非空。"""
+    """汇总本机内核的版本线信息。永不抛异常，失败时 KernelSupport.error 非空。
+
+    三种来源要在界面上能区分开，所以 checked_at 一律记「版本号实际来自什么时刻」：
+
+    * 缓存仍在 TTL 内 → 直接用，`stale=False`、`checked_at` 保持缓存的时刻；
+    * 缓存过期但联网成功 → 刷新缓存，`checked_at` = 现在；
+    * 缓存过期且联网失败 → 退回旧缓存，`stale=True`，`checked_at` 仍是原时刻
+      （改写成"现在"会让界面无法告诉用户这个结论究竟有多旧）。
+    """
     release = platform.release() if release is None else release
     now = int(time.time()) if now is None else int(now)
 
     cached = load_cache(cache_path, now) if use_cache else None
     if cached is not None:
-        mainline, stable = cached.mainline, cached.stable
-    else:
-        try:
-            mainline, stable = fetch_versions(fetcher=fetcher)
-        except Exception as e:                                    # noqa: BLE001 (离线、代理、DNS 全都要吞掉)
-            # 拿不到就用上次的缓存（哪怕过期）算出一个"仅供参考"的结论
-            stale = load_cache(cache_path, None) if use_cache else None
-            if stale is None or not (stale.mainline or stale.stable):
-                return KernelSupport(release=release, checked_at=now, error=str(e) or e.__class__.__name__)
-            mainline, stable = stale.mainline, stale.stable
-        else:
-            st = KernelSupport(release=release, mainline=mainline, stable=stable,
-                               tier=classify(release, mainline, stable), checked_at=now)
-            if use_cache:
-                save_cache(st, cache_path)
-            return st
+        return KernelSupport(release=release, mainline=cached.mainline, stable=cached.stable,
+                             tier=classify(release, cached.mainline, cached.stable),
+                             checked_at=cached.checked_at)
 
-    return KernelSupport(release=release, mainline=mainline, stable=stable,
-                         tier=classify(release, mainline, stable), checked_at=now)
+    try:
+        mainline, stable = fetch_versions(fetcher=fetcher)
+    except Exception as e:                                        # noqa: BLE001 (离线、代理、DNS 全都要吞掉)
+        reason = str(e) or e.__class__.__name__
+        # 拿不到就用上次的缓存（哪怕过期）算出一个结论，但要标明它已经过期。
+        stale = load_cache(cache_path, None) if use_cache else None
+        if stale is None or not (stale.mainline or stale.stable):
+            return KernelSupport(release=release, checked_at=now, error=reason)
+        return KernelSupport(release=release, mainline=stale.mainline, stable=stale.stable,
+                             tier=classify(release, stale.mainline, stale.stable),
+                             checked_at=stale.checked_at, error=reason, stale=True)
+
+    st = KernelSupport(release=release, mainline=mainline, stable=stable,
+                       tier=classify(release, mainline, stable), checked_at=now)
+    if use_cache:
+        save_cache(st, cache_path)
+    return st
 
 
 # ---------------------------------------------------------------------------

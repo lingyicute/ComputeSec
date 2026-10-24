@@ -517,15 +517,50 @@ def _collect_button(win, label="采集系统数据"):
     return btn
 
 
-def _kernel_support_block(report):
-    """内核版本线：不在 mainline / stable 上时给出醒目提示。
+def _kernel_check_button(win, label="重试"):
+    """重新核对版本线的按钮。win 可能是测试里的替身，缺方法时就不接。"""
+    btn = Gtk.Button(label=label, valign=Gtk.Align.CENTER)
+    btn.add_css_class("flat")
+
+    def on_click(_b=None):
+        start = getattr(win, "start_kernel_check", None)
+        if start is None:
+            return
+        start()
+        if hasattr(win, "toast"):
+            win.toast("正在重新核对内核版本线…")
+
+    btn.connect("clicked", on_click)
+    return btn
+
+
+def _kernel_support_block(report, win=None):
+    """内核版本线：给出上游版本号、本机所处的版本线，以及结论是否可信。
 
     背景：LTS 分支未包含上游全部安全修复与加固改进，部分加固参数在旧内核上不存在，
     或写入命令行后被内核静默忽略（/proc/cmdline 里却仍有——本程序会误判为已设置）。
+
+    三种状态必须能区分开：
+      * 还没查过（启动时联网检查与首次检测并行）→ 不显示，免得先闪一下"未能核对"；
+      * 查过但没拿到数据 → 明说"未能核对"并给出重试，而不是静默当作没问题；
+      * 拿到了但是旧缓存 → 显示结论，同时标注版本号有多旧。
     """
     st = getattr(report, "kernel_support", None)
-    if st is None or not st.known:
+    if st is None:
         return []
+
+    if not st.known:
+        g = group("内核版本线", kernelver.SUPPORT_CHECK_NOTE)
+        row = Adw.ActionRow(title="未能核对内核版本线",
+                            subtitle="无法从 kernel.org 取得 mainline / stable 版本号"
+                                     "（离线、代理拦截，或 Flatpak 的 network 权限已被收回）。"
+                                     "这不代表内核有问题，只是本次没有结论。")
+        row.add_prefix(status_icon("unknown"))
+        if st.error:
+            row.set_tooltip_text(st.error)
+        row.add_suffix(_kernel_check_button(win))
+        g.add(row)
+        return [g]
 
     g = group("内核版本线", kernelver.SUPPORT_CHECK_NOTE)
     g.add(text_row("当前内核", st.release))
@@ -534,6 +569,20 @@ def _kernel_support_block(report):
     row = Adw.ActionRow(title=esc(st.tier_text))
     row.add_prefix(status_icon("good" if st.supported else "warn"))
     g.add(row)
+
+    if st.stale:
+        age = st.age_text() or "较早"
+        old = Adw.ActionRow(title="版本号来自旧缓存",
+                            subtitle=f"这些版本号是 {age}取得的，本次没能连上 kernel.org，"
+                                     "因此上面的判断可能已经过时。")
+        old.add_prefix(status_icon("unknown"))
+        if st.error:
+            old.set_tooltip_text(st.error)
+        old.add_suffix(_kernel_check_button(win))
+        g.add(old)
+    elif st.checked_at:
+        g.add(text_row("核对时间", st.age_text()))
+
     if st.supported:
         return [g]
     return [banner(kernelver.banner_text(st), "warning", icon="dialog-warning-symbolic"), g]
@@ -666,7 +715,7 @@ def build_kernel(report, win):
     if s.arch == "aarch64":
         g_arm = group("aarch64 ASLR 提示")
         g_arm.add(code_block(data.SYSCTL_AARCH64_NOTE))
-    return page(_kernel_support_block(report) + [g_src, g1, g_fix] + sys_groups + [g_sfix, g_arm])
+    return page(_kernel_support_block(report, win) + [g_src, g1, g_fix] + sys_groups + [g_sfix, g_arm])
 
 
 # ---------------------------------------------------------------------------

@@ -224,7 +224,7 @@ class CollectWizard(Adw.Window):
     def on_copy_command(self, _b):
         # 介绍页（-1）与完成页（len(steps)）上按钮只是隐藏，仍做一次边界守卫，
         # 避免将来因焦点/快捷键变化被触发时抛 IndexError。
-        if not (0 <= self.index < len(self.steps)):
+        if not hostdata.valid_step_index(self.index):
             return
         step = self.steps[self.index]
         Gdk.Display.get_default().get_clipboard().set(step.command)
@@ -247,7 +247,7 @@ class CollectWizard(Adw.Window):
 
     # -- 剪贴板 ----------------------------------------------------------
     def read_clipboard(self):
-        if self._busy or not (0 <= self.index < len(self.steps)):
+        if self._busy or not hostdata.valid_step_index(self.index):
             return
         self._busy = True
         self._set_controls_sensitive(False)

@@ -255,6 +255,67 @@ def test_load_corrupt_file_returns_empty(tmp_path, monkeypatch):
     assert hostdata.HostData.load().payload == {}
 
 
+def _write_cache(tmp_path, payload):
+    monkeypatch_env = tmp_path
+    d = tmp_path / "computesec"
+    d.mkdir(exist_ok=True)
+    (d / hostdata.CACHE_NAME).write_text(payload)
+    return d
+
+
+def test_load_rejects_wrong_structure(tmp_path, monkeypatch):
+    """结构不对的缓存必须当作不存在，而不是让访问器抛 AttributeError。"""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    import json
+    for payload in ('{"steps": ["oops"]}',            # steps 是列表
+                    '{"steps": {"sysctl": "oops"}}',   # 单个 step 不是字典
+                    '["oops"]'):                       # 顶层都不是字典
+        _write_cache(tmp_path, payload)
+        hd = hostdata.HostData.load()
+        assert hd.payload == {}
+        assert hd.any_data is False
+        assert hd.sysctl_values == {}
+        assert hd.get("sysctl") is None
+
+
+def test_get_is_defensive_against_bad_payload():
+    """即便 payload 是手工构造的坏结构，访问器也只能返回空值，不能抛异常。"""
+    for bad in ({"steps": ["oops"]}, {"steps": None}, {"steps": {"sysctl": ["oops"]}}, {}):
+        hd = hostdata.HostData(bad)
+        assert hd.get("sysctl") is None
+        assert hd.sysctl_values == {}
+        assert hd.any_data is False
+
+
+def test_cache_file_and_dir_permissions(tmp_path, monkeypatch):
+    """缓存里是整份 sudo sysctl -a 输出，只能由当前用户读写。"""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    hd = hostdata.HostData()
+    hd.set("sysctl", {"values": {"kernel.ostype": "Linux"}})
+    hd.save()
+    cache = tmp_path / "computesec" / hostdata.CACHE_NAME
+    assert cache.exists()
+    assert (cache.stat().st_mode & 0o777) == 0o600
+    assert ((tmp_path / "computesec").stat().st_mode & 0o777) == 0o700
+
+
+def test_data_dir_tightens_existing_permissions(tmp_path, monkeypatch):
+    d = tmp_path / "xdg" / "computesec"
+    d.mkdir(parents=True)
+    d.chmod(0o755)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    assert hostdata._data_dir() == str(d)
+    assert (d.stat().st_mode & 0o777) == 0o700
+
+
+def test_valid_step_index():
+    n = len(hostdata.STEPS)
+    assert hostdata.valid_step_index(0) is True
+    assert hostdata.valid_step_index(n - 1) is True
+    for bad in (-1, n, n + 1, 10 ** 6, None, "0", 1.0):
+        assert hostdata.valid_step_index(bad) is False
+
+
 def test_data_dir_ignores_relative_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", "relative/dir")
     monkeypatch.setenv("HOME", str(tmp_path))

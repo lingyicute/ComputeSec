@@ -37,7 +37,10 @@ def _data_dir():
         base = os.path.join(os.path.expanduser("~"), ".local", "share")
     d = os.path.join(base, "computesec")
     try:
-        os.makedirs(d, exist_ok=True)
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        # 旧版本以 0755 创建，这里顺手收紧（仅本程序的私有目录）。
+        if (os.stat(d).st_mode & 0o077) != 0:
+            os.chmod(d, 0o700)
     except OSError:
         pass
     return d
@@ -120,6 +123,28 @@ def parse_lsblk(text):
     return j, ""
 
 
+def _payload_ok(payload):
+    """判断缓存内容的结构是否可信。
+
+    load() 只能保证"文件是合法 JSON"，而 get()/sysctl_values 等访问器假设
+    steps 是 {key: {"data": ...}} 的嵌套字典。若缓存被截断、被手工改坏或被旧版本
+    写成别的形状（例如 {"steps": ["oops"]}），那些访问器会抛 AttributeError，
+    被 checks.collect() 的兜底吞掉后表现为"整个 sysctl 板块凭空消失、内核得 0 分"，
+    既没有报错也没有提示。这里宁可把结构不对的缓存当不存在，让用户重新采集。
+    """
+    if not isinstance(payload, dict):
+        return False
+    steps = payload.get("steps", {})
+    if not isinstance(steps, dict):
+        return False
+    return all(isinstance(v, dict) for v in steps.values())
+
+
+def valid_step_index(index):
+    """向导步骤索引是否指向 STEPS 中的某一步（-1 = 介绍页，len = 完成页都不算）。"""
+    return isinstance(index, int) and 0 <= index < len(STEPS)
+
+
 # ---------------------------------------------------------------------------
 # 步骤定义
 # ---------------------------------------------------------------------------
@@ -168,8 +193,9 @@ class HostData:
 
     # -- 访问 ------------------------------------------------------------
     def get(self, key):
-        entry = self.payload.get("steps", {}).get(key)
-        return entry.get("data") if entry else None
+        steps = self.payload.get("steps")
+        entry = steps.get(key) if isinstance(steps, dict) else None
+        return entry.get("data") if isinstance(entry, dict) else None
 
     def has(self, key):
         return self.get(key) is not None
@@ -246,16 +272,19 @@ class HostData:
         path = os.path.join(_data_dir(), CACHE_NAME)
         try:
             with open(path) as f:
-                data = json.load(f)
-            return cls(data if isinstance(data, dict) else None)
+                payload = json.load(f)
         except (OSError, ValueError):
             return cls()
+        return cls(payload if _payload_ok(payload) else None)
 
     def save(self):
         path = os.path.join(_data_dir(), CACHE_NAME)
         tmp = path + ".tmp"
         try:
-            with open(tmp, "w") as f:
+            # 缓存里是用户粘贴的完整 sudo sysctl -a 输出（含内核地址、主机名等），
+            # 只给当前用户读写：os.open 建文件时直接带 0600，不受 umask 影响。
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
                 json.dump(self.payload, f)
             os.replace(tmp, path)
         except OSError:

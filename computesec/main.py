@@ -197,7 +197,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     # ---- 检测与渲染 ----
     def show_loading(self):
-        for key, b in self.bins.items():
+        for _key, b in self.bins.items():
             sp = Adw.StatusPage(title="正在检测系统…", description="正在读取 fwupd、/proc、sysfs 等信息，通常需要几秒钟。")
             spinner = Gtk.Spinner(spinning=True, width_request=40, height_request=40, halign=Gtk.Align.CENTER)
             sp.set_child(spinner)

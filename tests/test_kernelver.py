@@ -32,9 +32,9 @@ def _fetcher_returning(text):
     return fetch
 
 
-def _fetcher_failing(exc=OSError("network is unreachable")):
+def _fetcher_failing(exc=None):
     def fetch(url, timeout):
-        raise exc
+        raise exc or OSError("network is unreachable")
     return fetch
 
 

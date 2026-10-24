@@ -257,7 +257,6 @@ def _normalize_attrs(raw):
 def get_hsi() -> HsiReport:
     # 1) D-Bus（Flatpak 内也可用，需 --system-talk-name=org.freedesktop.fwupd）
     try:
-        import gi
         from gi.repository import Gio, GLib
         bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
         proxy = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, "org.freedesktop.fwupd", "/",
@@ -692,7 +691,8 @@ def _vendor_kw_match(kw, text):
 
 
 def get_hardware() -> HardwareReport:
-    dmi = lambda n: read(f"/sys/class/dmi/id/{n}").strip()
+    def dmi(n):
+        return read(f"/sys/class/dmi/id/{n}").strip()
     sv, pn, bv, biosv, biosver = dmi("sys_vendor"), dmi("product_name"), dmi("board_vendor"), dmi("bios_vendor"), dmi("bios_version")
     model = read("/proc/device-tree/model").strip("\x00\n ")
     # D-Bus hostname1 也提供厂商/型号/固件版本（宿主机视角），用于补全沙箱内读不到的字段
@@ -757,7 +757,7 @@ def _flatpak_apps():
     if not apps:
         rc, out = run(["flatpak", "list", "--app", "--columns=application"])
         if out:
-            apps.update(l.strip() for l in out.splitlines() if l.strip() and "." in l)
+            apps.update(name.strip() for name in out.splitlines() if name.strip() and "." in name)
             source = "flatpak list"
         elif rc == 0 and not source:
             source = "flatpak list"

@@ -256,7 +256,6 @@ def test_load_corrupt_file_returns_empty(tmp_path, monkeypatch):
 
 
 def _write_cache(tmp_path, payload):
-    monkeypatch_env = tmp_path
     d = tmp_path / "computesec"
     d.mkdir(exist_ok=True)
     (d / hostdata.CACHE_NAME).write_text(payload)
@@ -266,7 +265,6 @@ def _write_cache(tmp_path, payload):
 def test_load_rejects_wrong_structure(tmp_path, monkeypatch):
     """结构不对的缓存必须当作不存在，而不是让访问器抛 AttributeError。"""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    import json
     for payload in ('{"steps": ["oops"]}',            # steps 是列表
                     '{"steps": {"sysctl": "oops"}}',   # 单个 step 不是字典
                     '["oops"]'):                       # 顶层都不是字典

@@ -89,7 +89,6 @@ def parse_os_release(text):
 def _dbus_hostname1():
     """通过 D-Bus 读取宿主机 hostname1 属性。返回 (dict, error)。"""
     try:
-        import gi
         from gi.repository import Gio, GLib
     except Exception as e:                                  # pragma: no cover
         return {}, f"PyGObject 不可用：{e}"

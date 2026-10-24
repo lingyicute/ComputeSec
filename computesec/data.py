@@ -528,7 +528,5 @@ USB_24G_CONFIRM_KEYWORDS = ["2.4g", "2.4 g", "wireless receiver", "receiver", "d
 # 弱关键词：只能说明是"无线"设备——也可能是蓝牙，或只是同类芯片做的有线产品，
 # 仅能作为"疑似"提示，交由用户自行确认。
 USB_24G_SUSPECT_KEYWORDS = ["wireless mouse", "wireless keyboard", "wireless gaming", "wireless device"]
-# 兼容旧引用：两者并集（不再用于"确认"判定）
-USB_24G_KEYWORDS = USB_24G_CONFIRM_KEYWORDS + USB_24G_SUSPECT_KEYWORDS
 LOGITECH_UNIFYING_PIDS = {"c52b", "c532", "c534", "c52f", "c531", "c537", "c539", "c53a", "c53f", "c541", "c545"}
 LOGITECH_BOLT_PIDS = {"c548"}

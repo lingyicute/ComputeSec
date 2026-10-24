@@ -144,7 +144,7 @@ Best suited for developers who want to follow the latest code. Note that this wa
 runs directly with your user permissions, **without any sandbox isolation**; for everyday use,
 please prefer Option 1.
 
-Requirements: Python ≥ 3.9, PyGObject, GTK 4, libadwaita ≥ 1.4 (Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch), and `fwupd` for HSI.
+Requirements: Python ≥ 3.12, PyGObject, GTK 4, libadwaita ≥ 1.4 (Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch), and `fwupd` for HSI.
 
 ```bash
 # Fedora

@@ -136,7 +136,7 @@ flatpak run uk._92li.lingyicute.ComputeSec
 
 适合想随时跟进最新代码的开发者。请注意：此方式下程序直接以您的用户权限运行，**没有沙箱隔离**；日常使用请选择方式一。
 
-依赖：Python ≥ 3.9、PyGObject、GTK 4、libadwaita ≥ 1.4（Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch），以及 `fwupd`（用于 HSI）。
+依赖：Python ≥ 3.12、PyGObject、GTK 4、libadwaita ≥ 1.4（Fedora 39+ / Ubuntu 24.04+ / Debian 13+ / Arch），以及 `fwupd`（用于 HSI）。
 
 ```bash
 # Fedora

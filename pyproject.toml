@@ -14,7 +14,7 @@ build-backend = "setuptools.build_meta"
 name = "computesec"
 description = "评估固件安全 (HSI)、内核加固、硬件品牌信誉与使用习惯的桌面安全评估工具"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
 authors = [{ name = "lingyicute" }]
 keywords = ["security", "hardening", "hsi", "fwupd", "sysctl", "gtk4", "libadwaita"]
@@ -56,7 +56,7 @@ version = { attr = "computesec.data.VERSION" }
 testpaths = ["tests"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py312"
 # 与 CI 使用同一套规则，避免本地全绿、CI 变红（反之亦然）。
 # F   = Pyflakes（未使用变量/导入、未定义名称等）
 # E7  = 语句层面的风格问题（E731 lambda 赋值、E741 易混淆变量名等）

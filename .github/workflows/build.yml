@@ -43,8 +43,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # README 承诺 Python ≥ 3.9；只在 3.12 上跑，写进 README 的下限就没人验证。
-        python-version: ["3.9", "3.13"]
+        # 下限 3.12：README 要求 libadwaita ≥ 1.4，满足它的发行版（Fedora 39+、
+        # Ubuntu 24.04+、Debian 13+、Arch）自带的 Python 都 ≥ 3.12，更低的版本
+        # 实际上跑不起来本程序。上限 3.14 = ubuntu-latest（26.04）的系统 Python，
+        # 也是 smoke 作业实际使用的版本。两端都必须在 actions/python-versions 的
+        # versions-manifest.json 里提供 26.04 构建：3.9 就是因为没有而在
+        # ubuntu-latest 迁到 26.04 后直接失败的。
+        python-version: ["3.12", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

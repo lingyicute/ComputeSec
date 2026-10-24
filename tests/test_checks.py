@@ -375,8 +375,31 @@ def test_hsi_report_score():
 
 
 def test_hsi_report_score_unavailable():
-    assert checks.HsiReport(ok=False).score == 0
-    assert checks.HsiReport(ok=True, items=[]).score == 0
+    # 无法评估时必须是 None（之前返回 0，UI 会显示成"评估过且很差"）
+    assert checks.HsiReport(ok=False).score is None
+    assert checks.HsiReport(ok=True, items=[]).score is None
+
+
+def test_hsi_missing_data_is_undetermined_not_failed():
+    """fwupd 的 missing-data 表示"无法判定"，不能算作未通过、更不能进待办。"""
+    items = [
+        checks.HsiItem("a", "A", "", 3, "unknown", {"missing-data"}, "", {"fix": "x", "kind": "bios"}, False, False),
+        checks.HsiItem("b", "B", "", 3, "unknown", set(), "", {"fix": "y", "kind": "bios"}, False, False),
+        checks.HsiItem("c", "C", "", 3, "enabled", {"success"}, "", {}, True, False),
+    ]
+    r = checks.HsiReport(ok=True, items=items)
+    assert [i.id for i in r.undetermined] == ["a"]
+    assert [i.id for i in r.failed] == ["b"]
+    assert [i.id for i in r.fixable] == ["b"]        # A 不能被列成"您可以修复"
+    assert [i.id for i in r.scored] == ["b", "c"]
+    assert r.score == 50                              # 1/2，而不是 1/3
+
+
+def test_hsi_all_undetermined_has_no_score():
+    items = [checks.HsiItem("a", "A", "", 3, "unknown", {"missing-data"}, "", {}, False, False)]
+    r = checks.HsiReport(ok=True, items=items)
+    assert r.score is None
+    assert r.failed == [] and r.fixable == []
 
 
 def test_hsi_report_fixable_only_os_and_bios_with_fix():
@@ -406,7 +429,10 @@ def test_cmdline_report_score():
     assert len(r.applicable) == 3      # na 不参与
     assert len(r.missing) == 2         # missing + wrong 都算缺失
     assert r.score == 33
-    assert checks.CmdlineReport("x86_64", None, "", []).score == 0
+    # 没有可评估项（例如 riscv64 上所有参数都是 na）→ None，而不是 0 分
+    assert checks.CmdlineReport("x86_64", None, "", []).score is None
+    only_na = checks.CmdlineReport("riscv64", None, "", [checks.ParamItem("a", "1", checks.MISSING, "na", "")])
+    assert only_na.score is None
 
 
 def test_sysctl_report_score_excludes_unknown_and_na():
@@ -420,7 +446,12 @@ def test_sysctl_report_score_excludes_unknown_and_na():
     assert r.score == 50
     assert [i.key for i in r.missing] == ["bad.1"]
     assert [i.key for i in r.unknown] == ["unk.1"]
-    assert checks.SysctlReport("x86_64", groups=[]).score == 0
+    assert checks.SysctlReport("x86_64", groups=[]).score is None
+    # 全部被排除（未知/不适用/未验证）时同样没有分数
+    only_excluded = checks.SysctlReport("x86_64", groups=[("g", [
+        item("unk.1", "unknown"), item("na.1", "na"), item("unv.1", "unverified")])])
+    assert only_excluded.score is None
+    assert [i.key for i in only_excluded.scored] == []
 
 
 def test_sysctl_item_actual_text():
@@ -578,7 +609,7 @@ def test_habits_report_score():
     assert checks.HabitsReport(checks=[check("good"), check("bad")]).score == 50
     assert checks.HabitsReport(checks=[check("unknown")]).score == 60
     assert checks.HabitsReport(checks=[check("warn")]).score == 40
-    assert checks.HabitsReport(checks=[]).score == 0
+    assert checks.HabitsReport(checks=[]).score is None
 
 
 def _report(hsi_ok=True):
@@ -605,9 +636,24 @@ def test_report_scores():
     assert r.overall == 76                # (80 + 75 + 100 + 50) // 4
 
 
-def test_report_overall_hsi_unavailable_counts_50():
+def test_report_overall_skips_unavailable_hsi():
+    # HSI 拿不到时不再用 50 分顶替，而是把 HSI 从分母里去掉重新归一
     r = _report(hsi_ok=False)
-    assert r.overall == 68                # (50 + 75 + 100 + 50) // 4
+    assert r.overall == 75                # (75 + 100 + 50) // 3
+    assert r.hsi.score is None
+
+
+def test_report_overall_none_when_everything_unavailable():
+    r = checks.Report(
+        hsi=checks.HsiReport(ok=False),
+        cmdline=checks.CmdlineReport("riscv64", None, "", []),
+        sysctl=checks.SysctlReport("riscv64", groups=[("g", [
+            checks.SysctlItem("na.1", "1", "eq", {}, "na", "")])]),
+        hardware=checks.HardwareReport("", "", "", "", "", "", {"rating": "good"}, ""),
+        habits=checks.HabitsReport(checks=[]),
+        arch="riscv64", cpu="test", os_name="TestOS", kernel="1.0", in_flatpak=False)
+    assert r.kernel_score is None
+    assert r.overall == 100               # 只剩硬件品牌可评估
 
 
 def test_hardware_score_uses_rating_table():
@@ -623,7 +669,7 @@ def test_hardware_score_uses_rating_table():
 def test_get_cmdline_report_smoke():
     r = checks.get_cmdline_report()
     assert isinstance(r, checks.CmdlineReport)
-    assert 0 <= r.score <= 100
+    assert r.score is None or 0 <= r.score <= 100
     assert r.arch
     assert all(i.status in ("ok", "missing", "wrong", "na") for i in r.items)
 
@@ -631,5 +677,5 @@ def test_get_cmdline_report_smoke():
 def test_get_sysctl_report_smoke():
     r = checks.get_sysctl_report()
     assert [t for t, _ in r.groups] == [t for t, _ in data.SYSCTL_GROUPS]
-    assert 0 <= r.score <= 100
-    assert all(i.status in ("ok", "missing", "na", "unknown") for i in r.all_items)
+    assert r.score is None or 0 <= r.score <= 100
+    assert all(i.status in ("ok", "missing", "na", "unknown", "unverified") for i in r.all_items)

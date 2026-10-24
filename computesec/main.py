@@ -153,9 +153,10 @@ class MainWindow(Adw.ApplicationWindow):
         if r is None:
             self.title_widget.set_subtitle("正在检测…")
             return
-        sub = {"dashboard": f"综合评分 {r.overall}", "hsi": (r.hsi.host_id or f"评分 {r.hsi.score}") if r.hsi.ok else "不可用",
-               "kernel": f"评分 {r.kernel_score}", "hardware": data.RATING_ZH[r.hardware.vendor["rating"]],
-               "habits": f"评分 {r.habits.score}"}.get(key, "")
+        sub = {"dashboard": f"综合评分 {ui.score_str(r.overall)}",
+               "hsi": (r.hsi.host_id or f"评分 {ui.score_str(r.hsi.score)}") if r.hsi.ok else "不可用",
+               "kernel": f"评分 {ui.score_str(r.kernel_score)}", "hardware": data.RATING_ZH[r.hardware.vendor["rating"]],
+               "habits": f"评分 {ui.score_str(r.habits.score)}"}.get(key, "")
         self.title_widget.set_subtitle(sub)
 
     # ---- 检测与渲染 ----

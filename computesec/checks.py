@@ -121,6 +121,11 @@ class HsiItem:
     passed: bool
     obsoleted: bool
 
+    @property
+    def undetermined(self):
+        """fwupd 拿不到判定所需的数据（Flags 含 missing-data）：既非通过，也非失败。"""
+        return not self.passed and "missing-data" in self.flags
+
 
 @dataclass
 class HsiReport:
@@ -135,8 +140,18 @@ class HsiReport:
         return [i for i in self.items if not i.obsoleted]
 
     @property
+    def undetermined(self):
+        """fwupd 拿不到判定所需数据的项目（Flags 含 missing-data）。
+
+        这类项目既不是"通过"也不是"未通过"——常见于虚拟机、缺少 TPM 的老机器、
+        或固件没有暴露对应接口。它不该计入 failed，更不该被列成"可以修复"。
+        """
+        return [i for i in self.active if i.undetermined]
+
+    @property
     def failed(self):
-        return [i for i in self.active if not i.passed]
+        und = {id(i) for i in self.undetermined}
+        return [i for i in self.active if not i.passed and id(i) not in und]
 
     @property
     def fixable(self):
@@ -144,10 +159,19 @@ class HsiReport:
         return [i for i in self.failed if i.info.get("fix") and i.info.get("kind") in ("os", "bios")]
 
     @property
+    def scored(self):
+        """参与评分的项目：排除被废弃的与无法判定的。"""
+        und = {id(i) for i in self.undetermined}
+        return [i for i in self.active if id(i) not in und]
+
+    @property
     def score(self):
-        act = self.active
-        if not self.ok or not act:
-            return 0
+        """0-100 的通过率；无法评估时返回 None（而不是误导性的 0）。"""
+        if not self.ok:
+            return None
+        act = self.scored
+        if not act:
+            return None
         return int(100 * sum(1 for i in act if i.passed) / len(act))
 
 
@@ -322,8 +346,9 @@ class CmdlineReport:
 
     @property
     def score(self):
+        """0-100 的通过率；没有可评估项（如非 x86/arm 架构）时返回 None。"""
         ap = self.applicable
-        return int(100 * sum(1 for i in ap if i.status == "ok") / len(ap)) if ap else 0
+        return int(100 * sum(1 for i in ap if i.status == "ok") / len(ap)) if ap else None
 
 
 def _norm_key(k):
@@ -510,9 +535,15 @@ class SysctlReport:
         return [i for i in self.all_items if i.status == "unverified"]
 
     @property
+    def scored(self):
+        """参与评分的条目：na（内核不支持）、unknown（读不到）、unverified（不可信）都不算。"""
+        return [i for i in self.all_items if i.status not in ("na", "unknown", "unverified")]
+
+    @property
     def score(self):
-        ap = [i for i in self.all_items if i.status not in ("na", "unknown", "unverified")]
-        return int(100 * sum(1 for i in ap if i.status == "ok") / len(ap)) if ap else 0
+        """0-100 的通过率；没有可评估项时返回 None。"""
+        ap = self.scored
+        return int(100 * sum(1 for i in ap if i.status == "ok") / len(ap)) if ap else None
 
 
 def _sysctl_paths(key):
@@ -709,7 +740,7 @@ class HabitsReport:
     def score(self):
         # suspect（疑似）只作提醒、不影响得分，与“不扣分”的展示口径保持一致。
         pts = {"good": 100, "suspect": 100, "unknown": 60, "warn": 40, "bad": 0}
-        return int(sum(pts.get(c.status, 0) for c in self.checks) / len(self.checks)) if self.checks else 0
+        return int(sum(pts.get(c.status, 0) for c in self.checks) / len(self.checks)) if self.checks else None
 
 
 def _flatpak_apps():
@@ -1002,14 +1033,20 @@ class Report:
     identity: object = None         # hostinfo.HostIdentity
     hostdata: object = None         # hostdata.HostData
 
+    @staticmethod
+    def _mean(values):
+        vals = [v for v in values if v is not None]
+        return sum(vals) // len(vals) if vals else None
+
     @property
     def kernel_score(self):
-        return (self.cmdline.score + self.sysctl.score) // 2
+        return self._mean([self.cmdline.score, self.sysctl.score])
 
     @property
     def overall(self):
-        parts = [self.hsi.score if self.hsi.ok else 50, self.kernel_score, self.hardware.score, self.habits.score]
-        return sum(parts) // len(parts)
+        """四项的平均分，跳过无法评估（None）的分项后重新归一；全部无法评估时返回 None。"""
+        return self._mean([self.hsi.score if self.hsi.ok else None, self.kernel_score,
+                           self.hardware.score, self.habits.score])
 
 
 def _safe(fn, fallback):

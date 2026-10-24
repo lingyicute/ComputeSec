@@ -98,14 +98,28 @@ def status_icon(status, size=None):
     return img
 
 
+# 评分可能是 None：该板块没有任何可评估的项目（例如没有 fwupd、非 x86/arm 架构、
+# 或所有条目都因为权限/沙箱限制被排除）。此时显示「—」并标注"无法评估"，
+# 而不是把它当成 0 分——0 分意味着"已评估且很差"，与事实不符。
+SCORE_NA = "—"
+
+
 def score_css(score):
+    if score is None:
+        return "dim-label"
     return "success" if score >= 80 else ("warning" if score >= 50 else "error")
 
 
+def score_str(score):
+    return SCORE_NA if score is None else str(score)
+
+
 def score_label(score, big=False):
-    lbl = Gtk.Label(label=f"{score}")
+    lbl = Gtk.Label(label=score_str(score))
     lbl.add_css_class(score_css(score))
     lbl.add_css_class("title-1" if big else "title-3")
+    if score is None:
+        lbl.set_tooltip_text("无法评估：没有可用于评分的检测项")
     return lbl
 
 
@@ -114,7 +128,9 @@ def level_bar(score):
     bar.add_offset_value("low", 50)
     bar.add_offset_value("high", 80)
     bar.add_offset_value("full", 100)
-    bar.set_value(score)
+    bar.set_value(0 if score is None else score)
+    if score is None:
+        bar.add_css_class("dim-label")
     return bar
 
 
@@ -228,7 +244,10 @@ def build_dashboard(report, win, navigate):
     icon.set_pixel_size(96)
     head.append(icon)
     head.append(score_label(overall, big=True))
-    grade = "安全状况良好，请继续保持！" if overall >= 90 else ("还有一些可以改进的地方" if overall >= 70 else "存在多项需要处理的风险")
+    if overall is None:
+        grade = "无法评估：没有可用的检测项，请检查上面的提示"
+    else:
+        grade = "安全状况良好，请继续保持！" if overall >= 90 else ("还有一些可以改进的地方" if overall >= 70 else "存在多项需要处理的风险")
     head.append(wrapped_label(grade, css=("title-4",)))
     head.get_last_child().set_halign(Gtk.Align.CENTER)
     parts = [report.os_name, f"内核 {report.kernel}", report.arch]
@@ -245,9 +264,15 @@ def build_dashboard(report, win, navigate):
     # 配合 _CSS：去掉 flowboxchild 那层多余且比卡片大一圈的悬浮高亮
     flow.add_css_class("cards")
     hsi_txt = (report.hsi.host_id or "已检测") if report.hsi.ok else "无法获取"
-    hsi_score = report.hsi.score if report.hsi.ok else 0
+    hsi_score = report.hsi.score
+    if report.hsi.ok:
+        hsi_desc = f"{hsi_txt}｜{len(report.hsi.failed)} 项未通过，其中 {len(report.hsi.fixable)} 项可修复"
+        if report.hsi.undetermined:
+            hsi_desc += f"，另有 {len(report.hsi.undetermined)} 项数据缺失无法判定"
+    else:
+        hsi_desc = report.hsi.error
     cards = [
-        ("hsi", "HSI 固件安全", hsi_score, f"{hsi_txt}｜{len(report.hsi.failed)} 项未通过，其中 {len(report.hsi.fixable)} 项可修复" if report.hsi.ok else report.hsi.error, "security-high-symbolic"),
+        ("hsi", "HSI 固件安全", hsi_score, hsi_desc, "security-high-symbolic"),
         ("kernel", "内核加固", report.kernel_score, f"内核参数缺失 {len(report.cmdline.missing)} 项｜sysctl 缺失 {len(report.sysctl.missing)} 项", "emblem-system-symbolic"),
         ("hardware", "硬件品牌", report.hardware.score, f"{report.hardware.vendor['name']} · {data.RATING_ZH[report.hardware.vendor['rating']]}", "computer-symbolic"),
         ("habits", "使用习惯", report.habits.score, "、".join(f"{c.title.split(' ')[0]}{_HABIT_MARK.get(c.status, '?')}" for c in report.habits.checks), "avatar-default-symbolic"),
@@ -311,6 +336,9 @@ def build_dashboard(report, win, navigate):
     for c in report.habits.checks:
         if c.status in ("bad", "warn", "suspect"):
             _add_todo(esc(c.title), esc(c.summary), c.status, "habits")
+    if report.hsi.ok and report.hsi.undetermined:
+        _add_todo(f"有 {len(report.hsi.undetermined)} 项 HSI 检测因为缺少数据而无法判定",
+                  "这不是未通过，也无法通过改配置解决；展开 HSI 页面可查看具体项目", "unknown", "hsi")
     if n == 0:
         todo.add(praise_row("没有待办事项，您的安全配置非常出色，请继续保持！"))
 
@@ -368,7 +396,9 @@ def _hsi_item_row(it):
     res = data.HSI_RESULT_ZH.get(it.result, it.result)
     row.set_subtitle(esc(f"{res}" + (f" · {it.summary}" if it.summary and it.summary != it.name else "")))
     fixable = bool(it.info.get("fix") and it.info.get("kind") in ("os", "bios"))
-    row.add_prefix(status_icon("ok" if it.passed else ("warn" if fixable else "bad")))
+    # undetermined（fwupd 缺少数据）既不是通过也不是失败，用问号图标区分开
+    status = "ok" if it.passed else ("unknown" if it.undetermined else ("warn" if fixable else "bad"))
+    row.add_prefix(status_icon(status))
     lvl = Gtk.Label(label=f"HSI:{it.level}" if it.level else "运行时", valign=Gtk.Align.CENTER)
     lvl.add_css_class("dim-label")
     lvl.add_css_class("caption")
@@ -376,6 +406,11 @@ def _hsi_item_row(it):
 
     def populate(r):
         info = it.info
+        if it.undetermined:
+            r.add_row(text_row("为什么无法判定",
+                               "fwupd 将这一项标记为 missing-data：判定所需的数据（固件接口、TPM、"
+                               "安全启动变量等）在当前平台上读不到。这不代表该防护缺失，"
+                               "也无法通过修改系统配置来「修复」；若要确认真实状态，请进入固件设置自行检查。"))
         r.add_row(text_row("检测项含义", info.get("meaning") or it.summary or "fwupd 未提供说明。"))
         r.add_row(text_row("缺失的危害", info.get("risk") or "该项未通过会削弱平台信任链。"))
         if info.get("fix"):
@@ -403,9 +438,18 @@ def build_hsi(report, win):
     r = Adw.ActionRow(title="Host Security ID", subtitle=esc(h.host_id or "未知"))
     r.add_suffix(score_label(h.score))
     overview.add(r)
-    r2 = Adw.ActionRow(title="通过率", subtitle=f"{sum(1 for i in h.active if i.passed)} / {len(h.active)} 项通过 · 数据来源：{esc(h.source)}")
+    scored = h.scored
+    passed = sum(1 for i in scored if i.passed)
+    r2 = Adw.ActionRow(title="通过率", subtitle=f"{passed} / {len(scored)} 项通过 · 数据来源：{esc(h.source)}"
+                        if scored else f"没有可评估的检测项 · 数据来源：{esc(h.source)}")
     r2.add_suffix(level_bar(h.score))
     overview.add(r2)
+    if h.undetermined:
+        r3 = Adw.ActionRow(title="数据缺失，无法判定",
+                           subtitle=f"{len(h.undetermined)} 项检测所需的固件数据由 fwupd 判定为缺失（常见于虚拟机、"
+                                    "没有 TPM 的老机器或固件未暴露对应接口）。这些项目不计入通过率，也不是失败。")
+        r3.add_prefix(status_icon("unknown"))
+        overview.add(r3)
 
     fix = group("您可以修复", "以下未通过的项目可以由您自行操作修复。按修复途径分组，展开查看具体步骤。")
     fixable = h.fixable

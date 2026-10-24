@@ -43,8 +43,16 @@ def _quote_desktop_arg(arg):
     return f'"{arg}"' if quoted else arg
 
 
+def _data_home():
+    """XDG_DATA_HOME；按 XDG 规范，相对路径视为无效并忽略。"""
+    base = os.environ.get("XDG_DATA_HOME") or ""
+    if not os.path.isabs(base):
+        base = os.path.join(os.path.expanduser("~"), ".local", "share")
+    return base
+
+
 def install_desktop(uninstall=False):
-    data_home = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    data_home = _data_home()
     apps_dir = os.path.join(data_home, "applications")
     icon_dir = os.path.join(data_home, "icons", "hicolor", "scalable", "apps")
     desktop_path = os.path.join(apps_dir, APP_ID + ".desktop")
@@ -58,11 +66,11 @@ def install_desktop(uninstall=False):
         os.makedirs(apps_dir, exist_ok=True)
         os.makedirs(icon_dir, exist_ok=True)
         shutil.copy(os.path.join(PKG_ROOT, "data", "icons", "hicolor", "scalable", "apps", APP_ID + ".svg"), icon_path)
-        with open(os.path.join(PKG_ROOT, "data", APP_ID + ".desktop")) as f:
+        with open(os.path.join(PKG_ROOT, "data", APP_ID + ".desktop"), encoding="utf-8") as f:
             content = f.read()
         exec_line = f"{_quote_desktop_arg(sys.executable)} {_quote_desktop_arg(os.path.join(PKG_ROOT, 'run.py'))}"
         content = content.replace("Exec=computesec", f"Exec={exec_line}")
-        with open(desktop_path, "w") as f:
+        with open(desktop_path, "w", encoding="utf-8") as f:
             f.write(content)
         print("已安装", desktop_path)
         print("已安装", icon_path)

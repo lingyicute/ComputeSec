@@ -253,3 +253,14 @@ def test_load_corrupt_file_returns_empty(tmp_path, monkeypatch):
     d.mkdir()
     (d / hostdata.CACHE_NAME).write_text("{corrupt json")
     assert hostdata.HostData.load().payload == {}
+
+
+def test_data_dir_ignores_relative_xdg(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_DATA_HOME", "relative/dir")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert hostdata._data_dir() == str(tmp_path / ".local" / "share" / "computesec")
+
+
+def test_data_dir_respects_absolute_xdg(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    assert hostdata._data_dir() == str(tmp_path / "xdg" / "computesec")

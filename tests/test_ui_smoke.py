@@ -146,3 +146,38 @@ def test_main_window_constructs(app, monkeypatch):
     win.present()
     assert win.listbox.get_row_at_index(0) is not None
     win.destroy()
+
+def test_kernel_check_is_never_silently_dropped(app, monkeypatch):
+    """连点「重试」必须有反馈，过期结果也不能复位新一代的标志位。
+
+    背景：一次检查最长要等 FETCH_TIMEOUT（6 秒）。若在这段时间里把用户的点击
+    静默丢弃，按钮看上去就是坏的——这正是重试按钮在慢速网络下的失效方式。
+    """
+    from computesec import main as app_main
+
+    monkeypatch.setattr(kernelver, "get_status",
+                        lambda force=False: kernelver.KernelSupport(
+                            release="7.2.12", mainline="7.3", stable="7.2.12", tier="stable"))
+    monkeypatch.setattr(checks, "collect", lambda: _report())
+    win = app_main.MainWindow(app)
+
+    # 模拟"检查正在进行"：非 force 被忽略，force 排队并给出反馈。
+    win._kernel_checking = True
+    win._kernel_pending = 0
+    assert win.start_kernel_check() == app_main.KERNEL_CHECK_BUSY
+    assert win.start_kernel_check(force=True) == app_main.KERNEL_CHECK_QUEUED
+    assert win._kernel_pending == 1
+
+    # 过期结果（代际不匹配）不能复位标志位，也不能触发补跑。
+    win._kernel_check_gen = 5
+    old = kernelver.KernelSupport(release="6.1.158+", mainline="7.3", stable="7.2.12", tier="older")
+    assert win.on_kernel_status(old, False, gen=4) is False
+    assert win._kernel_checking is True and win.report is None
+
+    # 当前代际的结果才复位标志位，并把排队的那次补跑起来（补跑一律 force）。
+    reruns = []
+    monkeypatch.setattr(win, "start_kernel_check", lambda force=False: reruns.append(force))
+    win.on_kernel_status(old, False, gen=5)
+    assert win._kernel_checking is False
+    assert reruns == [True]
+    win.destroy()

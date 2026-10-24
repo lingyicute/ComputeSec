@@ -23,6 +23,13 @@ PAGES = [
 ]
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
+# start_kernel_check() 的返回值：调用方据此决定要不要提示"正在核对"。
+# 都是真值——只要用户明确要求重查（force=True），就一定给出可见反馈，
+# 不能出现"点了按钮什么都没发生"的状态。
+KERNEL_CHECK_STARTED = "started"      # 立刻启动了一次新检查
+KERNEL_CHECK_BUSY = "busy"            # 已有检查在跑，本次请求被忽略
+KERNEL_CHECK_QUEUED = "queued"        # 已有检查在跑，本次请求已排队，结束后补跑
+
 
 class MainWindow(Adw.ApplicationWindow):
     def __init__(self, app):
@@ -37,6 +44,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._wizard = None         # 当前打开的数据采集向导窗口（防止重复弹出）
         self._kernel_warned = False  # 内核版本线提示本次运行是否已经弹过
         self._kernel_checking = False  # 版本线检查是否正在进行（防止连点菜单并发多线程）
+        self._kernel_check_gen = 0     # 检查代际：只有最新一次的结果才允许复位标志位
+        self._kernel_pending = 0       # 检查进行中收到的重查请求数，结束后补跑一次
         self._pending_kernel_warning = None  # 等采集向导关闭后再弹的版本线提示
 
         self.toast_overlay = Adw.ToastOverlay()
@@ -127,12 +136,27 @@ class MainWindow(Adw.ApplicationWindow):
         报告结果。
 
         菜单项、重试按钮都直接调这里，连点几下就会并发出几个线程、几次
-        缓存写入和几次整页重建，因此用一个标志位挡住。返回值表示是否真的
-        启动了一次新检查，调用方据此决定要不要提示「正在核对」。
+        缓存写入和几次整页重建，因此用一个标志位挡住。
+
+        返回值（都是真值，调用方据此提示「正在核对」，不会出现"点了没反应"）：
+
+        * KERNEL_CHECK_STARTED —— 立刻启动了一次新检查；
+        * KERNEL_CHECK_QUEUED  —— 已有检查在跑，本次 force 请求已排队，结束后补跑；
+        * KERNEL_CHECK_BUSY    —— 已有检查在跑，本次（非 force）请求被忽略。
+
+        排队而不是直接丢弃，是因为网络慢时一次检查可能要等满 FETCH_TIMEOUT：
+        若此时把用户的点击静默丢掉，重试按钮看上去就是坏的。
         """
         if self._kernel_checking:
-            return False
+            if not force:
+                return KERNEL_CHECK_BUSY
+            # 用户明确要求重查：排队而不是丢弃。网络慢时（甚至要等满 6 秒的
+            # deadline）连点几下，至少每次都有可见反馈，结果也不会被悄悄吞掉。
+            self._kernel_pending += 1
+            return KERNEL_CHECK_QUEUED
         self._kernel_checking = True
+        self._kernel_check_gen += 1
+        gen = self._kernel_check_gen
 
         def worker():
             # get_status 承诺不抛异常；这里再兜一层是因为上面新加了 _kernel_checking
@@ -142,12 +166,16 @@ class MainWindow(Adw.ApplicationWindow):
             except Exception as e:                                  # noqa: BLE001
                 st = kernelver.KernelSupport(release=platform.release(),
                                              error=str(e) or e.__class__.__name__)
-            GLib.idle_add(self.on_kernel_status, st, force)
+            GLib.idle_add(self.on_kernel_status, st, force, gen)
 
         threading.Thread(target=worker, daemon=True).start()
-        return True
+        return KERNEL_CHECK_STARTED
 
-    def on_kernel_status(self, st, manual=False):
+    def on_kernel_status(self, st, manual=False, gen=None):
+        # 代际比当前小的结果已经过期（用户在它返回之前又发起了一次检查），
+        # 直接丢弃：既不能复位新一代的标志位，也不能把旧结果写进 report。
+        if gen is not None and gen != self._kernel_check_gen:
+            return False
         self._kernel_checking = False
         if manual:
             self.toast(kernelver.recheck_result_text(st))
@@ -163,7 +191,19 @@ class MainWindow(Adw.ApplicationWindow):
             self._kernel_warned = True
             self._pending_kernel_warning = st
             self.show_kernel_warning()
+        self._run_pending_kernel_check()
         return False
+
+    def _run_pending_kernel_check(self):
+        """把检查进行中收到的重查请求补跑一次。
+
+        只补一次：用户连点十下和点一下想知道的是同一件事，没必要发起十次请求。
+        补跑时一律 force=True——用户既然手动点过，就说明他要的是最新结果而不是缓存。
+        """
+        if not self._kernel_pending:
+            return
+        self._kernel_pending = 0
+        self.start_kernel_check(force=True)
 
     def show_kernel_warning(self):
         """弹出（或推迟）版本线提示。
@@ -409,6 +449,7 @@ class Application(Adw.Application):
         win = self._main_window()
         if win:
             win._kernel_warned = False
+            # force=True 一定会返回真值（启动 / 排队），因此总能给出反馈。
             if win.start_kernel_check(force=True):
                 win.toast("正在重新核对内核版本线…")
 

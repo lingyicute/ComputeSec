@@ -526,7 +526,8 @@ def _kernel_check_button(win, label="重试"):
         start = getattr(win, "start_kernel_check", None)
         if start is None:
             return
-        # 已有检查在进行时 start 返回 False：不再重复提示，结果出来时会另有 Toast。
+        # force=True 时 start 一定返回真值（启动 / 排队），所以每次点击都有反馈；
+        # 排队的那次会在当前检查结束后补跑，不会因为"已经在查了"而静默失效。
         if start(force=True) and hasattr(win, "toast"):
             win.toast("正在重新核对内核版本线…")
 

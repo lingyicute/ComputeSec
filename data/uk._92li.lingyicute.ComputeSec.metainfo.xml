@@ -71,6 +71,22 @@
     <color type="primary" scheme_preference="dark">#1a5fb4</color>
   </branding>
   <releases>
+    <release version="1.2.2" date="2026-10-24">
+      <description>
+        <p>Detection accuracy, network hardening and packaging fixes.</p>
+        <ul>
+          <li>Bluetooth adapters, IR receivers, TV tuners and similar devices are no longer reported as confirmed 2.4G receivers; receivers that only say "Receiver" or "Dongle" are reported as suspected without deducting points</li>
+          <li>A bare slab_debug, and comma-separated intel_iommu / amd_iommu / iommu options, are now judged the way the kernel parses them</li>
+          <li>"Check kernel version line again" really contacts kernel.org instead of re-reading the 24-hour cache, and reports the result</li>
+          <li>The version check rejects every redirect hop that is not HTTPS, not just the final address</li>
+          <li>A corrupted host data cache can no longer break the Kernel page</li>
+          <li>The pip-installed computesec command shares run.py's options (--version, --help, --install) and works without a graphical session</li>
+          <li>Root-only sysctls missing from a snapshot taken without sudo are shown as unreadable again, with the matching hint</li>
+          <li>The Flathub manifest gains the network permission already present in the JSON manifest</li>
+          <li>Python 3.12 or newer is now required, matching every distribution that ships libadwaita 1.4</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.1" date="2026-10-24">
       <description>
         <p>Reliability and packaging fixes.</p>

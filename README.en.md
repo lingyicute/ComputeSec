@@ -62,6 +62,7 @@
 * **Uptime reminder**: when the system `uptime` exceeds one day, it reminds you to update and reboot.
 * **Peripheral security check**: detects 2.4 GHz wireless receivers and warns about potential keystroke sniffing. Confirmed receivers deduct points; devices whose vendor/model strongly suggests a 2.4 GHz dongle but which cannot be confirmed as a keyboard/mouse receiver (for example the product string only says Receiver / Dongle) are reported as **"suspected"** — a reminder only, **no points deducted**, together with steps to verify it yourself. Bluetooth adapters, IR receivers, TV tuners and other radios are not considered.
 * **Environment isolation check**: detects NTFS partitions or a Windows installation (unauditable, and liable to contaminate your Linux environment).
+* **Unreadable means unscored**: if a check on this page cannot read what it needs (no flatpak installed, no `/run/udev` access), it shows as **unreadable** and is **not counted towards the score** instead of being scored as a middle value — you cannot improve it, so deducting points would only distort the score.
 
 ## Option 1: Flatpak (recommended ⭐)
 

@@ -71,6 +71,22 @@
     <color type="primary" scheme_preference="dark">#1a5fb4</color>
   </branding>
   <releases>
+    <release version="1.2.3" date="2026-10-24">
+      <description>
+        <p>Correctness fixes for readings taken from a snapshot or over the network.</p>
+        <ul>
+          <li>Outside Flatpak, live /proc values now win over a snapshot taken earlier in the same boot; the snapshot only fills in entries that cannot be read (such as vm.mmap_rnd_bits). Previously a revoked sysctl could still be reported as hardened</li>
+          <li>A snapshot entry that fills an unreadable key is labelled with its age, so an hours-old value no longer looks live</li>
+          <li>The version check has an overall deadline, not just a per-socket timeout, so a slow trickle can no longer leave the retry button silent; repeated clicks are queued instead of dropped, and a late result from an earlier check is discarded</li>
+          <li>"Could not verify the kernel version line" no longer blames the network when the local kernel release string itself cannot be parsed, and never prints empty parentheses</li>
+          <li>Usage Habits: entries that could not be read no longer deduct points, matching the other three sections</li>
+          <li>2.4G receiver detection ignores guitars, MIDI gear, remote controls, barcode scanners and printers that happen to be named "USB Receiver"</li>
+          <li>The collection wizard shows the real data directory instead of a hard-coded ~/.local/share/computesec</li>
+          <li>Unknown options and conflicting options are rejected instead of being ignored</li>
+          <li>Dropped the Flathub manifest (Flathub submission is no longer planned); the metainfo release version is now checked against the application version in CI</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.2" date="2026-10-24">
       <description>
         <p>Detection accuracy, network hardening and packaging fixes.</p>

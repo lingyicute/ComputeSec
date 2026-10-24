@@ -279,6 +279,40 @@ def _usb_dev(vid, pid, mfr, product, cls="00"):
     return {"vid": vid, "pid": pid, "manufacturer": mfr, "product": product, "cls": cls}
 
 
+@pytest.mark.parametrize("dev,want", [
+    # 型号里写着 dongle / receiver，但明确不是键鼠接收器：直接排除
+    (("0a12", "0001", "Cambridge Silicon Radio, Ltd", "Bluetooth Dongle (HCI mode)", "e0"), None),
+    (("03f0", "0624", "HP, Inc", "Bluetooth Dongle", ""), None),          # lsusb 回退时没有 bDeviceClass
+    (("046d", "c709", "Logitech, Inc.", "BT Mini-Receiver (HCI mode)", ""), None),
+    (("046d", "0a5b", "Logitech, Inc.", "G933 Wireless Headset Dongle", ""), None),
+    (("03ee", "2501", "Mitsumi", "eHome Infrared Receiver", ""), None),
+    (("0413", "6025", "Leadtek Research, Inc.", "WinFast DTV Dongle", ""), None),
+    (("045e", "0291", "Microsoft Corp.", "Xbox 360 Wireless Receiver for Windows", ""), None),
+    (("0e50", "0002", "TDK", "Matrixlock Dongle (HID)", ""), None),       # 软件授权狗
+    (("0499", "6001", "Yamaha Corp.", "CRW2200UX Lightspeed 2 External CD-RW Drive", ""), None),
+    (("1a79", "6210", "Bayer Health Care LLC", "Contour Next Link 2.4 glucometer", ""), None),
+    # 泛化词 + 键鼠证据 → 确认
+    (("17ef", "6032", "Lenovo", "Wireless Dongle for Keyboard and Mouse", ""), "bad"),
+    (("25a7", "fa61", "Areson", "USB Dongle", ""), "bad"),               # 专做 2.4G 方案的芯片厂商
+    (("046d", "c52b", "Logitech, Inc.", "Unifying Receiver", ""), "bad"),
+    (("1d57", "fa20", "Xenta", "2.4GHz Wireless Receiver (Mini Keyboard & Mouse)", ""), "bad"),
+    # 只有泛化词：无法确认，按「疑似」处理（不扣分）
+    (("1a81", "1701", "Holtek", "Wireless dongle", ""), "suspect"),
+    (("256f", "c652", "3Dconnexion", "Universal Receiver", ""), "suspect"),
+])
+def test_usb_receiver_kind_keywords(dev, want):
+    vid, pid, mfr, product, cls = dev
+    kind = checks._usb_receiver_kind(_usb_dev(vid, pid, mfr, product, cls=cls))
+    assert (kind[0] if kind else None) == want
+
+
+def test_check_usb_bluetooth_dongle_alone_is_good(monkeypatch):
+    """只插着蓝牙适配器时，这一项不能被扣到 0 分。"""
+    devs = [_usb_dev("0a12", "0001", "Cambridge Silicon Radio, Ltd", "Bluetooth Dongle (HCI mode)", cls="e0")]
+    monkeypatch.setattr(checks, "_usb_devices", lambda: (devs, "sysfs"))
+    assert checks.check_usb().status == "good"
+
+
 def test_check_usb_suspect_does_not_deduct_points(monkeypatch):
     """芯片厂商的通用型号串只能判“疑似”：提醒风险，但不扣分。"""
     devs = [

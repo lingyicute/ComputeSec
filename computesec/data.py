@@ -522,9 +522,32 @@ USB_24G_VENDORS = {
 }
 # 专用于 2.4G 无线键鼠接收器方案的芯片厂商（即使产品名仅写 Mouse / Keyboard / Composite Device 也高度可疑）
 USB_24G_DEDICATED_VENDORS = {"25a7", "3938", "062a", "1d57", "248a", "3151", "3554"}
-# 强关键词：型号串里明确写了"接收器 / 2.4G / dongle"，命中即可确认为 2.4G 无线接收设备。
-USB_24G_CONFIRM_KEYWORDS = ["2.4g", "2.4 g", "wireless receiver", "receiver", "dongle",
-                            "unifying", "lightspeed", "nano receiver", "usb receiver"]
+# 强关键词：本身就特指无线键鼠接收器，命中即可确认为 2.4G 无线接收设备。
+# 「2.4G」按正则匹配，要求 G 后面是 Hz 或单词边界（"2.4 glucometer" 不算）。
+USB_24G_CONFIRM_RE = r"2\.4 ?g(?:hz)?\b"
+USB_24G_CONFIRM_KEYWORDS = ["wireless receiver", "nano receiver", "usb receiver"]
+# Unifying / Lightspeed 是罗技的品牌名，只在罗技（046d）名下才有意义——
+# 别家的 "Lightspeed 2 External CD-RW Drive" 与键鼠毫无关系。
+LOGITECH_RECEIVER_KEYWORDS = ["unifying", "lightspeed", "receiver", "dongle"]
+# 泛化词：只说明它是个"接收器 / 适配器"。红外接收器、电视棒、GPS、蓝牙与 Wi-Fi 适配器
+# 也都这么叫（usb.ids 里光是这两个词就让 300 多款设备被判成了"已确认"），必须同时有
+# 键鼠方面的证据（输入设备字样，或专做 2.4G 方案的芯片厂商）才能确认，否则只算疑似。
+USB_24G_GENERIC_KEYWORDS = ["receiver", "dongle"]
+# 键鼠方面的证据。不含 "hid"：软件授权加密狗（"HID Dongle"、"Matrixlock Dongle (HID)"）
+# 同样走 HID 协议，却与无线输入毫无关系。
+USB_24G_INPUT_KEYWORDS = ["mouse", "keyboard", "keypad", "trackball", "touchpad", "presenter"]
+# 明确不是键鼠接收器的无线 / 接收类设备：命中即排除，不进入 2.4G 判定（按单词边界匹配）。
+USB_NON_INPUT_RADIO_RE = (r"bluetooth|bluecore|\bbt\b|infrared|\bc?ir\b|\bdvb|\bd?tv\b|tuner|\bisdb"
+                          r"|\batsc|\bdab\b|\ba/v\b|\bgps\b|gnss|802\.11|\bwlan\b|wi-?fi|wireless lan"
+                          r"|wireless network|ethernet|headset|headphone|\baudio\b|speaker|sound"
+                          r"|microphone|\bmic\b|\bsdr\b|sniffer|licen[cs]e|unikey|\bhasp\b|sentinel"
+                          r"|matrixlock|smart ?card|security key|irda|\bkvm\b|\bfm\b|satellite|hdmi|hdbaset"
+                          r"|video|\bvga\b|telephone|weather|heart rate|\b11[abgn]/")
+# 无线手柄 / 方向盘的接收器：同样是 2.4G，但不传键盘输入，不存在键入内容被嗅探的问题。
+# 只在型号里没有键鼠字样时才排除（"Cordless Keyboard for Wii" 仍然是键盘）。
+USB_GAME_CONTROLLER_RE = r"game ?pad|joystick|\bwheel|xbox|playstation|\bps[2-5]\b|\bwii\b|controller"
+# bDeviceClass：0e = 视频（UVC 摄像头），e0 = 无线控制器（蓝牙适配器）。
+USB_NON_INPUT_CLASSES = {"0e", "e0"}
 # 弱关键词：只能说明是"无线"设备——也可能是蓝牙，或只是同类芯片做的有线产品，
 # 仅能作为"疑似"提示，交由用户自行确认。
 USB_24G_SUSPECT_KEYWORDS = ["wireless mouse", "wireless keyboard", "wireless gaming", "wireless device"]

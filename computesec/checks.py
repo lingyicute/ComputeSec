@@ -887,12 +887,16 @@ def _usb_devices():
 USB_ADVICE_CONFIRMED = ("绝大多数 2.4G 无线键鼠不加密或使用弱加密，攻击者在数十米外即可嗅探您输入的每一个字符"
                         "（包括密码、密钥口令），甚至注入按键（MouseJack）。"
                         "高安全性计算请改用有线键鼠；支持蓝牙 LE Secure Connections 的输入设备是次优选择。")
-USB_ADVICE_SUSPECT = ("这些设备的厂商或型号与常见的 2.4G 无线键鼠方案高度重合，但型号串里没有「2.4G」「接收器」"
-                      "之类的字样，ComputeSec 无法确认它是 2.4G 接收器，还是同厂的有线 / 蓝牙设备，"
-                      "因此这一项不计入评分。\n\n"
+USB_ADVICE_SUSPECT = ("这些设备的厂商或型号与常见的 2.4G 无线键鼠方案高度重合（例如型号里只写了"
+                      "「Wireless Mouse」，或只写了「Receiver」「Dongle」），但没有「2.4G」或键鼠接收器型号之类"
+                      "能够确认的字样，ComputeSec 无法确认它是 2.4G 接收器，还是同厂的有线 / 蓝牙设备"
+                      "或别的无线接收设备，因此这一项不计入评分。\n\n"
                       "请自行确认：① 拔下该设备后重新检测，看这一条是否消失；② 检查它是否配有一个同样插在 USB 口上的"
                       "小接收器（有则是 2.4G 无线接收器方案）；③ 在终端执行 lsusb -v 查看其接口描述符与供电需求。"
                       "若确认是 2.4G 无线键鼠，请按「已确认」情形处理：改用有线，或支持蓝牙 LE Secure Connections 的设备。")
+
+
+_LOGITECH_UNIFYING_DESC = "Logitech Unifying/Lightspeed 接收器（曾曝出 MouseJack、KeyJack 等密钥提取与按键注入漏洞）"
 
 
 def _usb_receiver_kind(d):
@@ -905,15 +909,30 @@ def _usb_receiver_kind(d):
     """
     text = f"{d['manufacturer']} {d['product']}".lower()
     vid, pid = d["vid"], d["pid"]
-    if vid == "046d":       # Logitech：PID 表与型号串都足够明确
-        if pid in data.LOGITECH_BOLT_PIDS:
-            return "bad", "Logitech Bolt 接收器（使用 BLE 安全连接加密，风险较低，但仍建议有线）"
-        if pid in data.LOGITECH_UNIFYING_PIDS or any(k in text for k in data.USB_24G_CONFIRM_KEYWORDS):
-            return "bad", "Logitech Unifying/Lightspeed 接收器（曾曝出 MouseJack、KeyJack 等密钥提取与按键注入漏洞）"
+    if vid == "046d" and pid in data.LOGITECH_BOLT_PIDS:
+        return "bad", "Logitech Bolt 接收器（使用 BLE 安全连接加密，风险较低，但仍建议有线）"
+    if vid == "046d" and pid in data.LOGITECH_UNIFYING_PIDS:
+        return "bad", _LOGITECH_UNIFYING_DESC
+    # 蓝牙适配器、红外接收器、电视棒、无线耳机接收器等：型号里也常写 dongle / receiver，
+    # 但与 2.4G 键鼠无关，不能让它们触发「已确认」（会把这一项扣到 0 分）。
+    if d.get("cls") in data.USB_NON_INPUT_CLASSES or re.search(data.USB_NON_INPUT_RADIO_RE, text):
         return None
-    if any(k in text for k in data.USB_24G_CONFIRM_KEYWORDS):
+    inputish = any(k in text for k in data.USB_24G_INPUT_KEYWORDS)
+    if not inputish and re.search(data.USB_GAME_CONTROLLER_RE, text):
+        return None
+    if vid == "046d":       # Logitech 的 receiver / dongle 就是其键鼠接收器
+        hit = any(k in text for k in data.LOGITECH_RECEIVER_KEYWORDS)
+        return ("bad", _LOGITECH_UNIFYING_DESC) if hit else None
+    strong = bool(re.search(data.USB_24G_CONFIRM_RE, text)) or any(
+        k in text for k in data.USB_24G_CONFIRM_KEYWORDS)
+    generic = any(k in text for k in data.USB_24G_GENERIC_KEYWORDS)
+    dedicated = vid in getattr(data, "USB_24G_DEDICATED_VENDORS", set())
+    if strong or (generic and (inputish or dedicated)):
         vendor = data.USB_24G_VENDORS.get(vid)
         return "bad", f"{vendor} 2.4G 接收器" if vendor else "2.4G 无线接收器"
+    if generic:
+        vendor = data.USB_24G_VENDORS.get(vid)
+        return "suspect", (f"{vendor} " if vendor else "") + "无线接收器 / 适配器（型号未标明是键鼠接收器）"
     # 以下拿不到"接收器"的正面证据，只能给疑似：芯片厂商既做 2.4G 方案，也做有线外设，
     # 仅凭 VID 或 "Mouse/Keyboard" 之类的型号串无法区分。
     if vid in getattr(data, "USB_24G_DEDICATED_VENDORS", set()) and any(

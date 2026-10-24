@@ -60,7 +60,7 @@
   * Suggests using Flatpak more if you have fewer than 5 apps.
   * Recommends Pear's [harden-flatpak](https://github.com/lingyicute/harden-flatpak) project, which denies all Flatpak permissions by default, paired with Flatseal for per-app permission hardening.
 * **Uptime reminder**: when the system `uptime` exceeds one day, it reminds you to update and reboot.
-* **Peripheral security check**: detects 2.4 GHz wireless receivers and warns about potential keystroke sniffing. Confirmed receivers deduct points; devices whose vendor/model strongly suggests a 2.4 GHz dongle but whose product string never says so are reported as **"suspected"** — a reminder only, **no points deducted**, together with steps to verify it yourself.
+* **Peripheral security check**: detects 2.4 GHz wireless receivers and warns about potential keystroke sniffing. Confirmed receivers deduct points; devices whose vendor/model strongly suggests a 2.4 GHz dongle but which cannot be confirmed as a keyboard/mouse receiver (for example the product string only says Receiver / Dongle) are reported as **"suspected"** — a reminder only, **no points deducted**, together with steps to verify it yourself. Bluetooth adapters, IR receivers, TV tuners and other radios are not considered.
 * **Environment isolation check**: detects NTFS partitions or a Windows installation (unauditable, and liable to contaminate your Linux environment).
 
 ## Option 1: Flatpak (recommended ⭐)

@@ -18,7 +18,8 @@ mainline 或 stable 内核。
 隐私与健壮性
 ------------
 - 只向 kernel.org 发一次 GET 请求读取公开的 releases.json，不上报任何信息；
-- 结果缓存 24 小时（XDG 数据目录，0600），失败就静默跳过，绝不影响界面；
+- 结果缓存 24 小时（XDG 数据目录，0600）。失败不弹窗、不影响检测，但「内核加固」页
+  会明说「未能核对」并给出重试按钮；
 - 本模块不 import gi，可在无 GTK 环境下直接测试。
 """
 
@@ -208,16 +209,27 @@ def fetch_versions(fetcher=None, timeout=FETCH_TIMEOUT, url=RELEASES_URL):
 
 
 def load_cache(path=None, now=None):
+    """读缓存。
+
+    给了 now：只返回仍在 TTL 内的缓存。时间戳缺失（0）或在未来（本机时钟被回拨，
+    双系统按本地时间写 RTC 时很常见）都按过期处理，否则这份缓存会永不过期。
+    不给 now：联网失败时的回退，只要结构正确、确实带有版本号即可，不看新旧。
+
+    没有 mainline / stable 的缓存一律不认：正常流程不会写出这种文件（取不到版本号
+    时 fetch_versions 会抛异常、不写缓存），出现了只能是被改坏的，若当作有效缓存
+    就会跳过联网，直接给出「未能核对」。
+    """
     path = path or os.path.join(_data_dir(), CACHE_NAME)
     try:
         with open(path) as f:
             st = KernelSupport.from_dict(json.load(f))
     except (OSError, ValueError, TypeError):
         return None
-    if st is None:
+    if st is None or not (st.mainline or st.stable):
         return None
-    if now is not None and st.checked_at and now - st.checked_at > CACHE_TTL:
-        return None
+    if now is not None:
+        if st.checked_at <= 0 or not 0 <= now - st.checked_at <= CACHE_TTL:
+            return None
     return st
 
 
@@ -233,20 +245,25 @@ def save_cache(st, path=None):
         pass
 
 
-def get_status(release=None, now=None, fetcher=None, cache_path=None, use_cache=True):
-    """汇总本机内核的版本线信息。永不抛异常，失败时 KernelSupport.error 非空。
+def get_status(release=None, now=None, fetcher=None, cache_path=None, force=False):
+    """汇总本机内核的版本线信息。永不抛异常，联网失败时 KernelSupport.error 非空。
 
-    三种来源要在界面上能区分开，所以 checked_at 一律记「版本号实际来自什么时刻」：
+    几种来源要在界面上能区分开，所以 checked_at 一律记「版本号实际来自什么时刻」：
 
-    * 缓存仍在 TTL 内 → 直接用，`stale=False`、`checked_at` 保持缓存的时刻；
-    * 缓存过期但联网成功 → 刷新缓存，`checked_at` = 现在；
-    * 缓存过期且联网失败 → 退回旧缓存，`stale=True`，`checked_at` 仍是原时刻
-      （改写成"现在"会让界面无法告诉用户这个结论究竟有多旧）。
+    * 缓存仍在 TTL 内（且未 force）→ 直接用，`stale=False`、`checked_at` 保持缓存的时刻；
+    * 联网成功 → 刷新缓存，`checked_at` = 现在；
+    * 联网失败、缓存已过期 → 退回旧缓存，`stale=True`，`checked_at` 仍是原时刻
+      （改写成"现在"会让界面无法告诉用户这个结论究竟有多旧）；
+    * 联网失败、缓存仍在 TTL 内（只会发生在 force 时）→ 沿用缓存，`stale=False`，
+      但 `error` 照常记下，便于界面告诉用户「这次没刷新成」。
+
+    force=True 用于用户手动「重新检查」：只跳过「TTL 内直接读缓存」这一步，成功后照常
+    写缓存，失败后照常回退缓存——否则 24 小时内手动重查根本不会发出请求。
     """
     release = platform.release() if release is None else release
     now = int(time.time()) if now is None else int(now)
 
-    cached = load_cache(cache_path, now) if use_cache else None
+    cached = None if force else load_cache(cache_path, now)
     if cached is not None:
         return KernelSupport(release=release, mainline=cached.mainline, stable=cached.stable,
                              tier=classify(release, cached.mainline, cached.stable),
@@ -256,18 +273,18 @@ def get_status(release=None, now=None, fetcher=None, cache_path=None, use_cache=
         mainline, stable = fetch_versions(fetcher=fetcher)
     except Exception as e:                                        # noqa: BLE001 (离线、代理、DNS 全都要吞掉)
         reason = str(e) or e.__class__.__name__
-        # 拿不到就用上次的缓存（哪怕过期）算出一个结论，但要标明它已经过期。
-        stale = load_cache(cache_path, None) if use_cache else None
-        if stale is None or not (stale.mainline or stale.stable):
+        # 拿不到就用上次的缓存（哪怕过期）算出一个结论；过期了要标明。
+        prev = load_cache(cache_path, None)
+        if prev is None:
             return KernelSupport(release=release, checked_at=now, error=reason)
-        return KernelSupport(release=release, mainline=stale.mainline, stable=stale.stable,
-                             tier=classify(release, stale.mainline, stale.stable),
-                             checked_at=stale.checked_at, error=reason, stale=True)
+        expired = load_cache(cache_path, now) is None
+        return KernelSupport(release=release, mainline=prev.mainline, stable=prev.stable,
+                             tier=classify(release, prev.mainline, prev.stable),
+                             checked_at=prev.checked_at, error=reason, stale=expired)
 
     st = KernelSupport(release=release, mainline=mainline, stable=stable,
                        tier=classify(release, mainline, stable), checked_at=now)
-    if use_cache:
-        save_cache(st, cache_path)
+    save_cache(st, cache_path)
     return st
 
 
@@ -275,6 +292,15 @@ def get_status(release=None, now=None, fetcher=None, cache_path=None, use_cache=
 # 面向用户的文案（放在这里以便单元测试，不依赖 GTK）
 # ---------------------------------------------------------------------------
 SUPPORT_CHECK_NOTE = "版本信息来自 kernel.org 的 releases.json，仅用于判断本机内核属于哪条版本线。"
+
+
+def recheck_result_text(st):
+    """手动重新检查结束后的一句话提示（Toast）。"""
+    if not st.known:
+        return "未能连上 kernel.org，内核版本线仍未核对"
+    if st.error:
+        return f"未能连上 kernel.org，继续沿用 {st.age_text() or '较早'}取得的版本号"
+    return f"已重新核对内核版本线：{st.tier_text}"
 
 
 def warning_text(st):

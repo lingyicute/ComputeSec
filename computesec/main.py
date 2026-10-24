@@ -113,37 +113,44 @@ class MainWindow(Adw.ApplicationWindow):
         else:
             hostdata.set_current(hostdata.HostData())
             GLib.idle_add(self.open_wizard)
-        # 与首次检测并行：联网核对内核版本线（不阻塞界面，失败就安静跳过）
+        # 与首次检测并行：联网核对内核版本线（不阻塞界面；失败不弹窗，内核页会显示「未能核对」）
         self.start_kernel_check()
 
     # ---- 内核版本线 ----
-    def start_kernel_check(self):
+    def start_kernel_check(self, force=False):
         """后台线程向 kernel.org 取最新的 mainline / stable 版本号。
 
         只读公开的 releases.json，结果缓存 24 小时；离线、代理、DNS 失败都只是
-        拿不到结论，不会打扰用户，也绝不影响检测本身。
+        拿不到结论，不弹窗、不影响检测本身，内核页会显示「未能核对」与重试按钮。
+
+        force=True 表示用户手动触发：跳过 24 小时缓存真正联网，结束后用 Toast
+        报告结果。
 
         菜单项、重试按钮都直接调这里，连点几下就会并发出几个线程、几次
-        缓存写入和几次整页重建，因此用一个标志位挡住。
+        缓存写入和几次整页重建，因此用一个标志位挡住。返回值表示是否真的
+        启动了一次新检查，调用方据此决定要不要提示「正在核对」。
         """
         if self._kernel_checking:
-            return
+            return False
         self._kernel_checking = True
 
         def worker():
             # get_status 承诺不抛异常；这里再兜一层是因为上面新加了 _kernel_checking
             # 标志——万一真的抛了，标志就再也没人复位，重试按钮会永久失效。
             try:
-                st = kernelver.get_status()
+                st = kernelver.get_status(force=force)
             except Exception as e:                                  # noqa: BLE001
                 st = kernelver.KernelSupport(release=platform.release(),
                                              error=str(e) or e.__class__.__name__)
-            GLib.idle_add(self.on_kernel_status, st)
+            GLib.idle_add(self.on_kernel_status, st, force)
 
         threading.Thread(target=worker, daemon=True).start()
+        return True
 
-    def on_kernel_status(self, st):
+    def on_kernel_status(self, st, manual=False):
         self._kernel_checking = False
+        if manual:
+            self.toast(kernelver.recheck_result_text(st))
         kernelver.set_current(st)
         if self.report is not None:
             self.report.kernel_support = st
@@ -402,7 +409,8 @@ class Application(Adw.Application):
         win = self._main_window()
         if win:
             win._kernel_warned = False
-            win.start_kernel_check()
+            if win.start_kernel_check(force=True):
+                win.toast("正在重新核对内核版本线…")
 
     def on_about(self, *_):
         kwargs = dict(

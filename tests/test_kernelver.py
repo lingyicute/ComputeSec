@@ -173,6 +173,57 @@ def test_online_result_is_not_stale(tmp_path):
     assert st.error == ""
 
 
+def _counting(text):
+    calls = []
+
+    def fetch(url, timeout):
+        calls.append(url)
+        return text
+    return fetch, calls
+
+
+def test_force_bypasses_fresh_cache_and_rewrites_it(tmp_path):
+    """手动重查：缓存还在 TTL 内也要真正联网，且新结果照常写回缓存。"""
+    cache = str(tmp_path / "kv.json")
+    kv.save_cache(kv.KernelSupport(release="7.2.1", mainline="7.2", stable="7.1.9",
+                                   tier="stable", checked_at=1000), cache)
+    fetch, calls = _counting(RELEASES_JSON)
+    st = kv.get_status(release="7.2.1", now=1000 + 3600, fetcher=fetch, cache_path=cache, force=True)
+    assert len(calls) == 1
+    assert (st.mainline, st.stable, st.checked_at) == ("7.3", "7.2.12", 1000 + 3600)
+    assert kv.load_cache(cache).mainline == "7.3"
+
+
+def test_force_failure_keeps_fresh_cache_without_marking_stale(tmp_path):
+    cache = str(tmp_path / "kv.json")
+    kv.get_status(release="7.2.12", now=1000, fetcher=_fetcher_returning(RELEASES_JSON), cache_path=cache)
+    st = kv.get_status(release="7.2.12", now=2000, fetcher=_fetcher_failing(), cache_path=cache, force=True)
+    assert st.known and st.supported
+    assert st.stale is False                # 仍在 TTL 内，不算过期
+    assert st.error                         # 但这次确实没刷新成
+    assert st.checked_at == 1000
+
+
+@pytest.mark.parametrize("checked_at", [0, 1000 + 30 * 86400])
+def test_cache_without_or_with_future_timestamp_is_not_fresh(tmp_path, checked_at):
+    """时间戳为 0 或在未来（时钟回拨）时，缓存不能永不过期。"""
+    cache = tmp_path / "kv.json"
+    cache.write_text(json.dumps(dict(release="7.2.1", mainline="7.2", stable="7.1.9", tier="stable",
+                                     checked_at=checked_at, error="")))
+    fetch, calls = _counting(RELEASES_JSON)
+    st = kv.get_status(release="7.2.1", now=1000, fetcher=fetch, cache_path=str(cache))
+    assert len(calls) == 1 and st.mainline == "7.3"
+
+
+def test_cache_without_versions_is_ignored(tmp_path):
+    cache = tmp_path / "kv.json"
+    cache.write_text(json.dumps(dict(release="7.2.1", mainline="", stable="", tier="unknown",
+                                     checked_at=990, error="")))
+    fetch, calls = _counting(RELEASES_JSON)
+    st = kv.get_status(release="7.2.1", now=1000, fetcher=fetch, cache_path=str(cache))
+    assert len(calls) == 1 and st.known
+
+
 @pytest.mark.parametrize("secs,want", [
     (0, "刚刚"), (59, "刚刚"), (60, "1 分钟前"), (3599, "59 分钟前"),
     (3600, "1 小时前"), (86400, "1 天前"), (3 * 86400, "3 天前"),

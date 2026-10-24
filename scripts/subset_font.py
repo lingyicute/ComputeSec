@@ -4,7 +4,8 @@ Subset the design font into a separately cacheable WOFF2 file.
 
 Optional maintenance/CI tool, not a runtime build requirement.
 Run: pip install fonttools brotli && python scripts/subset_font.py
-Use --force to refresh the upstream font, or NEBULOVE_FONT=/path/to/font.ttf offline.
+Use --force to refresh the upstream font, or NEBULOVE_FONT=/path/to/font.ttf offline
+(the local file must match FONT_SHA256, exactly like the downloaded one).
 """
 import hashlib
 from html.parser import HTMLParser
@@ -77,14 +78,36 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def fingerprint(chars=None, local_font=None):
-    """决定"这份 WOFF2 是否还能用"的指纹：上游字体 + 本脚本 + 页面用到的字符集。"""
+def fingerprint(chars=None):
+    """决定"这份 WOFF2 是否还能用"的指纹：上游字体 + 本脚本 + 页面用到的字符集。
+
+    字体部分用 FONT_SHA256：无论字体是下载的还是 NEBULOVE_FONT 指定的本地文件，
+    都必须先通过这个哈希校验，所以它就是字体内容本身的身份。此前本地文件用自己的
+    摘要、下载用 URL 字符串，离线生成的子集在 CI 的 --check 里永远是 STALE。
+    """
     chars = collect_chars() if chars is None else chars
-    source_key = digest(Path(local_font)) if local_font else FONT_URL
     return hashlib.sha256((
-        source_key + digest(Path(__file__))
+        FONT_SHA256 + digest(Path(__file__))
         + json.dumps(sorted(ord(c) for c in chars))
     ).encode()).hexdigest()
+
+
+def _load_cache():
+    """读取 .font-subset-cache.json；缺失或损坏时返回 None。"""
+    try:
+        cached = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return cached if isinstance(cached, dict) else None
+
+
+def _check_font_hash(blob, where):
+    got = hashlib.sha256(blob).hexdigest()
+    if got == FONT_SHA256:
+        return True
+    print(f"字体哈希不一致（{where}），已中止：\n  期望 {FONT_SHA256}\n  实际 {got}\n"
+          "如果你确实要升级字体，请同时更新脚本里的 FONT_COMMIT 与 FONT_SHA256。")
+    return False
 
 
 def subset(font, chars):
@@ -116,9 +139,8 @@ def replace_face(css, family, filename):
 
 def is_current():
     """当前 web/index.html 与已提交的 WOFF2 子集是否一致（不访问网络）。"""
-    try:
-        cached = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    cached = _load_cache()
+    if cached is None:
         return False, "缺少或无法解析 scripts/.font-subset-cache.json"
     css = HTML_PATH.read_text(encoding="utf-8")
     if cached.get("fingerprint") != fingerprint():
@@ -145,10 +167,10 @@ def main():
 
     chars = collect_chars()
     local_font = os.environ.get("NEBULOVE_FONT")
-    fp = fingerprint(chars, local_font)
+    fp = fingerprint(chars)
     css = HTML_PATH.read_text(encoding="utf-8")
-    if "--force" not in sys.argv and CACHE_PATH.exists():
-        cached = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    cached = None if "--force" in sys.argv else _load_cache()
+    if cached is not None:
         if cached.get("fingerprint") == fp and all(
             path.exists() and path.name in css
             and cached.get("outputs", {}).get(path.name) == digest(path)
@@ -158,17 +180,17 @@ def main():
             return
 
     if local_font:
-        nebulove = TTFont(local_font)
+        blob = Path(local_font).read_bytes()
+        where = local_font
     else:
         print(f"Downloading Nebulove source font @ {FONT_COMMIT[:7]}...")
         with urllib.request.urlopen(FONT_URL, timeout=90) as response:
             blob = response.read()
-        got = hashlib.sha256(blob).hexdigest()
-        if got != FONT_SHA256:
-            print(f"字体哈希不一致，已中止：\n  期望 {FONT_SHA256}\n  实际 {got}\n"
-                  "如果你确实要升级字体，请同时更新脚本里的 FONT_COMMIT 与 FONT_SHA256。")
-            return 1
-        nebulove = TTFont(io.BytesIO(blob))
+        where = FONT_URL
+    # 本地文件同样要校验：否则任何一份同名字体都能悄悄生成出不同的子集。
+    if not _check_font_hash(blob, where):
+        return 1
+    nebulove = TTFont(io.BytesIO(blob))
     fonts = {"Nebulove": subset(nebulove, chars)}
 
     new_css = css

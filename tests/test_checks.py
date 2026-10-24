@@ -76,8 +76,56 @@ def test_lookup_hsi_info():
     # 通用属性尾段（如 .Enabled / .Version）不应跨类别误匹配到 Intel Boot Guard 或 ME
     assert checks._lookup_hsi_info("org.fwupd.hsi.Unknown.Enabled") == {}
     assert checks._lookup_hsi_info("org.fwupd.hsi.Bios.Version") == {}
+    # “通用词 + 编号”同样按通用处理：Version20 末段唯一，但它与 TPM 2.0 无关
+    assert checks._lookup_hsi_info("com.example.Version20") == {}
+    assert checks._lookup_hsi_info("com.example.Enabled2") == {}
+    # 两段组合仍然可以命中（厂商前缀不同但功能段一致）
+    assert checks._lookup_hsi_info("com.example.Tpm.Version20")["name"] == "TPM 2.0"
     # 完全未知返回空字典（调用方用 .get 做降级）
     assert checks._lookup_hsi_info("org.example.Nope") == {}
+
+
+def test_hsi_tail_is_generic():
+    assert checks._hsi_tail_is_generic("Enabled") is True
+    assert checks._hsi_tail_is_generic("Version") is True
+    assert checks._hsi_tail_is_generic("Version20") is True
+    assert checks._hsi_tail_is_generic("Enabled_2") is True
+    # 只是"以通用词开头"或"包含通用词"的专有名词不应被误伤
+    assert checks._hsi_tail_is_generic("PlatformDebugEnabled") is False
+    assert checks._hsi_tail_is_generic("Dbx") is False
+    assert checks._hsi_tail_is_generic("SecureBoot") is False
+    assert checks._hsi_tail_is_generic("ReconstructionPcr0") is False
+
+
+def test_hsi_lookup_requires_unique_match(monkeypatch):
+    """尾缀出现歧义时退化为 {}，而不是随手挑一条把说明安错。"""
+    monkeypatch.setattr(checks.data, "HSI_ATTRS", {
+        "org.fwupd.hsi.Uefi.SecureBoot": dict(name="A"),
+        "org.example.hsi.Uefi.SecureBoot": dict(name="B"),
+        "org.fwupd.hsi.Tpm.Version20": dict(name="TPM 2.0"),
+        "org.fwupd.hsi.Tpm.Pcr0": dict(name="Pcr0"),
+    })
+    # 两段尾缀有两条候选 → 不猜
+    assert checks._lookup_hsi_info("com.vendor.Uefi.SecureBoot") == {}
+    # 单段尾缀有两条候选 → 不猜
+    assert checks._lookup_hsi_info("com.vendor.SecureBoot") == {}
+    # 唯一命中仍然可用
+    assert checks._lookup_hsi_info("com.vendor.Tpm.Version20")["name"] == "TPM 2.0"
+    assert checks._lookup_hsi_info("com.vendor.Pcr0")["name"] == "Pcr0"
+
+
+def test_hsi_attr_tails_have_no_ambiguity():
+    """不变量：非通用的末段必须唯一，且两段尾缀不得重复。
+
+    一旦有人往 data.HSI_ATTRS 里加了同尾段的条目，这条测试会立刻失败，
+    提醒他要么改名，要么把该尾段加进 _HSI_GENERIC_TAILS。
+    """
+    from collections import Counter
+    tails = Counter(k.split(".")[-1] for k in data.HSI_ATTRS)
+    dup_tails = {t for t, n in tails.items() if n > 1}
+    assert all(checks._hsi_tail_is_generic(t) for t in dup_tails), dup_tails
+    pairs = Counter(tuple(k.split(".")[-2:]) for k in data.HSI_ATTRS)
+    assert [p for p, n in pairs.items() if n > 1] == []
 
 
 @pytest.mark.parametrize("key,actual,expected,want", [

@@ -156,20 +156,39 @@ _HSI_GENERIC_TAILS = {
 }
 
 
+def _hsi_tail_is_generic(tail):
+    """末段是否过于通用，不能单凭它推断检测项含义。
+
+    除通用词本身外，也要挡住"通用词 + 编号"的写法：例如 Version20 虽然目前
+    是唯一的末段，但 com.example.Version20 与 TPM 2.0 毫无关系，只因末段
+    唯一就关联过去会把说明和修复建议安到无关的检测项上。
+    """
+    for generic in _HSI_GENERIC_TAILS:
+        if tail == generic:
+            return True
+        rest = tail[len(generic):]
+        if tail.startswith(generic) and rest and rest.strip("0123456789_") == "":
+            return True
+    return False
+
+
 def _lookup_hsi_info(aid):
     aid = data.HSI_ALIASES.get(aid, aid)
     if aid in data.HSI_ATTRS:
         return data.HSI_ATTRS[aid]
     parts = aid.split(".")
-    # 优先尝试最后两段精确匹配（如 com.example.IntelCet.Enabled -> IntelCet.Enabled）
+    # 1) 最后两段精确匹配（如 com.example.IntelCet.Enabled -> IntelCet.Enabled）。
+    #    必须唯一命中：将来若出现两个同尾段的条目，宁可退回到 fwupd 自带的
+    #    Name/Summary，也不要随手挑一条把说明安错。data.HSI_ATTRS 的两段尾缀
+    #    当前无重复，tests 里有一条不变量测试锁死这一点。
     if len(parts) >= 2:
         tail2 = parts[-2:]
-        for k, v in data.HSI_ATTRS.items():
-            if k.split(".")[-2:] == tail2:
-                return v
-    # 尝试去掉厂商前缀的单段模糊匹配（排除通用属性名及存在歧义的尾段）
+        matches = [v for k, v in data.HSI_ATTRS.items() if k.split(".")[-2:] == tail2]
+        if len(matches) == 1:
+            return matches[0]
+    # 2) 去掉厂商前缀的单段匹配，仅当末段不通用且唯一命中时采用。
     tail1 = parts[-1]
-    if tail1 and tail1 not in _HSI_GENERIC_TAILS:
+    if tail1 and not _hsi_tail_is_generic(tail1):
         matches = [v for k, v in data.HSI_ATTRS.items() if k.split(".")[-1] == tail1]
         if len(matches) == 1:
             return matches[0]

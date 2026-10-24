@@ -2,28 +2,54 @@ name: Build
 
 on:
   push:
-      paths:
+    paths:
       - 'computesec/**'
       - 'run.py'
       - 'tests/**'
       - 'data/**'
+      - 'web/**'
+      - 'scripts/**'
+      - 'pyproject.toml'          # ruff 规则集与 fail_under 都在里面
+      - 'conftest.py'             # 决定 sys.path，删掉 test_run.py 就 import 失败
       - '*.json'
       - '*.yml'
       - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'computesec/**'
+      - 'run.py'
+      - 'tests/**'
+      - 'data/**'
+      - 'pyproject.toml'
+      - 'conftest.py'
   workflow_dispatch:
 
+# 默认只读：lint / smoke 不需要写权限。只有 release 作业单独提权到 write，
+# 避免一个被篡改的测试脚本顺手就能改仓库内容。
 permissions:
-  contents: write
+  contents: read
+
+# 连续 push 时取消上一轮：release 作业是"先删 nightly 再重建"，两个 run 同时
+# 执行会互相踩，甚至让 nightly 指向错误的 commit。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
-    name: Python 语法、lint、测试与元数据检查
+    name: Python ${{ matrix.python-version }}：语法、lint、测试与元数据检查
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # README 承诺 Python ≥ 3.9；只在 3.12 上跑，写进 README 的下限就没人验证。
+        python-version: ["3.9", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: 编译检查
         run: python -m compileall -q computesec run.py scripts
       - name: 安装检查工具
@@ -49,6 +75,7 @@ jobs:
   smoke:
     name: UI 冒烟测试（Xvfb，真跑一遍 GTK）
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: 安装系统 Python 的 PyGObject / GTK4 / libadwaita 与 Xvfb
@@ -61,6 +88,9 @@ jobs:
 
   flatpak:
     name: 构建 Flatpak (${{ matrix.arch }})
+    # PR 只跑 lint + smoke（几十秒），不跑两个架构的整包构建（各要几十分钟）；
+    # 需要验证 manifest 时由维护者手动 workflow_dispatch 或在 push 后看结果。
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -70,6 +100,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
@@ -89,6 +120,9 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: flatpak
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write          # gh release delete / create 需要
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

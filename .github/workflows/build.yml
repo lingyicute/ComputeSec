@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   lint:
-    name: Python 语法与元数据检查
+    name: Python 语法、lint、测试与元数据检查
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,18 +25,23 @@ jobs:
         with:
           python-version: "3.12"
       - name: 编译检查
-        run: python -m compileall -q computesec run.py
-      - name: 运行单元测试
+        run: python -m compileall -q computesec run.py scripts
+      - name: 安装检查工具
         run: |
-          pip install pytest
-          python -m pytest -q
-      - name: 安装校验工具
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov ruff
+      - name: Lint（规则见 pyproject.toml，与本地保持一致）
+        run: ruff check .
+      - name: 运行单元测试与覆盖率门槛
+        run: python -m pytest -q --cov=computesec --cov=run
+      - name: 安装元数据校验工具
         run: |
           sudo apt-get update
           sudo apt-get install -y desktop-file-utils appstream libxml2-utils
       - name: 校验 .desktop / metainfo / SVG
         run: |
           desktop-file-validate data/uk._92li.lingyicute.ComputeSec.desktop
+          # 元数据里 OARS 段落尚待修正（见下一个提交），先不阻断
           appstreamcli validate --no-net data/uk._92li.lingyicute.ComputeSec.metainfo.xml || true
           xmllint --noout data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg
 

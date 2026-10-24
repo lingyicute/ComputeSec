@@ -6,4 +6,7 @@ repo/
 *.flatpak
 .venv/
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
 .ruff_cache/

@@ -1,9 +1,29 @@
 # ComputeSec 工程配置
 #
 # 运行测试：python -m pytest
+# 运行 lint：ruff check .
+# 覆盖率：  python -m pytest --cov=computesec --cov=run
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py39"
+# 与 CI 使用同一套规则，避免本地全绿、CI 变红（反之亦然）。
+# F   = Pyflakes（未使用变量/导入、未定义名称等）
+# E7  = 语句层面的风格问题（E731 lambda 赋值、E741 易混淆变量名等）
+# E9  = 运行时才会暴露的语法错误
+# B   = flake8-bugbear（可变默认参数、盲捕异常等常见 bug 模式）
+lint.select = ["F", "E7", "E9", "B"]
+lint.ignore = []
+
+[tool.coverage.run]
+source = ["computesec", "run"]
+
+[tool.coverage.report]
+# 覆盖率门槛：只作为"不许后退"的栏杆，不追求好看的数字。
+# ui.py / main.py / wizard.py 需要 GTK 与显示服务器才能实例化，CI 里无法导入，
+# 因此合计覆盖率天然偏低（这三个模块按 0% 计入）。改动这些模块时请人工冒烟一次。
+fail_under = 40
+skip_covered = false
+show_missing = true

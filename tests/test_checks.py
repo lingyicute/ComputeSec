@@ -576,6 +576,26 @@ def test_sysctl_flatpak_snapshot_gap_is_unverified(monkeypatch):
     assert rep.score == 100        # unverified 不参与评分
 
 
+def test_sysctl_flatpak_root_only_key_missing_from_snapshot_is_unknown(monkeypatch):
+    """漏了 sudo 时 root-only 条目的报错被 2>/dev/null 吞掉，快照里就没有它们。
+
+    沙箱里读这一项是「权限不足」，应归为 unknown，界面才会提示「可能没有加 sudo」，
+    而不是笼统的「快照缺失」。"""
+    ok_key, root_key = "kernel.kptr_restrict", "vm.mmap_rnd_bits"
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {ok_key: "2"}}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks, "_flatpak_shares_network", lambda: True)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [
+        ("t", [dict(key=ok_key, value="2", desc="d"), dict(key=root_key, value="32", desc="d")]),
+    ])
+    monkeypatch.setattr(checks, "_sysctl_from_proc",
+                        lambda k: ({}, True) if k == root_key else ({k: "2"}, False))
+    by_key = {i.key: i for i in checks.get_sysctl_report().all_items}
+    assert by_key[root_key].status == "unknown"
+    assert by_key[ok_key].status == "ok"
+
+
 def test_flatpak_shared_subsystems(monkeypatch):
     monkeypatch.setattr(checks, "read", lambda path, default="": (
         "[Application]\nname=x\n\n[Context]\nshared=network;ipc;\nsockets=wayland;\n"

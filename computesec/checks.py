@@ -694,10 +694,13 @@ def get_sysctl_report() -> SysctlReport:
                 # 数值来自新 netns 的默认值，与宿主机的加固状态无关。
                 actual, source, snapshot_gap = {}, "沙箱网络隔离", "沙箱网络隔离"
                 unreadable = False
-            elif IN_FLATPAK and user_values:
+            elif IN_FLATPAK and user_values and not (unreadable and not actual):
                 # 沙箱内的 /proc/sys 不是宿主机视图（可能被屏蔽、改写或加了命名空间），
                 # 快照没有覆盖这一项时不能拿沙箱读数顶替，否则会把沙箱的值当成
                 # 宿主机结果报出来。明确标成 unverified 并排除出评分。
+                # 例外：沙箱里这一项完全是「权限不足」（vm.mmap_rnd_bits 等 0600 条目），
+                # 快照里又恰好没有——最可能是执行时漏了 sudo、报错被 2>/dev/null 吞掉。
+                # 这种情况落到下面的 unknown，界面才会给出「可能没有加 sudo」的提示。
                 actual, source, snapshot_gap = {}, "快照缺失", "快照缺失"
                 unreadable = False
             if snapshot_gap:

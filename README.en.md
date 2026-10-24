@@ -107,9 +107,9 @@ The tool has to read information from the host, so it requests the permissions b
 
 > **About the network permission**: `--share=network` is used only to fetch `releases.json` (version
 > numbers) from kernel.org at startup. Nothing about your system is uploaded, and the result is
-> cached for 24 hours. You can revoke it with Flatseal: the version line check is then skipped
-> silently, and because `net.*` inside the sandbox belongs to a private network namespace those
-> readings are no longer trusted — they show up as "unverified" and are excluded from scoring.
+> cached for 24 hours. You can revoke it with Flatseal: the version line check then shows
+> **not verified**, and because `net.*` inside the sandbox belongs to a private network namespace
+> those readings are no longer trusted — they show up as "unverified" and are excluded from scoring.
 > Everything else keeps working.
 
 > **This tool does not request `--talk-name=org.freedesktop.Flatpak`from version 1.0.3.**

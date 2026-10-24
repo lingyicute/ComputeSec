@@ -52,9 +52,9 @@ TIER_ZH = {
 }
 
 
-def _data_dir():
-    """本程序的数据目录（规则见 computesec.xdg）。"""
-    return xdg.data_dir()
+def _data_dir(create=True):
+    """本程序的数据目录（规则见 computesec.xdg）。只读查询传 create=False，不在磁盘上留痕。"""
+    return xdg.data_dir(create=create)
 
 
 def parse_release(text):
@@ -244,7 +244,7 @@ def load_cache(path=None, now=None):
     时 fetch_versions 会抛异常、不写缓存），出现了只能是被改坏的，若当作有效缓存
     就会跳过联网，直接给出「未能核对」。
     """
-    path = path or os.path.join(_data_dir(), CACHE_NAME)
+    path = path or os.path.join(_data_dir(create=False), CACHE_NAME)
     try:
         with open(path) as f:
             st = KernelSupport.from_dict(json.load(f))
@@ -263,6 +263,7 @@ def save_cache(st, path=None):
     tmp = path + ".tmp"
     try:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.fchmod(fd, 0o600)      # 已存在的同名 .tmp 不受 O_CREAT 的 mode 影响
         with os.fdopen(fd, "w") as f:
             json.dump(st.to_dict(), f)
         os.replace(tmp, path)

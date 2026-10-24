@@ -360,3 +360,28 @@ def test_data_dir_ignores_relative_xdg(monkeypatch, tmp_path):
 def test_data_dir_respects_absolute_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     assert hostdata._data_dir() == str(tmp_path / "xdg" / "computesec")
+
+
+def test_readonly_paths_do_not_create_data_dir(tmp_path, monkeypatch):
+    """只读查询与清理不应在磁盘上留下空目录。"""
+    from computesec import kernelver
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    hostdata.HostData.load()
+    hostdata.HostData.clear()
+    kernelver.load_cache()
+    assert not (tmp_path / "xdg" / "computesec").exists()
+
+
+def test_save_tightens_leftover_tmp_file(tmp_path, monkeypatch):
+    """上次写到一半留下的 .tmp 若是 0644，写入时也要收紧成 0600。"""
+    import os
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    d = tmp_path / "computesec"
+    d.mkdir(mode=0o700)
+    leftover = d / (hostdata.CACHE_NAME + ".tmp")
+    leftover.write_text("{}")
+    os.chmod(leftover, 0o644)
+    hd = hostdata.HostData()
+    hd.set("sysctl", {"values": {"kernel.ostype": "Linux"}})
+    hd.save()
+    assert (os.stat(d / hostdata.CACHE_NAME).st_mode & 0o777) == 0o600

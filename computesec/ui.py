@@ -355,7 +355,7 @@ def build_dashboard(report, win, navigate):
             _add_todo(esc(c.title), esc(c.summary), c.status, "habits")
     _ks = getattr(report, "kernel_support", None)
     if _ks is not None and _ks.known and not _ks.supported:
-        _add_todo(f"当前内核 {_ks.release} 不在 mainline / stable 版本线上",
+        _add_todo(f"当前内核 {esc(_ks.release)} 不在 mainline / stable 版本线上",
                   "旧分支未包含上游全部安全修复与加固改进，下面的加固建议不保证生效", "warn", "kernel")
     if report.hsi.ok and report.hsi.undetermined:
         _add_todo(f"有 {len(report.hsi.undetermined)} 项 HSI 检测因为缺少数据而无法判定",

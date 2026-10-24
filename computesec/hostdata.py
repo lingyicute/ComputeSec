@@ -32,9 +32,9 @@ SYSCTL_ANCHORS = ("kernel.ostype", "kernel.osrelease", "kernel.version", "kernel
                   "fs.file-max", "net.ipv4.ip_forward", "vm.max_map_count")
 
 
-def _data_dir():
-    """本程序的数据目录（规则见 computesec.xdg）。"""
-    return xdg.data_dir()
+def _data_dir(create=True):
+    """本程序的数据目录（规则见 computesec.xdg）。只读查询传 create=False，不在磁盘上留痕。"""
+    return xdg.data_dir(create=create)
 
 
 def boot_id():
@@ -296,7 +296,7 @@ class HostData:
     # -- 持久化 ----------------------------------------------------------
     @classmethod
     def load(cls):
-        path = os.path.join(_data_dir(), CACHE_NAME)
+        path = os.path.join(_data_dir(create=False), CACHE_NAME)
         try:
             with open(path) as f:
                 payload = json.load(f)
@@ -311,6 +311,8 @@ class HostData:
             # 缓存里是用户粘贴的完整 sudo sysctl -a 输出（含内核地址、主机名等），
             # 只给当前用户读写：os.open 建文件时直接带 0600，不受 umask 影响。
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            # 上次写到一半留下的同名 .tmp 不会因 O_CREAT 的 mode 而改权限，这里显式收紧。
+            os.fchmod(fd, 0o600)
             with os.fdopen(fd, "w") as f:
                 json.dump(self.payload, f)
             os.replace(tmp, path)
@@ -320,7 +322,7 @@ class HostData:
     @staticmethod
     def clear():
         try:
-            os.remove(os.path.join(_data_dir(), CACHE_NAME))
+            os.remove(os.path.join(_data_dir(create=False), CACHE_NAME))
         except OSError:
             pass
 

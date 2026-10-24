@@ -13,6 +13,26 @@ from typing import Optional
 from . import data, hostdata, hostinfo
 
 IN_FLATPAK = os.path.exists("/.flatpak-info")
+
+
+def _flatpak_shared_subsystems():
+    """返回 Flatpak 沙箱与宿主共享的子系统集合（取 /.flatpak-info 的 [Context] shared=）。
+
+    flatpak-metadata(5)：/.flatpak-info 描述沙箱的**实际生效**配置，[Context] 的
+    shared 是以分号分隔的列表（network、ipc）。配置文件缺失或格式异常时返回空集合
+    ——宁可当作"什么都没共享"，也不要凭空相信沙箱内的读数。
+    """
+    text = read("/.flatpak-info")
+    if not text:
+        return set()
+    m = re.search(r"^shared=(.*)$", text, re.M)
+    if not m:
+        return set()
+    return {x.strip() for x in m.group(1).split(";") if x.strip()}
+
+
+def _flatpak_shares_network():
+    return "network" in _flatpak_shared_subsystems()
 MISSING = object()
 
 
@@ -555,6 +575,11 @@ def _sysctl_from_proc(key):
 def get_sysctl_report() -> SysctlReport:
     hd = hostdata.CURRENT
     user_values = hd.sysctl_values
+    # net.* 是按网络命名空间复制的 sysctl。Flatpak 默认不共享宿主网络（manifest 未声明
+    # --share=network 时，应用跑在私有 netns 里），此时 /proc/sys/net 读到的是**沙箱
+    # 自己的**默认值而不是宿主机的加固状态——新 netns 的 rp_filter=0、
+    # accept_redirects=1，与推荐值恰好相反。只有确认共享了宿主网络才能采信。
+    sandbox_netns = IN_FLATPAK and not _flatpak_shares_network()
     groups = []
     for title, entries in data.SYSCTL_GROUPS:
         items = []
@@ -563,30 +588,35 @@ def get_sysctl_report() -> SysctlReport:
             cmp = e.get("cmp", "eq")
             actual, unreadable = _sysctl_from_proc(key)
             source = "proc"
-            snapshot_gap = False
+            snapshot_gap = ""
+            net_isolated = sandbox_netns and key.startswith("net.")
             # 用户提供的 sysctl -a（以 root 执行、在宿主机上执行）优先级更高：
             # 它既能补上权限不足的条目，也能补上被 Flatpak 沙箱屏蔽或隔离的条目。
-            if user_values:
-                supplied = hd.sysctl_lookup(key)
-                if supplied:
-                    if IN_FLATPAK:
-                        # 沙箱里的 /proc/sys 可能属于隔离视图，不能混入宿主机快照。
-                        actual = dict(supplied)
+            supplied = hd.sysctl_lookup(key) if user_values else {}
+            if supplied:
+                if IN_FLATPAK:
+                    # 沙箱里的 /proc/sys 可能属于隔离视图，不能混入宿主机快照。
+                    actual = dict(supplied)
+                    source = "用户提供"
+                else:
+                    # 原生环境保留快照采集后新出现的接口等条目，用户值仅覆盖同名键。
+                    merged = dict(actual)
+                    merged.update(supplied)
+                    if unreadable or merged != actual:
                         source = "用户提供"
-                    else:
-                        # 原生环境保留快照采集后新出现的接口等条目，用户值仅覆盖同名键。
-                        merged = dict(actual)
-                        merged.update(supplied)
-                        if unreadable or merged != actual:
-                            source = "用户提供"
-                        actual = merged
-                    unreadable = False
-                elif IN_FLATPAK:
-                    # 沙箱内的 /proc/sys 不是宿主机视图（可能被屏蔽、改写或加了命名空间），
-                    # 快照没有覆盖这一项时不能拿沙箱读数顶替，否则会把沙箱的值当成
-                    # 宿主机结果报出来。明确标成 unverified 并排除出评分。
-                    actual, source, snapshot_gap = {}, "快照缺失", True
-                    unreadable = False
+                    actual = merged
+                unreadable = False
+            elif net_isolated:
+                # Flatpak 没有共享宿主网络：沙箱内的 net.* 属于独立的网络命名空间，
+                # 数值来自新 netns 的默认值，与宿主机的加固状态无关。
+                actual, source, snapshot_gap = {}, "沙箱网络隔离", "沙箱网络隔离"
+                unreadable = False
+            elif IN_FLATPAK and user_values:
+                # 沙箱内的 /proc/sys 不是宿主机视图（可能被屏蔽、改写或加了命名空间），
+                # 快照没有覆盖这一项时不能拿沙箱读数顶替，否则会把沙箱的值当成
+                # 宿主机结果报出来。明确标成 unverified 并排除出评分。
+                actual, source, snapshot_gap = {}, "快照缺失", "快照缺失"
+                unreadable = False
             if snapshot_gap:
                 status = "unverified"
             elif unreadable and not actual:

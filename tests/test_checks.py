@@ -478,6 +478,78 @@ def test_sysctl_flatpak_snapshot_gap_is_unverified(monkeypatch):
     assert rep.score == 100        # unverified 不参与评分
 
 
+def test_flatpak_shared_subsystems(monkeypatch):
+    monkeypatch.setattr(checks, "read", lambda path, default="": (
+        "[Application]\nname=x\n\n[Context]\nshared=network;ipc;\nsockets=wayland;\n"
+        if path == "/.flatpak-info" else default))
+    assert checks._flatpak_shared_subsystems() == {"network", "ipc"}
+    assert checks._flatpak_shares_network() is True
+    # 没有 network 时不能采信沙箱内的 net.*
+    monkeypatch.setattr(checks, "read", lambda path, default="": (
+        "[Context]\nshared=ipc;\n" if path == "/.flatpak-info" else default))
+    assert checks._flatpak_shares_network() is False
+    # 文件缺失 / 没有 shared 行：按“什么都没共享”处理
+    monkeypatch.setattr(checks, "read", lambda path, default="": default)
+    assert checks._flatpak_shared_subsystems() == set()
+    assert checks._flatpak_shares_network() is False
+
+
+def test_sysctl_flatpak_without_host_network_marks_net_unverified(monkeypatch):
+    """Flatpak 未共享宿主网络时，net.* 的沙箱读数必须被丢弃（新 netns 的默认值与宿主相反）。"""
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks, "_flatpak_shares_network", lambda: False)
+    monkeypatch.setattr(checks.hostdata, "CURRENT", checks.hostdata.HostData())
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda key: (
+        ({key.replace("*", "all"): "1"} if not key.startswith("net.") else {"net.x": "0"}), False))
+
+    r = checks.get_sysctl_report()
+    net = [i for i in r.all_items if i.key.startswith("net.")]
+    other = [i for i in r.all_items if not i.key.startswith("net.")]
+    assert net and all(i.status == "unverified" for i in net)
+    assert all(i.source == "沙箱网络隔离" for i in net)
+    assert not any(i.status == "unverified" for i in other)
+    # 未参与评分：unverified 不算进分母，拿不到分也不会拉低分数
+    assert all(i.status not in ("missing", "ok") for i in net)
+
+
+def _fake_sysctl_reader(value_for_key):
+    """伪造 _sysctl_from_proc：按 sysctl 表里的期望值返回"已加固"的读数。"""
+    expected = {e["key"]: e["value"] for _, entries in data.SYSCTL_GROUPS for e in entries}
+    return lambda key: ({key.replace("*", "all"): str(expected.get(key, value_for_key))}, False)
+
+
+def test_sysctl_flatpak_with_shared_network_trusts_sandbox(monkeypatch):
+    """共享了宿主网络（--share=network）时，沙箱内的 /proc/sys/net 就是宿主机视图。"""
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks, "_flatpak_shares_network", lambda: True)
+    monkeypatch.setattr(checks.hostdata, "CURRENT", checks.hostdata.HostData())
+    monkeypatch.setattr(checks, "_sysctl_from_proc", _fake_sysctl_reader("1"))
+
+    r = checks.get_sysctl_report()
+    net = [i for i in r.all_items if i.key.startswith("net.")]
+    assert net and all(i.status == "ok" for i in net)
+    assert all(i.source == "proc" for i in net)
+
+
+def test_sysctl_flatpak_net_uses_user_snapshot(monkeypatch):
+    """用户提供的宿主机快照仍应覆盖被隔离的 net.*。"""
+    hd = checks.hostdata.HostData()
+    hd.payload = {"steps": {"sysctl": {"data": {"values": {
+        "net.ipv4.conf.all.rp_filter": "1", "net.ipv4.tcp_syncookies": "1"}}}}}
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks, "_flatpak_shares_network", lambda: False)
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda key: ({"net.x": "0"}, False))
+
+    r = checks.get_sysctl_report()
+    item = next(i for i in r.all_items if i.key == "net.ipv4.tcp_syncookies")
+    assert item.status == "ok"
+    assert item.source == "用户提供"
+    # 快照里没有的 net.* 依然标 unverified，不会退回沙箱读数
+    other = next(i for i in r.all_items if i.key == "net.core.bpf_jit_harden")
+    assert other.status == "unverified"
+
+
 def test_sysctl_native_still_merges_snapshot(monkeypatch):
     """原生环境维持原有行为：快照只覆盖同名键，新出现的接口仍用 /proc 读数（不回归）。"""
     key = "net.ipv4.conf.*.accept_redirects"

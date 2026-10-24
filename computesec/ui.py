@@ -457,23 +457,32 @@ def build_kernel(report, win):
     cpu_zh = {"intel": "Intel", "amd": "AMD"}.get(c.cpu, "未知/非 x86")
 
     # ---- 数据来源 / 采集提示 ----
+    # 只有确实存在"拿不到 / 不可信"的条目时才显示这一栏：Flatpak 本身不是问题，
+    # 沙箱里能读到的条目（kernel.*、vm.*、fs.* 等）本来就是宿主机视图。
     g_src = None
-    if s.user_supplied or s.unknown or s.unverified or report.in_flatpak:
-        n = len(s.unknown)
-        m = len(s.unverified)
+    n = len(s.unknown)
+    m = len(s.unverified)
+    m_net = sum(1 for i in s.unverified if i.source == "沙箱网络隔离")
+    if s.user_supplied or n or m:
+        parts = []
         if s.user_supplied:
-            desc = (f"已使用您提供的 sysctl 输出（{report.hostdata.age_text if report.hostdata else ''}采集）。"
-                    + (f"仍有 {n} 项无法判定，可能是您执行命令时没有加 sudo。" if n else ""))
-            if m:
-                desc += (f"另有 {m} 项不在您提供的输出中（可能被 2>/dev/null 过滤，或该内核没有这一项）；"
-                         "沙箱内的读数不可信，已忽略，未计入评分。")
             title = "数据来源：您提供的 sysctl -a"
+            parts.append(f"已使用您提供的 sysctl 输出（{report.hostdata.age_text if report.hostdata else ''}采集）。")
+            if n:
+                parts.append(f"仍有 {n} 项无法判定，可能是您执行命令时没有加 sudo。")
+            if m:
+                parts.append(f"另有 {m} 项不在您提供的输出中（可能被 2>/dev/null 过滤，或该内核没有这一项）；"
+                             "沙箱内的读数不可信，已忽略，未计入评分。")
         else:
-            desc = (f"当前有 {n} 项 sysctl 因为文件仅 root 可读而无法判定（例如 vm.mmap_rnd_bits），未计入评分。"
-                    if n else "部分 sysctl 条目在当前权限或 Flatpak 沙箱内不可见。")
-            desc += "点击右侧按钮，按向导在终端执行一条只读命令并复制结果，即可得到完整准确的评估。"
             title = "部分数据不完整"
-        g_src = group(title, desc)
+            if m_net:
+                parts.append(f"当前有 {m_net} 项 net.* 参数只能在宿主机上读取：Flatpak 沙箱没有共享宿主网络，"
+                             "沙箱内的 net.* 属于独立的网络命名空间，数值与宿主机的加固状态无关，"
+                             "已忽略且未计入评分。")
+            if n:
+                parts.append(f"当前有 {n} 项 sysctl 因为文件仅 root 可读而无法判定（例如 vm.mmap_rnd_bits），未计入评分。")
+            parts.append("点击右侧按钮，按向导在终端执行一条只读命令并复制结果，即可得到完整准确的评估。")
+        g_src = group(title, "".join(parts))
         g_src.set_header_suffix(_collect_button(win, "重新采集" if s.user_supplied else "采集系统数据"))
 
     # ---- cmdline ----
@@ -529,6 +538,9 @@ def build_kernel(report, win):
                 sub += "  （内核不支持或模块未加载）"
             elif it.status == "unknown":
                 sub += "  （该文件仅 root 可读，未参与评分；请用主菜单的「重新采集系统数据」提供 sudo sysctl -a 的结果）"
+            elif it.status == "unverified" and it.source == "沙箱网络隔离":
+                sub += ("  （Flatpak 沙箱没有共享宿主网络，这一项在沙箱内属于独立的网络命名空间，"
+                        "读数与宿主机无关，已忽略且未参与评分；可在「数据采集向导」中提供 sudo sysctl -a 的结果）")
             elif it.status == "unverified":
                 sub += ("  （您提供的 sysctl -a 快照中没有这一项；沙箱内的读数不是宿主机视图，"
                         "已忽略且未参与评分）")

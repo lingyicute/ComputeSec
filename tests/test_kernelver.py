@@ -204,6 +204,62 @@ def test_load_cache_rejects_garbage(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# 联网请求本身
+# ---------------------------------------------------------------------------
+class _FakeResponse:
+    """够 _default_fetcher 用的最小替身。"""
+
+    def __init__(self, body=b"{}", url=None):
+        self._body = body
+        self._url = url
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+    def geturl(self):
+        return self._url
+
+    def read(self, n=-1):
+        self.seen_limit = n
+        return self._body
+
+
+def _patch_urlopen(monkeypatch, resp):
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["url"] = req.full_url
+        seen["resp"] = resp
+        return resp
+
+    monkeypatch.setattr(kv.urllib.request, "urlopen", fake_urlopen)
+    return seen
+
+
+def test_default_fetcher_caps_response_size(monkeypatch):
+    resp = _FakeResponse(b'{"releases": []}', url=kv.RELEASES_URL)
+    _patch_urlopen(monkeypatch, resp)
+    assert kv._default_fetcher(kv.RELEASES_URL, 5) == '{"releases": []}'
+    assert resp.seen_limit == kv.MAX_RESPONSE_BYTES
+
+
+def test_default_fetcher_rejects_downgrade_redirect(monkeypatch):
+    """被重定向到 http:// 时 TLS 只保护了第一跳，此时不能相信响应内容。"""
+    _patch_urlopen(monkeypatch, _FakeResponse(url="http://mirror.example/releases.json"))
+    with pytest.raises(ValueError):
+        kv._default_fetcher(kv.RELEASES_URL, 5)
+
+
+def test_default_fetcher_accepts_https_redirect(monkeypatch):
+    resp = _FakeResponse(b"ok", url="https://mirrors.example/releases.json")
+    _patch_urlopen(monkeypatch, resp)
+    assert kv._default_fetcher(kv.RELEASES_URL, 5) == "ok"
+
+
+# ---------------------------------------------------------------------------
 # 文案
 # ---------------------------------------------------------------------------
 def _status(tier, release="6.1.158+", mainline="7.3", stable="7.2.12"):

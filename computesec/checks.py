@@ -1036,8 +1036,15 @@ class Report:
 
     @staticmethod
     def _mean(values):
+        """各分项的平均分，无法评估（None）的分项跳过；全部无法评估时返回 None。
+
+        用整数四舍五入（.5 向上），而不是 // 截断：截断是单向偏低，每个综合分
+        都会平白少掉最多 1 分（[80, 79] 截断成 79，实际是 79.5）。
+        """
         vals = [v for v in values if v is not None]
-        return sum(vals) // len(vals) if vals else None
+        if not vals:
+            return None
+        return (sum(vals) + len(vals) // 2) // len(vals)
 
     @property
     def kernel_score(self):

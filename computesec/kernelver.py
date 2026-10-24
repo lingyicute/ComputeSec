@@ -33,6 +33,9 @@ RELEASES_URL = "https://www.kernel.org/releases.json"
 CACHE_NAME = "kernelver.json"
 CACHE_TTL = 24 * 3600
 FETCH_TIMEOUT = 6.0
+# releases.json 现在约 20 KB。限长读取，避免坏代理 / captive portal 返回一个
+# 巨大的响应把内存吃满。
+MAX_RESPONSE_BYTES = 1_000_000
 
 # 内核 release 串：6.1.158+ / 7.2.12-200.fc44.x86_64 / 6.18.0-rc3 / 7.3
 _RELEASE_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?")
@@ -192,7 +195,12 @@ class KernelSupport:
 def _default_fetcher(url, timeout):
     req = urllib.request.Request(url, headers={"User-Agent": "ComputeSec"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:   # noqa: S310 (固定的 https 地址)
-        return resp.read().decode("utf-8", "replace")
+        # urlopen 默认跟随重定向，但 TLS 只保护了第一跳。一旦被 302 到 http://，
+        # 后面的内容就是明文，任何人都能改写版本号——那正是本功能的判断依据。
+        final = resp.geturl() or url
+        if not final.startswith("https://"):
+            raise ValueError(f"请求被重定向到了非 https 地址：{final}")
+        return resp.read(MAX_RESPONSE_BYTES).decode("utf-8", "replace")
 
 
 def fetch_versions(fetcher=None, timeout=FETCH_TIMEOUT, url=RELEASES_URL):

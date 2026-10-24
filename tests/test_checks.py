@@ -636,6 +636,20 @@ def test_report_scores():
     assert r.overall == 76                # (80 + 75 + 100 + 50) // 4
 
 
+@pytest.mark.parametrize("values,want", [
+    ([80, 79], 80),                 # 79.5 向上，而不是截断成 79
+    ([81, 80], 81),                 # 80.5 向上（round() 的银行家舍入会给出 80）
+    ([100, 99, 100, 98], 99),       # 99.25
+    ([0, 1], 1),                    # 0.5 向上
+    ([100], 100),
+    ([None, 90], 90),
+    ([None, None], None),
+    ([], None),
+])
+def test_mean_rounds_half_up(values, want):
+    assert checks.Report._mean(values) == want
+
+
 def test_report_overall_skips_unavailable_hsi():
     # HSI 拿不到时不再用 50 分顶替，而是把 HSI 从分母里去掉重新归一
     r = _report(hsi_ok=False)

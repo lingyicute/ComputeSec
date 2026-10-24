@@ -625,7 +625,10 @@ def build_kernel(report, win):
     g1 = group("内核当前启动参数和加固状态", f"架构: {c.arch} · CPU 制造商: {cpu_zh}\n{data.KERNEL_MACHINE_SPECIFIC_NOTE}")
     g1.set_header_suffix(score_label(c.score))
     g1.add(code_block(c.cmdline or "（无法读取）"))
-    for it in sorted(c.items, key=lambda i: ({"missing": 0, "wrong": 0, "ok": 1, "na": 2}[i.status], i.key)):
+    # 排序权重用 .get 兜底：将来给 ParamItem 加第五种状态时，这里不该变成一个
+    # KeyError——那会被 build_page 捕获成整页「页面渲染失败」，代价太大。
+    _order = {"missing": 0, "wrong": 0, "ok": 1, "na": 2}
+    for it in sorted(c.items, key=lambda i: (_order.get(i.status, 9), i.key)):
         row = Adw.ActionRow(title=f"<tt>{esc(it.token)}</tt>")
         sub = it.desc
         if it.note:

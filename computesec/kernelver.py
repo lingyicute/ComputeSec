@@ -209,18 +209,40 @@ def _urlopen(req, timeout):
 
 
 def _default_fetcher(url, timeout):
+    """取回 releases.json 正文。
+
+    timeout 是**整次请求**的截止时间，不只是单次 socket 操作的超时。
+
+    ``urlopen(timeout=)`` 只约束单次 connect / read，对端每 5 秒吐 1 个字节时，
+    每一次 read() 都在超时之内合法返回，整次请求却可以一直拖下去。后果不是崩溃
+    而是更糟：后台线程一直挂着，检查标志位永不复位，「重试」按钮从此点了没有任何
+    反应（见 main.start_kernel_check）。因此这里按块读取，每块之前核对一次
+    deadline。
+
+    MAX_RESPONSE_BYTES 仍然保留：它防的是"一次给你一大坨"，deadline 防的是
+    "一点一点喂给你"，两者互不替代。
+    """
     req = urllib.request.Request(url, headers={"User-Agent": "ComputeSec"})
+    deadline = time.monotonic() + timeout
     with _urlopen(req, timeout) as resp:
         # 重定向已逐跳校验，这里再核一次最终地址，防止将来有人换掉 opener 而不自知。
         final = resp.geturl() or url
         if not final.startswith("https://"):
             raise ValueError(f"请求被重定向到了非 https 地址：{final}")
-        # 多读 1 字节用来判断是否超限：静默截断的结果是 JSON 解析失败，报出来的却是
-        # 「响应里没有版本号」，会把排查方向带偏。
-        body = resp.read(MAX_RESPONSE_BYTES + 1)
-        if len(body) > MAX_RESPONSE_BYTES:
-            raise ValueError(f"响应超过 {MAX_RESPONSE_BYTES} 字节，不像是 releases.json")
-        return body.decode("utf-8", "replace")
+        chunks, size = [], 0
+        while True:
+            if time.monotonic() > deadline:
+                raise ValueError(f"读取 {url} 超过 {timeout:g} 秒，已中止")
+            chunk = resp.read(64 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            # 超限要明确报错：静默截断的结果是 JSON 解析失败，报出来的却是
+            # 「响应里没有版本号」，会把排查方向带偏。
+            if size > MAX_RESPONSE_BYTES:
+                raise ValueError(f"响应超过 {MAX_RESPONSE_BYTES} 字节，不像是 releases.json")
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8", "replace")
 
 
 def fetch_versions(fetcher=None, timeout=FETCH_TIMEOUT, url=RELEASES_URL):

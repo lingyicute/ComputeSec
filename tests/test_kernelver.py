@@ -258,11 +258,16 @@ def test_load_cache_rejects_garbage(tmp_path):
 # 联网请求本身
 # ---------------------------------------------------------------------------
 class _FakeResponse:
-    """够 _default_fetcher 用的最小替身。"""
+    """够 _default_fetcher 用的最小替身。
+
+    read() 必须像真实的 HTTPResponse 那样"读一点少一点、读完返回 b''"：
+    _default_fetcher 现在是按块循环读的，一次性返回全部正文的替身会让它死循环。
+    """
 
     def __init__(self, body=b"{}", url=None):
-        self._body = body
+        self._left = body
         self._url = url
+        self.reads = 0
 
     def __enter__(self):
         return self
@@ -274,8 +279,11 @@ class _FakeResponse:
         return self._url
 
     def read(self, n=-1):
+        self.reads += 1
+        step = len(self._left) if n is None or n < 0 else n
+        out, self._left = self._left[:step], self._left[step:]
         self.seen_limit = n
-        return self._body
+        return out
 
 
 def _patch_urlopen(monkeypatch, resp):
@@ -290,11 +298,28 @@ def _patch_urlopen(monkeypatch, resp):
     return seen
 
 
-def test_default_fetcher_caps_response_size(monkeypatch):
-    resp = _FakeResponse(b'{"releases": []}', url=kv.RELEASES_URL)
+def test_default_fetcher_reads_the_whole_body(monkeypatch):
+    body = b'{"releases": [' + b" " * 200_000 + b"]}"
+    resp = _FakeResponse(body, url=kv.RELEASES_URL)
     _patch_urlopen(monkeypatch, resp)
-    assert kv._default_fetcher(kv.RELEASES_URL, 5) == '{"releases": []}'
-    assert resp.seen_limit == kv.MAX_RESPONSE_BYTES + 1
+    assert kv._default_fetcher(kv.RELEASES_URL, 5).encode() == body
+    assert resp.reads > 1                      # 确实分块读了，而不是指望一次读完
+    assert 0 < resp.seen_limit < len(body)     # 每块都有上限，单次读不会索要全文
+
+
+def test_default_fetcher_gives_up_after_the_deadline(monkeypatch):
+    """慢速滴流：每次 read 都在 socket 超时之内，整次请求却永远不会结束。
+
+    没有总 deadline 时这里会一直挂着——检查线程挂住 → 标志位永不复位 →
+    重试按钮点了没有任何反应。因此必须在每次读之前核对已用时。
+    """
+    clock = iter([0.0, 0.0, 999.0, 999.0, 999.0, 999.0])
+    monkeypatch.setattr(kv.time, "monotonic", lambda: next(clock, 999.0))
+    resp = _FakeResponse(b"x" * 4096, url=kv.RELEASES_URL)
+    _patch_urlopen(monkeypatch, resp)
+    with pytest.raises(ValueError, match="秒"):
+        kv._default_fetcher(kv.RELEASES_URL, 6)
+    assert resp.reads <= 1                     # 没有把 4096 字节一点点吃进内存
 
 
 def test_default_fetcher_reports_oversized_response(monkeypatch):

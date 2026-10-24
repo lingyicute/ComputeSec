@@ -28,6 +28,7 @@ import os
 import platform
 import re
 import time
+import urllib.error
 import urllib.request
 
 from . import xdg
@@ -187,15 +188,39 @@ class KernelSupport:
                    checked_at=checked_at, error=d.get("error", ""))
 
 
+class _HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """在**每一跳发出之前**拒绝非 https 的重定向目标。
+
+    只在最后检查 resp.geturl() 是不够的：https → http → https 这样的链，中间那一跳
+    是明文，攻击者可以把它改写成指向自己（持有合法证书）的 https 地址，最终 URL
+    照样以 https:// 开头；而且等到检查时，明文请求早已发出。
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not newurl.lower().startswith("https://"):
+            fp.close()
+            raise urllib.error.URLError(f"拒绝跟随到非 https 地址的重定向：{newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _urlopen(req, timeout):
+    # build_opener 发现传入的是 HTTPRedirectHandler 的子类时，就不再装默认的那个。
+    return urllib.request.build_opener(_HttpsOnlyRedirectHandler).open(req, timeout=timeout)
+
+
 def _default_fetcher(url, timeout):
     req = urllib.request.Request(url, headers={"User-Agent": "ComputeSec"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:   # noqa: S310 (固定的 https 地址)
-        # urlopen 默认跟随重定向，但 TLS 只保护了第一跳。一旦被 302 到 http://，
-        # 后面的内容就是明文，任何人都能改写版本号——那正是本功能的判断依据。
+    with _urlopen(req, timeout) as resp:
+        # 重定向已逐跳校验，这里再核一次最终地址，防止将来有人换掉 opener 而不自知。
         final = resp.geturl() or url
         if not final.startswith("https://"):
             raise ValueError(f"请求被重定向到了非 https 地址：{final}")
-        return resp.read(MAX_RESPONSE_BYTES).decode("utf-8", "replace")
+        # 多读 1 字节用来判断是否超限：静默截断的结果是 JSON 解析失败，报出来的却是
+        # 「响应里没有版本号」，会把排查方向带偏。
+        body = resp.read(MAX_RESPONSE_BYTES + 1)
+        if len(body) > MAX_RESPONSE_BYTES:
+            raise ValueError(f"响应超过 {MAX_RESPONSE_BYTES} 字节，不像是 releases.json")
+        return body.decode("utf-8", "replace")
 
 
 def fetch_versions(fetcher=None, timeout=FETCH_TIMEOUT, url=RELEASES_URL):

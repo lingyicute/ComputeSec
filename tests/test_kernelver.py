@@ -286,7 +286,7 @@ def _patch_urlopen(monkeypatch, resp):
         seen["resp"] = resp
         return resp
 
-    monkeypatch.setattr(kv.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(kv, "_urlopen", fake_urlopen)
     return seen
 
 
@@ -294,7 +294,41 @@ def test_default_fetcher_caps_response_size(monkeypatch):
     resp = _FakeResponse(b'{"releases": []}', url=kv.RELEASES_URL)
     _patch_urlopen(monkeypatch, resp)
     assert kv._default_fetcher(kv.RELEASES_URL, 5) == '{"releases": []}'
-    assert resp.seen_limit == kv.MAX_RESPONSE_BYTES
+    assert resp.seen_limit == kv.MAX_RESPONSE_BYTES + 1
+
+
+def test_default_fetcher_reports_oversized_response(monkeypatch):
+    """超限要明确报错，而不是截断后让 JSON 解析失败、误报「没有版本号」。"""
+    _patch_urlopen(monkeypatch, _FakeResponse(b"x" * (kv.MAX_RESPONSE_BYTES + 1), url=kv.RELEASES_URL))
+    with pytest.raises(ValueError, match="超过"):
+        kv._default_fetcher(kv.RELEASES_URL, 5)
+
+
+class _FakeFp:
+    closed = False
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.mark.parametrize("newurl", ["http://www.kernel.org/releases.json", "ftp://mirror.example/x"])
+def test_redirect_handler_rejects_each_non_https_hop(newurl):
+    """https → http → https 的链里，中间那一跳在发出前就必须被拦下。"""
+    import urllib.error
+    import urllib.request
+    h = kv._HttpsOnlyRedirectHandler()
+    fp = _FakeFp()
+    with pytest.raises(urllib.error.URLError):
+        h.redirect_request(urllib.request.Request(kv.RELEASES_URL), fp, 302, "Found", {}, newurl)
+    assert fp.closed
+
+
+def test_redirect_handler_follows_https_hop():
+    import urllib.request
+    h = kv._HttpsOnlyRedirectHandler()
+    new = h.redirect_request(urllib.request.Request(kv.RELEASES_URL), _FakeFp(), 302, "Found", {},
+                             "https://mirrors.example/releases.json")
+    assert new.full_url == "https://mirrors.example/releases.json"
 
 
 def test_default_fetcher_rejects_downgrade_redirect(monkeypatch):

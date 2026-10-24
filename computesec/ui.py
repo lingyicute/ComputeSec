@@ -689,7 +689,9 @@ def build_kernel(report, win):
                         "已忽略且未参与评分）")
             row.set_subtitle(esc(sub))
             row.add_prefix(status_icon("locked" if it.status == "unknown" else it.status))
-            if it.source == "用户提供":
+            # source 可能是 "用户提供" 或 "用户提供（3 小时前）"：只有这一项是
+            # 靠快照补上的才打标签，剩下的都是 /proc 的实时读数。
+            if it.source.startswith("用户提供"):
                 tag = Gtk.Label(label="您提供", valign=Gtk.Align.CENTER)
                 tag.add_css_class("caption")
                 tag.add_css_class("dim-label")

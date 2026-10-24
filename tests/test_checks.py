@@ -668,8 +668,14 @@ def test_sysctl_flatpak_net_uses_user_snapshot(monkeypatch):
     assert other.status == "unverified"
 
 
-def test_sysctl_native_still_merges_snapshot(monkeypatch):
-    """原生环境维持原有行为：快照只覆盖同名键，新出现的接口仍用 /proc 读数（不回归）。"""
+def test_sysctl_native_prefers_live_values(monkeypatch):
+    """原生环境下 /proc 才是此刻的真实状态，快照不得覆盖同名键。
+
+    反过来（快照优先）会错两次：用户加固后（快照是加固前采的）被判成未加固；
+    用户把 sysctl 撤销后（快照里还是加固后的值）却被判成"已加固"——后者正是
+    本程序最不该犯的错。快照的存活期是整次开机，本程序本身又在提醒用户
+    "长时间不重启"，两者叠在一起时快照可能已经很旧了。
+    """
     key = "net.ipv4.conf.*.accept_redirects"
     hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {
         "net.ipv4.conf.all.accept_redirects": "0",
@@ -686,8 +692,24 @@ def test_sysctl_native_still_merges_snapshot(monkeypatch):
 
     item = checks.get_sysctl_report().all_items[0]
     assert item.status == "missing"
-    assert item.actual["net.ipv4.conf.eth0.accept_redirects"] == "1"
-    assert item.actual["net.ipv4.conf.all.accept_redirects"] == "0"
+    assert item.actual["net.ipv4.conf.all.accept_redirects"] == "1"      # 实时值，不是快照里的 0
+    assert item.actual["net.ipv4.conf.eth0.accept_redirects"] == "1"     # 快照里没有的接口照常保留
+    assert item.source == "proc"                                        # 没有用到快照
+
+
+def test_sysctl_native_snapshot_fills_unreadable_keys(monkeypatch):
+    """读不到（EACCES）的键仍要用快照补上，并标注这份快照有多旧。"""
+    key = "vm.mmap_rnd_bits"
+    hd = hostdata.HostData({"collected_at": 1, "steps": {"sysctl": {"data": {"values": {key: "32"}}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [("t", [dict(key=key, value="32", desc="d")])])
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _k: ({}, True))
+
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.status == "ok"
+    assert item.actual == {key: "32"}
+    assert item.source.startswith("用户提供")
 
 
 def test_habits_report_score():

@@ -673,27 +673,35 @@ def get_sysctl_report() -> SysctlReport:
             source = "proc"
             snapshot_gap = ""
             net_isolated = sandbox_netns and key.startswith("net.")
-            # 用户提供的 sysctl -a（以 root 执行、在宿主机上执行）优先级更高：
-            # 它既能补上权限不足的条目，也能补上被 Flatpak 沙箱屏蔽或隔离的条目。
+            # 用户提供的 sysctl -a（以 root 执行、在宿主机上执行）能补上权限不足的
+            # 条目，也能补上被 Flatpak 沙箱屏蔽或隔离的条目。但它在本机的地位取决于
+            # 环境，两种环境必须分开处理。
             supplied = hd.sysctl_lookup(key) if user_values else {}
-            if supplied:
-                if IN_FLATPAK:
-                    # 沙箱里的 /proc/sys 可能属于隔离视图，不能混入宿主机快照。
-                    actual = dict(supplied)
-                    source = "用户提供"
-                else:
-                    # 原生环境保留快照采集后新出现的接口等条目，用户值仅覆盖同名键。
-                    merged = dict(actual)
-                    merged.update(supplied)
-                    if unreadable or merged != actual:
-                        source = "用户提供"
-                    actual = merged
+            if supplied and IN_FLATPAK:
+                # 沙箱里的 /proc/sys 可能属于隔离视图（被屏蔽、被改写、或另一个
+                # netns），不能混入宿主机快照，只能整块以快照为准。
+                actual = dict(supplied)
+                source = "用户提供"
                 unreadable = False
             elif net_isolated:
                 # Flatpak 没有共享宿主网络：沙箱内的 net.* 属于独立的网络命名空间，
                 # 数值来自新 netns 的默认值，与宿主机的加固状态无关。
                 actual, source, snapshot_gap = {}, "沙箱网络隔离", "沙箱网络隔离"
                 unreadable = False
+            elif supplied:
+                # 原生环境：/proc/sys 是此刻的真实状态，快照只用来补读不到的键。
+                # 反过来让快照覆盖实时值会错两次：用户加固后（快照是加固前采的）
+                # 被判成未加固；用户把 sysctl 撤销后（快照里还是加固后的值）却被
+                # 判成"已加固"——后者是本程序最不该犯的错。快照的存活期是整次开机
+                # （hostdata.fresh 只比对 boot_id），而本程序自己就在提醒用户
+                # "长时间不重启"，两者叠在一起，快照可能已经过了一整天。
+                filled = {k: v for k, v in supplied.items() if k not in actual}
+                if filled:
+                    # 这些键在 /proc 里读不到（多半是 EACCES），用快照补上。
+                    actual = {**actual, **filled}
+                    age = hd.age_text
+                    source = f"用户提供（{age}）" if age else "用户提供"
+                    unreadable = False
             elif IN_FLATPAK and user_values and not (unreadable and not actual):
                 # 沙箱内的 /proc/sys 不是宿主机视图（可能被屏蔽、改写或加了命名空间），
                 # 快照没有覆盖这一项时不能拿沙箱读数顶替，否则会把沙箱的值当成

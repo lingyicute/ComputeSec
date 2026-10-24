@@ -360,7 +360,9 @@ class Application(Adw.Application):
         if display is not None:
             theme = Gtk.IconTheme.get_for_display(display)
             theme.add_search_path(os.path.join(PROJECT_ROOT, "data", "icons"))
-            for p in (os.path.expanduser("~/.local/share/icons"), "/app/share/icons"):
+            for p in (os.path.expanduser("~/.local/share/icons"),
+                      os.path.join(sys.prefix, "share", "icons"),   # pip install .
+                      "/app/share/icons"):                          # Flatpak
                 if os.path.isdir(p):
                     theme.add_search_path(p)
         Gtk.Window.set_default_icon_name(data.APP_ID)

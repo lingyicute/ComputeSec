@@ -3,6 +3,54 @@
 # 运行测试：python -m pytest
 # 运行 lint：ruff check .
 # 覆盖率：  python -m pytest --cov=computesec --cov=run
+# 安装开发环境：pip install -e ".[dev]"
+# 安装程序本体：pip install .   （同时装出 computesec 命令与 desktop/metainfo/图标）
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "computesec"
+description = "评估固件安全 (HSI)、内核加固、硬件品牌信誉与使用习惯的桌面安全评估工具"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "GPL-3.0-or-later"
+authors = [{ name = "lingyicute" }]
+keywords = ["security", "hardening", "hsi", "fwupd", "sysctl", "gtk4", "libadwaita"]
+classifiers = [
+    "Environment :: X11 Applications :: GTK",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+# 版本号只在 computesec/data.py 里维护一处，避免 VERSION、metainfo、pyproject 三处漂移。
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/lingyicute/ComputeSec"
+Issues = "https://github.com/lingyicute/ComputeSec/issues"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "fonttools", "brotli"]
+# PyGObject / GTK4 / libadwaita 只能由发行版提供（不能用 pip 装），故不写进依赖。
+
+[project.gui-scripts]
+computesec = "computesec.main:main"
+
+[tool.setuptools]
+packages = ["computesec"]
+
+[tool.setuptools.dynamic]
+version = { attr = "computesec.data.VERSION" }
+
+# desktop / metainfo / 图标不属于 Python 包，用 data-files 装到 share/ 下，
+# 与 run.py --install 和 Flatpak 的布局保持一致。
+[tool.setuptools.data-files]
+"share/applications" = ["data/uk._92li.lingyicute.ComputeSec.desktop"]
+"share/metainfo" = ["data/uk._92li.lingyicute.ComputeSec.metainfo.xml"]
+"share/icons/hicolor/scalable/apps" = ["data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

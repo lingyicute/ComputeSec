@@ -38,7 +38,9 @@
   * 读取 `/proc/cmdline` 与 `/proc/sys`（等价于 `sysctl -a`）。
   * 对于仅 root 可读的条目（`vm.mmap_rnd_bits` 等），通过「数据采集向导」由您粘贴 `sudo sysctl -a` 的结果补全；未提供时该项显示为「无法读取」并**不计入评分**。
   * 程序会根据您的当前架构，分别与内置 amd64 / aarch64 推荐 kargs 列表及 sysctl 加固列表进行对比。
-* **版本线检查**：启动时会向 kernel.org 取一次当前 mainline / stable 的版本号。若您的内核既不属于 mainline，也不属于 stable（例如各 LTS 分支），程序会明确提醒：各 LTS 分支**均未包含**上游全部的安全修复与加固改进，本程序给出的 sysctl 与启动参数在这些旧内核上**不保证**能提供应有的加固效果（有的参数在旧内核上根本不存在，有的写进命令行后会被内核静默忽略，甚至因为出现在 `/proc/cmdline` 里被本程序误判为已加固）；这类版本线上的结论**不可作为安全加固的依据**，建议切换到 mainline 或 stable 内核。检查失败（离线、被防火墙拦截）时不会打扰您，主菜单里可手动重新检查。
+* **版本线检查**：启动时会向 kernel.org 取一次当前 mainline / stable 的版本号。若您的内核既不属于 mainline，也不属于 stable（例如各 LTS 分支），程序会明确提醒：各 LTS 分支**均未包含**上游全部的安全修复与加固改进，本程序给出的 sysctl 与启动参数在这些旧内核上**不保证**能提供应有的加固效果（有的参数在旧内核上根本不存在，有的写进命令行后会被内核静默忽略，甚至因为出现在 `/proc/cmdline` 里被本程序误判为已加固）；这类版本线上的结论**不可作为安全加固的依据**，建议切换到 mainline 或 stable 内核。检查失败（离线、被防火墙拦截、Flatpak 权限被收回）时不会打扰您——「内核加固」页会显示一行
+「未能核对」并给出重试按钮，主菜单里也可以手动重新检查。若本次连不上而又有一份过期缓存，
+程序会照常给出结论，但会标明这些版本号是多久以前取得的。
 * **三种"不计入评分"的情形**（都不会把分数拉低，也不代表已通过）：
   * **无法读取**：文件权限不足（如 `vm.mmap_rnd_bits` 为 `0600 root:root`）；
   * **未验证**：Flatpak 沙箱内的读数不可信（未共享宿主网络时，`net.*` 属于独立的网络命名空间；或您提供的快照中没有这一项），已忽略；
@@ -104,7 +106,7 @@ flatpak run uk._92li.lingyicute.ComputeSec
 `/proc/cmdline`、`/proc/sys`、`/sys/class/dmi`、`/sys/bus/usb` 在沙箱内默认可读，无需额外权限。
 
 > **关于网络权限**：`--share=network` 只用于启动时向 kernel.org 读取 `releases.json`（版本号），
-> 不上报任何信息，结果缓存 24 小时。您可以用 Flatseal 收回该权限：此时版本线检查会静默跳过，
+> 不上报任何信息，结果缓存 24 小时。您可以用 Flatseal 收回该权限：此时版本线检查会显示「未能核对」，
 > 且由于沙箱内的 `net.*` 属于私有网络命名空间，程序不再采信这些读数——相关条目会显示为
 > 「未验证」且不计入评分，其余检测不受影响。
 
@@ -155,7 +157,18 @@ python3 run.py
 ```bash
 python3 run.py --install     # 安装 .desktop 与 SVG 图标到 ~/.local/share
 python3 run.py --uninstall   # 移除
+python3 run.py --version     # 打印版本号（不需要图形环境）
+python3 run.py --help        # 全部选项
 ```
+
+也可以当作普通的 Python 包安装（会一并装出 `computesec` 命令、`.desktop`、metainfo 与图标）：
+
+```bash
+pip install .                # 装到当前环境
+pip install -e ".[dev]"      # 开发环境：额外装上 pytest / ruff / fonttools / brotli
+```
+
+PyGObject、GTK 4 与 libadwaita 只能由发行版提供（无法用 pip 安装），仍需按上面的命令装好。
 
 ## 项目结构
 
@@ -169,10 +182,11 @@ computesec/
   ├── hostdata.py       用户协助采集的数据：解析、校验、缓存（按 boot_id 失效）
   ├── kernelver.py      内核版本线检查（kernel.org 的 mainline / stable，缓存 24 小时）
   ├── hostinfo.py       宿主机身份信息（D-Bus org.freedesktop.hostname1）
+  ├── xdg.py            XDG 数据目录（run.py / hostdata / kernelver 共用）
   └── data.py           知识库：HSI 说明、内核参数、sysctl、厂商信誉
 tests/                  单元测试（pytest，不依赖 GTK/D-Bus，运行：python -m pytest）
                         其中 test_ui_smoke.py 需要 PyGObject + 显示服务器，缺任一项自动跳过
-pyproject.toml            pytest / ruff 工程配置
+pyproject.toml            打包元数据、pytest / ruff 工程配置
 data/
   └── 图标和构建信息
 uk._92li.lingyicute.ComputeSec.json       Flatpak 清单

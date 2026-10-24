@@ -71,6 +71,20 @@
     <color type="primary" scheme_preference="dark">#1a5fb4</color>
   </branding>
   <releases>
+    <release version="1.2.1" date="2026-10-24">
+      <description>
+        <p>Reliability and packaging fixes.</p>
+        <ul>
+          <li>The Kernel page now says so when the kernel.org version check could not run, with a retry button, instead of silently showing nothing; a conclusion taken from an expired cache is labelled with its age</li>
+          <li>Scores are rounded instead of truncated, so the overall score is no longer systematically one point too low</li>
+          <li>The version check limits response size and rejects redirects that downgrade to plain HTTP</li>
+          <li>Repeated version checks no longer spawn duplicate background threads</li>
+          <li>run.py gains --version and --help, and no longer starts the GUI for unknown options</li>
+          <li>The package can be installed with pip, which also installs the desktop file, metainfo and icon</li>
+          <li>CI: fixed path filters (pyproject.toml, conftest.py, scripts, web), least-privilege token, per-job timeouts, pull request runs and a Python 3.9 / 3.13 matrix</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-10-24">
       <description>
         <p>Accuracy, transparency and maintenance fixes.</p>

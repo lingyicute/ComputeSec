@@ -38,7 +38,7 @@
   * Reads `/proc/cmdline` and `/proc/sys` (the equivalent of `sysctl -a`).
   * Root-only entries (such as `vm.mmap_rnd_bits`) are filled in from the `sudo sysctl -a` output you paste via the data collection wizard; without it they are reported as "cannot read" and are **excluded from scoring**.
   * Compares them against the built-in recommended kargs list and sysctl hardening list for your architecture (amd64 / aarch64).
-* **Version line check**: at startup the app asks kernel.org for the current mainline / stable version. If your kernel belongs to neither (for example any LTS branch), it states plainly that LTS branches do **not** carry all upstream security fixes and hardening improvements, so the recommended sysctls and boot parameters are **not guaranteed** to deliver the intended hardening on those kernels (some parameters do not exist on older kernels, others are silently ignored by the kernel even when present on the command line, and some are then wrongly counted as hardened because they appear in `/proc/cmdline`). Conclusions drawn on such a branch **must not be used as a basis for hardening**; switching to a mainline or stable kernel is recommended. If the check fails (offline, blocked by a firewall) you are not bothered; you can retry it from the main menu.
+* **Version line check**: at startup the app asks kernel.org for the current mainline / stable version. If your kernel belongs to neither (for example any LTS branch), it states plainly that LTS branches do **not** carry all upstream security fixes and hardening improvements, so the recommended sysctls and boot parameters are **not guaranteed** to deliver the intended hardening on those kernels (some parameters do not exist on older kernels, others are silently ignored by the kernel even when present on the command line, and some are then wrongly counted as hardened because they appear in `/proc/cmdline`). Conclusions drawn on such a branch **must not be used as a basis for hardening**; switching to a mainline or stable kernel is recommended. If the check fails (offline, blocked by a firewall, or the Flatpak network permission revoked) you are not bothered — the Kernel page shows a **not verified** row with a retry button, and the main menu can re-run it too. If the fetch fails while an expired cache exists, the app still reports a conclusion but states how old those version numbers are.
 * **Three cases that are excluded from scoring** (they never lower the score, and they do not mean "passed"):
   * **cannot read**: the file is not readable by your user (e.g. `vm.mmap_rnd_bits` is `0600 root:root`);
   * **unverified**: readings taken inside the Flatpak sandbox cannot be trusted (without host network sharing, `net.*` belongs to a private network namespace; or the snapshot you provided does not cover the entry), so they are ignored;
@@ -166,7 +166,20 @@ To make it show up in your app menu and display the correct icon in the taskbar/
 ```bash
 python3 run.py --install     # install the .desktop file and SVG icons into ~/.local/share
 python3 run.py --uninstall   # remove them
+python3 run.py --version     # print the version (no display needed)
+python3 run.py --help        # all options
 ```
+
+It can also be installed as an ordinary Python package, which additionally installs the
+`computesec` command, the `.desktop` file, the metainfo file and the icon:
+
+```bash
+pip install .                # into the current environment
+pip install -e ".[dev]"      # dev environment: adds pytest / ruff / fonttools / brotli
+```
+
+PyGObject, GTK 4 and libadwaita must come from your distribution (they cannot be installed
+with pip), so install them with the commands above first.
 
 ## Project layout
 
@@ -180,10 +193,11 @@ computesec/
   ├── hostdata.py       User-assisted host data: parsing, validation, caching (expires by boot_id)
   ├── kernelver.py      Kernel version line check (kernel.org mainline / stable, cached for 24h)
   ├── hostinfo.py       Host identity (D-Bus org.freedesktop.hostname1)
+  ├── xdg.py            XDG data directory (shared by run.py / hostdata / kernelver)
   └── data.py           Knowledge base: HSI descriptions, kernel parameters, sysctl, vendor reputation
 tests/                  Unit tests (pytest, no GTK/D-Bus needed, run: python -m pytest)
                         test_ui_smoke.py additionally needs PyGObject and a display; it is skipped otherwise
-pyproject.toml          pytest / ruff project config
+pyproject.toml          Packaging metadata, pytest / ruff project config
 data/
   └── Icons and build metadata
 uk._92li.lingyicute.ComputeSec.json      Flatpak manifest

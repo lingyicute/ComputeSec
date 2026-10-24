@@ -17,7 +17,12 @@ import sys
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-FONT_URL = "https://raw.githubusercontent.com/lingyicute/Nebulove/main/Nebulove.ttf"
+# 上游字体固定在某个提交上，不用 main 分支：否则上游一改，同一份代码就会得到不同
+# 的构建产物，CI 与本地也就无法复现。升级字体时同时更新 COMMIT 与 SHA256。
+FONT_REPO = "lingyicute/Nebulove"
+FONT_COMMIT = "df0d98ed69435d0ff1f3705c084aca057f4ca9a5"
+FONT_SHA256 = "c40a831c4577807aaf7e264fad8dadb6dd2b8fe329bd39abdf74e3ef72770ae4"
+FONT_URL = f"https://raw.githubusercontent.com/{FONT_REPO}/{FONT_COMMIT}/Nebulove.ttf"
 HTML_PATH = ROOT / "web" / "index.html"
 CACHE_PATH = ROOT / "scripts" / ".font-subset-cache.json"
 OUTPUTS = {
@@ -72,6 +77,16 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def fingerprint(chars=None, local_font=None):
+    """决定"这份 WOFF2 是否还能用"的指纹：上游字体 + 本脚本 + 页面用到的字符集。"""
+    chars = collect_chars() if chars is None else chars
+    source_key = digest(Path(local_font)) if local_font else FONT_URL
+    return hashlib.sha256((
+        source_key + digest(Path(__file__))
+        + json.dumps(sorted(ord(c) for c in chars))
+    ).encode()).hexdigest()
+
+
 def subset(font, chars):
     from fontTools.subset import Options, Subsetter
 
@@ -99,20 +114,42 @@ def replace_face(css, family, filename):
     raise ValueError(f"Missing font-face: {family}")
 
 
+def is_current():
+    """当前 web/index.html 与已提交的 WOFF2 子集是否一致（不访问网络）。"""
+    try:
+        cached = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False, "缺少或无法解析 scripts/.font-subset-cache.json"
+    css = HTML_PATH.read_text(encoding="utf-8")
+    if cached.get("fingerprint") != fingerprint():
+        return False, "字体子集已过期：web/index.html 或本脚本有改动"
+    for path in OUTPUTS.values():
+        if not path.exists():
+            return False, f"缺少 {path.relative_to(ROOT)}"
+        if path.name not in css:
+            return False, f"web/index.html 没有引用 {path.name}"
+        if cached.get("outputs", {}).get(path.name) != digest(path):
+            return False, f"{path.relative_to(ROOT)} 与缓存记录的哈希不一致"
+    return True, "WOFF2 子集与页面一致"
+
+
 def main():
+    if "--check" in sys.argv:
+        ok, reason = is_current()
+        print(("OK: " if ok else "STALE: ") + reason)
+        if not ok:
+            print("请执行：pip install fonttools brotli && python scripts/subset_font.py")
+            return 1
+        return 0
     from fontTools.ttLib import TTFont
 
     chars = collect_chars()
     local_font = os.environ.get("NEBULOVE_FONT")
-    source_key = digest(Path(local_font)) if local_font else FONT_URL
-    fingerprint = hashlib.sha256((
-        source_key + digest(Path(__file__))
-        + json.dumps(sorted(ord(c) for c in chars))
-    ).encode()).hexdigest()
+    fp = fingerprint(chars, local_font)
     css = HTML_PATH.read_text(encoding="utf-8")
     if "--force" not in sys.argv and CACHE_PATH.exists():
         cached = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-        if cached.get("fingerprint") == fingerprint and all(
+        if cached.get("fingerprint") == fp and all(
             path.exists() and path.name in css
             and cached.get("outputs", {}).get(path.name) == digest(path)
             for path in OUTPUTS.values()
@@ -123,9 +160,15 @@ def main():
     if local_font:
         nebulove = TTFont(local_font)
     else:
-        print("Downloading Nebulove source font...")
+        print(f"Downloading Nebulove source font @ {FONT_COMMIT[:7]}...")
         with urllib.request.urlopen(FONT_URL, timeout=90) as response:
-            nebulove = TTFont(io.BytesIO(response.read()))
+            blob = response.read()
+        got = hashlib.sha256(blob).hexdigest()
+        if got != FONT_SHA256:
+            print(f"字体哈希不一致，已中止：\n  期望 {FONT_SHA256}\n  实际 {got}\n"
+                  "如果你确实要升级字体，请同时更新脚本里的 FONT_COMMIT 与 FONT_SHA256。")
+            return 1
+        nebulove = TTFont(io.BytesIO(blob))
     fonts = {"Nebulove": subset(nebulove, chars)}
 
     new_css = css
@@ -138,7 +181,7 @@ def main():
         print(f"{path.name}: {len(fonts[family]):,} bytes")
     HTML_PATH.write_text(new_css, encoding="utf-8")
     CACHE_PATH.write_text(json.dumps({
-        "fingerprint": fingerprint,
+        "fingerprint": fp,
         "source": FONT_URL,
         "charset_count": len(chars),
         "outputs": {p.name: digest(p) for p in OUTPUTS.values()},
@@ -147,4 +190,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

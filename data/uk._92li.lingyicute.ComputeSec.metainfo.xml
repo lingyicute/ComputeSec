@@ -35,29 +35,28 @@
   <url type="bugtracker">https://github.com/lingyicute/ComputeSec/issues</url>
   <url type="vcs-browser">https://github.com/lingyicute/ComputeSec</url>
   <content_rating type="oars-1.1">
-    <content_attribute id="money-advertising" type="none"/>
-    <content_attribute id="money-gambling" type="none"/>
-    <content_attribute id="money-purchasing" type="none"/>
-    <content_attribute id="violence-cartoon" type="none"/>
-    <content_attribute id="violence-fantasy" type="none"/>
-    <content_attribute id="violence-realistic" type="none"/>
-    <content_attribute id="violence-bloodshed" type="none"/>
-    <content_attribute id="violence-desecration" type="none"/>
-    <content_attribute id="violence-worship" type="none"/>
-    <content_attribute id="drugs-alcohol" type="none"/>
-    <content_attribute id="drugs-narcotics" type="none"/>
-    <content_attribute id="drugs-tobacco" type="none"/>
-    <content_attribute id="language-profanity" type="none"/>
-    <content_attribute id="language-humor" type="none"/>
-    <content_attribute id="language-discrimination" type="none"/>
-    <content_attribute id="sex-nudity" type="none"/>
-    <content_attribute id="sex-themes" type="none"/>
-    <content_attribute id="sex-profanity" type="none"/>
-    <content_attribute id="social-chat" type="none"/>
-    <content_attribute id="social-audio" type="none"/>
-    <content_attribute id="social-contacts" type="none"/>
-    <content_attribute id="social-info" type="none"/>
-    <content_attribute id="social-location" type="none"/>
+    <content_attribute id="money-advertising">none</content_attribute>
+    <content_attribute id="money-gambling">none</content_attribute>
+    <content_attribute id="money-purchasing">none</content_attribute>
+    <content_attribute id="violence-cartoon">none</content_attribute>
+    <content_attribute id="violence-fantasy">none</content_attribute>
+    <content_attribute id="violence-realistic">none</content_attribute>
+    <content_attribute id="violence-bloodshed">none</content_attribute>
+    <content_attribute id="violence-desecration">none</content_attribute>
+    <content_attribute id="violence-worship">none</content_attribute>
+    <content_attribute id="drugs-alcohol">none</content_attribute>
+    <content_attribute id="drugs-narcotics">none</content_attribute>
+    <content_attribute id="drugs-tobacco">none</content_attribute>
+    <content_attribute id="language-profanity">none</content_attribute>
+    <content_attribute id="language-humor">none</content_attribute>
+    <content_attribute id="language-discrimination">none</content_attribute>
+    <content_attribute id="sex-nudity">none</content_attribute>
+    <content_attribute id="sex-themes">none</content_attribute>
+    <content_attribute id="social-chat">none</content_attribute>
+    <content_attribute id="social-audio">none</content_attribute>
+    <content_attribute id="social-contacts">none</content_attribute>
+    <content_attribute id="social-info">none</content_attribute>
+    <content_attribute id="social-location">none</content_attribute>
   </content_rating>
   <supports>
     <control>pointing</control>

@@ -38,11 +38,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y desktop-file-utils appstream libxml2-utils
-      - name: 校验 .desktop / metainfo / SVG
+      - name: 校验 web/ 的字体子集是否与页面一致
+        run: python scripts/subset_font.py --check
+      - name: 校验 .desktop / metainfo / SVG（有错误即失败）
         run: |
           desktop-file-validate data/uk._92li.lingyicute.ComputeSec.desktop
-          # 元数据里 OARS 段落尚待修正（见下一个提交），先不阻断
-          appstreamcli validate --no-net data/uk._92li.lingyicute.ComputeSec.metainfo.xml || true
+          appstreamcli validate --no-net data/uk._92li.lingyicute.ComputeSec.metainfo.xml
           xmllint --noout data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg
 
   flatpak:

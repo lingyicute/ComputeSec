@@ -125,10 +125,40 @@ def _payload_ok(payload):
     """
     if not isinstance(payload, dict):
         return False
+    if not _is_number(payload.get("collected_at", 0)):
+        return False
+    if not isinstance(payload.get("boot_id", ""), str):
+        return False
     steps = payload.get("steps", {})
     if not isinstance(steps, dict):
         return False
-    return all(isinstance(v, dict) for v in steps.values())
+    for key, entry in steps.items():
+        if not isinstance(entry, dict):
+            return False
+        # 只校验认识的步骤；data 缺失表示这一步没有数据，是合法的。
+        check = _STEP_DATA_OK.get(key)
+        if check is not None and "data" in entry and not check(entry["data"]):
+            return False
+    return True
+
+
+def _is_number(v):
+    # bool 是 int 的子类，但 True 当时间戳显然是坏数据。
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _sysctl_data_ok(d):
+    if not isinstance(d, dict) or not isinstance(d.get("values"), dict):
+        return False
+    return all(isinstance(k, str) and isinstance(v, str) for k, v in d["values"].items())
+
+
+def _lsblk_data_ok(d):
+    return isinstance(d, dict) and isinstance(d.get("blockdevices"), list)
+
+
+# 各步骤 data 的形状必须与对应解析器（parse_sysctl / parse_lsblk）的产出一致。
+_STEP_DATA_OK = {"sysctl": _sysctl_data_ok, "lsblk": _lsblk_data_ok}
 
 
 def valid_step_index(index):
@@ -191,22 +221,28 @@ class HostData:
     def has(self, key):
         return self.get(key) is not None
 
+    # 以下访问器在 load() 已校验结构的前提下，对手工构造的 payload 再兜一层：
+    # 形状不对时只返回空值，绝不抛异常。
     @property
     def sysctl_values(self):
         d = self.get("sysctl")
-        return (d or {}).get("values") or {}
+        values = d.get("values") if isinstance(d, dict) else None
+        return values if isinstance(values, dict) else {}
 
     @property
     def lsblk(self):
-        return self.get("lsblk")
+        d = self.get("lsblk")
+        return d if isinstance(d, dict) else None
 
     @property
     def collected_at(self):
-        return self.payload.get("collected_at", 0)
+        v = self.payload.get("collected_at", 0)
+        return v if _is_number(v) else 0
 
     @property
     def collected_boot_id(self):
-        return self.payload.get("boot_id", "")
+        v = self.payload.get("boot_id", "")
+        return v if isinstance(v, str) else ""
 
     @property
     def skipped(self):

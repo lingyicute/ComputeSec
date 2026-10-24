@@ -285,6 +285,43 @@ def test_get_is_defensive_against_bad_payload():
         assert hd.any_data is False
 
 
+@pytest.mark.parametrize("payload", [
+    {"steps": {"sysctl": {"data": ["oops"]}}},                    # data 不是字典
+    {"steps": {"sysctl": {"data": {"values": ["a"]}}}},           # values 不是字典
+    {"steps": {"sysctl": {"data": {"values": {"k": 1}}}}},        # 值不是字符串
+    {"steps": {"lsblk": {"data": ["x"]}}},                        # lsblk 不是字典
+    {"steps": {"lsblk": {"data": {"blockdevices": "x"}}}},        # blockdevices 不是列表
+    {"collected_at": "bad", "steps": {}},                         # 时间戳不是数字
+    {"collected_at": True, "steps": {}},
+    {"boot_id": 42, "steps": {}},
+])
+def test_load_rejects_bad_nested_structure(tmp_path, monkeypatch, payload):
+    """深一层的坏结构同样当作没有缓存：此前会让 sysctl 板块整块消失，或让内核页渲染失败。"""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    _write_cache(tmp_path, json.dumps(payload))
+    hd = hostdata.HostData.load()
+    assert hd.payload == {}
+
+
+def test_accessors_survive_bad_nested_payload():
+    hd = hostdata.HostData({"collected_at": "bad", "boot_id": 42,
+                            "steps": {"sysctl": {"data": ["oops"]}, "lsblk": {"data": ["x"]}}})
+    assert hd.sysctl_values == {}
+    assert hd.sysctl_lookup("kernel.kptr_restrict") == {}
+    assert hd.lsblk is None
+    assert hd.age_text == ""
+    assert hd.collected_boot_id == ""
+
+
+def test_load_keeps_valid_payload_with_both_steps(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    good = {"collected_at": 1000, "boot_id": "b", "skipped": False, "steps": {
+        "sysctl": {"data": {"values": {"kernel.ostype": "Linux"}, "meta": {}}, "at": 1000},
+        "lsblk": {"data": {"blockdevices": []}, "at": 1000}}}
+    _write_cache(tmp_path, json.dumps(good))
+    assert hostdata.HostData.load().payload == good
+
+
 def test_cache_file_and_dir_permissions(tmp_path, monkeypatch):
     """缓存里是整份 sudo sysctl -a 输出，只能由当前用户读写。"""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))

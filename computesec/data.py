@@ -579,7 +579,9 @@ USB_GAME_CONTROLLER_RE = r"game ?pad|joystick|\bwheel|xbox|playstation|\bps[2-5]
 # bDeviceClass：0e = 视频（UVC 摄像头），e0 = 无线控制器（蓝牙适配器）。
 USB_NON_INPUT_CLASSES = {"0e", "e0"}
 # 弱关键词：只能说明是"无线"设备——也可能是蓝牙，或只是同类芯片做的有线产品，
-# 仅能作为"疑似"提示，交由用户自行确认。
-USB_24G_SUSPECT_KEYWORDS = ["wireless mouse", "wireless keyboard", "wireless gaming", "wireless device"]
+# 仅能作为"疑似"提示，交由用户自行确认。翻页器（presenter）本身就是带按键的
+# 输入设备、属于本检测范围（见 USB_24G_INPUT_KEYWORDS 的注释），故一并列入。
+USB_24G_SUSPECT_KEYWORDS = ["wireless mouse", "wireless keyboard", "wireless gaming", "wireless device",
+                            "wireless presenter"]
 LOGITECH_UNIFYING_PIDS = {"c52b", "c532", "c534", "c52f", "c531", "c537", "c539", "c53a", "c53f", "c541", "c545"}
 LOGITECH_BOLT_PIDS = {"c548"}

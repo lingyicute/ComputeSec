@@ -332,6 +332,14 @@ def _usb_dev(vid, pid, mfr, product, cls="00"):
     (("03f0", "0004", "HP", "Wireless Printer USB Receiver", ""), None),
     # 翻页器 / 遥控笔属于带按键的输入设备，仍在检测范围内（不能被上面的排除带走）
     (("046d", "c534", "Logitech, Inc.", "Wireless Presenter USB Receiver", ""), "bad"),
+    # 罗技型号串只写「Wireless Mouse」：没有 receiver / dongle 字样就无法确认，
+    # 走通用疑似逻辑——罗技不能比别家少一层提示（有线「USB Keyboard」仍无关）。
+    (("046d", "c53d", "Logitech, Inc.", "Wireless Mouse", ""), "suspect"),
+    (("046d", "c31c", "Logitech, Inc.", "USB Keyboard", ""), None),
+    # 专做 2.4G 方案的芯片厂商出的翻页器：presenter 本身就是键鼠方面的证据
+    (("248a", "8266", "Maxxter", "Wireless Presenter", ""), "suspect"),
+    # 其它厂商只写「Wireless Presenter」：弱关键词，按疑似处理
+    (("04d9", "1234", "Holtek", "Wireless Presenter", ""), "suspect"),
 ])
 def test_usb_receiver_kind_keywords(dev, want):
     vid, pid, mfr, product, cls = dev

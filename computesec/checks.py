@@ -970,9 +970,11 @@ def _usb_receiver_kind(d):
     inputish = any(k in text for k in data.USB_24G_INPUT_KEYWORDS)
     if not inputish and re.search(data.USB_GAME_CONTROLLER_RE, text):
         return None
-    if vid == "046d":       # Logitech 的 receiver / dongle 就是其键鼠接收器
-        hit = any(k in text for k in data.LOGITECH_RECEIVER_KEYWORDS)
-        return ("bad", _LOGITECH_UNIFYING_DESC) if hit else None
+    # Logitech 的 receiver / dongle 就是其键鼠接收器；但没命中这些词时不能直接
+    # 排除——只写了「Wireless Mouse」之类的罗技接收器同样要走下面的通用判定，
+    # 否则罗技设备反而比别家少一层「疑似」提示。
+    if vid == "046d" and any(k in text for k in data.LOGITECH_RECEIVER_KEYWORDS):
+        return "bad", _LOGITECH_UNIFYING_DESC
     strong = bool(re.search(data.USB_24G_CONFIRM_RE, text)) or any(
         k in text for k in data.USB_24G_CONFIRM_KEYWORDS)
     generic = any(k in text for k in data.USB_24G_GENERIC_KEYWORDS)
@@ -986,7 +988,8 @@ def _usb_receiver_kind(d):
     # 以下拿不到"接收器"的正面证据，只能给疑似：芯片厂商既做 2.4G 方案，也做有线外设，
     # 仅凭 VID 或 "Mouse/Keyboard" 之类的型号串无法区分。
     if vid in getattr(data, "USB_24G_DEDICATED_VENDORS", set()) and any(
-            k in text for k in data.USB_24G_SUSPECT_KEYWORDS + ["mouse", "keyboard", "composite"]):
+            k in text for k in
+            data.USB_24G_SUSPECT_KEYWORDS + data.USB_24G_INPUT_KEYWORDS + ["composite"]):
         vendor = data.USB_24G_VENDORS.get(vid, "未知厂商")
         return "suspect", f"{vendor} 键鼠类设备（该厂商专做 2.4G 方案，但型号未标明接收器）"
     if any(k in text for k in data.USB_24G_SUSPECT_KEYWORDS):

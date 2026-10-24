@@ -6,6 +6,11 @@ command: computesec
 finish-args:
   - --socket=wayland
   - --device=dri
+  # Fetch the current mainline/stable kernel version from kernel.org (releases.json) to tell
+  # whether the running kernel is supported; also makes /proc/sys/net the host view instead of
+  # a private netns. 必须与 .json 清单保持一致：缺了它，版本线检查恒为「未能核对」，
+  # net.* 下的 sysctl 也会全部变成「未验证」。
+  - --share=network
   # Read HSI via fwupd D-Bus (read-only). Needed for firmware security assessment.
   - --system-talk-name=org.freedesktop.fwupd
   # Read host OS name, kernel, hw vendor/model via systemd-hostnamed.

@@ -297,11 +297,11 @@ KERNEL_PARAMS = [
     dict(key="rd.shell", value="0", arch=XA, desc="禁止 initramfs 提供 root shell（防物理攻击者绕过认证）。"),
     dict(key="slab_debug", value="FZ", arch=XA, desc="启用 slab 完整性检查与红区，检测堆溢出。", note="有性能开销。"),
     dict(key="slab_nomerge", value=None, arch=XA, desc="禁止合并 slab 缓存，增加堆利用难度。"),
-    dict(key="spec_store_bypass_disable", value="on", arch=XA, desc="无条件启用 Spectre v4 (SSB) 缓解。"),
-    dict(key="spectre_v2", value="on", arch=XA, desc="无条件启用 Spectre v2 缓解。"),
-    dict(key="ssbd", value="force-on", arch=XA, desc="强制开启推测存储绕过禁用。"),
+    dict(key="spec_store_bypass_disable", value="on", arch=X, desc="无条件启用 Spectre v4 (SSB) 缓解。"),
+    dict(key="spectre_v2", value="on", arch=X, desc="无条件启用 Spectre v2 缓解。"),
+    dict(key="ssbd", value="force-on", arch=A, desc="强制开启推测存储绕过禁用（ARM64 上的 Spectre v4 缓解，对应 x86 的 spec_store_bypass_disable）。"),
     dict(key="systemd.ssh_auto", value="no", arch=XA, desc="禁止 systemd 自动生成 SSH 监听（AF_VSOCK/本地套接字）。"),
-    dict(key="vdso32", value="0", arch=XA, desc="禁用 32 位 vDSO。"),
+    dict(key="vdso32", value="0", arch=X, desc="禁用 32 位 vDSO。"),
     dict(key="vsyscall", value="none", arch=X, desc="彻底禁用固定地址的 vsyscall 页，消除 ROP 跳板。", note="极老的 glibc（< 2.14）程序无法运行。"),
     dict(key="ia32_emulation", value="0", arch=X, desc="禁用 32 位系统调用兼容层，减少攻击面。", note="Steam、Wine 等 32 位程序将无法运行。"),
     dict(key="bdev_allow_write_mounted", value="0", arch=XA, desc="禁止对已挂载的块设备直接写入。", note="部分磁盘工具可能受影响。"),
@@ -311,7 +311,15 @@ KERNEL_PARAMS = [
     dict(key="mem_encrypt", value="on", arch=X, cpu="amd", desc="启用 AMD 透明内存加密 (SME)。"),
     dict(key="oops", value="panic", arch=XA, desc="内核 oops 时直接 panic，防止在损坏状态下继续被利用。"),
     dict(key="irqchip.gicv3_pseudo_nmi", value="1", arch=A, desc="启用 GICv3 伪 NMI，改善 ARM64 上的 hardlockup 检测。"),
-    dict(key="rodata", value="full", arch=A, desc="ARM64 上完整的只读数据保护（含 linear map）。"),
+    # rodata= 在 6.18 被重构（arm64: refactor the rodata=xxx）：6.17 及更早 full = 完整保护、
+    # on = 只保护内核映像本身（linear map 别名仍可写）；6.18 起 on = 完整保护，full 不再识别。
+    # 同一个取值在新旧内核上语义相反，推荐值只能按运行中的内核版本给出（见 checks.get_cmdline_report）。
+    # 解析不出版本时用 before_kernel 的取值：full 在 6.18+ 上只会被忽略并打印警告，
+    # 默认仍是完整保护，在任何内核上都不会造成降级。
+    dict(key="rodata", value="on", before_kernel=((6, 18), "full"), arch=A,
+         desc="ARM64 上完整的只读数据保护（内核只读数据在 linear map 中的别名同样设为只读）。",
+         note="6.18 起 rodata=on 即完整保护；6.17 及更早的内核上 on 只保护内核映像本身，完整保护须写 rodata=full。"
+              "推荐值按当前运行的内核给出，内核升级或降级跨过 6.18 后请重新检测。"),
 ]
 KERNEL_MACHINE_SPECIFIC_NOTE = ("Tips：root、rootflags、rw、rhgb、quiet、vconsole.keymap 等参数属于系统启动配置，"
                                 "请勿修改或删除它们。")

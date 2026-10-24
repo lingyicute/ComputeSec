@@ -523,6 +523,7 @@ def get_cmdline_report() -> CmdlineReport:
                 continue
             present[nk] = None
     ar, cv = arch(), cpu_vendor()
+    running = kernelver.parse_release(platform.release())
     items = []
     for p in data.KERNEL_PARAMS:
         if ar not in p["arch"]:
@@ -530,6 +531,12 @@ def get_cmdline_report() -> CmdlineReport:
         exp = p["value"]
         if isinstance(exp, dict):
             exp = exp.get(ar)
+        if p.get("before_kernel"):
+            # 同一取值在新旧内核上语义不同（如 rodata=）：低于分界版本、或解析不出
+            # 版本时用旧取值。Flatpak 沙箱与宿主机共用内核，platform.release() 即宿主机内核。
+            cutoff, legacy = p["before_kernel"]
+            if running is None or running[:2] < cutoff:
+                exp = legacy
         nk = _norm_key(p["key"])
         actual = present.get(nk, MISSING)
         if p.get("cpu") and p["cpu"] != cv and (cv is not None or actual is MISSING):

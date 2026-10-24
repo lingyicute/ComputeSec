@@ -426,6 +426,50 @@ def test_cmdline_aliases_and_unknown_cpu(monkeypatch):
     assert by_key["amd_iommu"].status == "na"
 
 
+def test_cmdline_params_are_arch_scoped(monkeypatch):
+    """按 kernel-parameters.txt 的标注：spectre_v2 / spec_store_bypass_disable /
+    vdso32 是 x86 专属，ssbd 是 ARM64 专属。把它们标成双架构会让另一边的用户
+    去加内核根本不认识的参数。"""
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: None)
+    monkeypatch.setattr(checks, "read", lambda p, default="": "" if p == "/proc/cmdline" else default)
+
+    monkeypatch.setattr(checks, "arch", lambda: "aarch64")
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    for x86_only in ("spectre_v2", "spec_store_bypass_disable", "vdso32"):
+        assert x86_only not in by_key, x86_only
+    assert "ssbd" in by_key
+
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert "ssbd" not in by_key
+    assert "rodata" not in by_key
+    for x86_only in ("spectre_v2", "spec_store_bypass_disable", "vdso32"):
+        assert x86_only in by_key, x86_only
+
+
+@pytest.mark.parametrize("release, cmdline, expected, status", [
+    # 6.17 及更早：on 只保护内核映像（rodata_full = false），完整保护是 full
+    ("6.12.48-1-arm64", "rodata=full", "full", "ok"),
+    ("6.12.48-1-arm64", "rodata=on", "full", "wrong"),
+    ("6.17.9", "", "full", "missing"),
+    # 6.18 起：on 即完整保护，full 不再识别（被忽略并打印警告）
+    ("6.18.0-rc3", "rodata=on", "on", "ok"),
+    ("6.18.2-200.fc43.aarch64", "rodata=full", "on", "wrong"),
+    ("7.3.1", "rodata=on", "on", "ok"),
+    # 解析不出版本时退回 full：它在任何内核上都不会降低保护
+    ("", "rodata=full", "full", "ok"),
+    ("weird-kernel", "rodata=on", "full", "wrong"),
+])
+def test_cmdline_rodata_expected_follows_running_kernel(monkeypatch, release, cmdline, expected, status):
+    monkeypatch.setattr(checks, "arch", lambda: "aarch64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: None)
+    monkeypatch.setattr(checks.platform, "release", lambda: release)
+    monkeypatch.setattr(checks, "read", lambda p, default="": cmdline if p == "/proc/cmdline" else default)
+    item = {i.key: i for i in checks.get_cmdline_report().items}["rodata"]
+    assert item.expected == expected
+    assert item.status == status
+
+
 # ---------------------------------------------------------------------------
 # 评分规则
 # ---------------------------------------------------------------------------

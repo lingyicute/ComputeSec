@@ -376,6 +376,11 @@ _CMDLINE_MODULE_BOOL_KEYS = {
     # 因此裸 token 同样等价于真，归类应与上面的 module_param(bool) 一致。
     "page_alloc.shuffle",
 }
+# 处理函数按逗号逐个解析子选项、且多次出现时依次累加的参数（efi_parse_options、
+# intel_iommu_setup、parse_amd_iommu_options、x86 iommu_setup 都是
+# `while (*str) { strncmp…; str += strcspn(str, ","); }`）。同名 token 出现多次时
+# 要按顺序拼起来，只保留最后一个会丢掉前面已经生效的选项。
+_CMDLINE_COMMA_KEYS = {"efi", "intel_iommu", "amd_iommu", "iommu"}
 _BOOL_TRUE = {"1", "on", "y", "yes", "true"}
 _BOOL_FALSE = {"0", "off", "n", "no", "false"}
 
@@ -394,12 +399,58 @@ def _cmdline_bool_norm(v):
     return v.strip()
 
 
+def _iommu_opts_ok(nk, opts, expected):
+    """按内核的解析方式判断逗号分隔的 IOMMU 子选项是否达到推荐值。
+
+    三个处理函数都用 strncmp 做前缀匹配，因此这里也用 startswith。
+    """
+    if nk == "intel_iommu" and expected == "on":
+        # drivers/iommu/intel/iommu.c intel_iommu_setup()：on / off 后者覆盖前者。
+        # igfx_off 让集成显卡绕过 DMA 重映射，tboot_noforce 让 tboot 下不强制开启
+        # （内核原话 "could expose security risk for tboot"）——都是给 IOMMU 开了
+        # 口子，不算达到推荐值。sm_on、strict 等不削弱隔离的子选项不影响结论。
+        state = None
+        for o in opts:
+            if o.startswith("on"):
+                state = "on"
+            elif o.startswith("off"):
+                state = "off"
+            elif o.startswith(("igfx_off", "tboot_noforce")):
+                return False
+        return state == "on"
+    if nk == "amd_iommu" and expected == "force_isolation":
+        # drivers/iommu/amd/init.c parse_amd_iommu_options()：off 一出现即禁用，
+        # 与先后无关；注意 AMD 上没有 "on" 这个选项（会被当成 Unknown option）。
+        if any(o.startswith("off") for o in opts):
+            return False
+        return any(o.startswith("force_isolation") for o in opts)
+    if nk == "iommu" and expected == "force":
+        # arch/x86/kernel/pci-dma.c iommu_setup()：各项是独立的 if，force 与 noforce
+        # 后者覆盖前者（"forcesac" 同样以 force 开头，内核也会置 force_iommu）；
+        # off 关闭 IOMMU，pt 让设备直通、绕过地址转换。
+        forced = False
+        for o in opts:
+            if o.startswith(("off", "pt")):
+                return False
+            if o.startswith("force"):
+                forced = True
+            elif o.startswith("noforce"):
+                forced = False
+        return forced
+    return False
+
+
 def _cmdline_value_ok(key, actual, expected):
     if expected is None:
         return actual is not MISSING
     if actual is MISSING:
         return False
     nk = _norm_key(key)
+    if nk == "slab_debug" and not actual:
+        # mm/slub.c setup_slub_debug()：没有 "=选项"（裸 token 或 "slab_debug="）时
+        # 直接 goto out，启用 DEBUG_DEFAULT_FLAGS = 一致性检查 F | 红区 Z | 投毒 P |
+        # 记录调用者 U，严格强于推荐的 FZ。
+        actual = "FZPU"
     if actual is None:
         # 裸 token（无 =）仅对 module_param 型布尔参数等价于真；
         # early_param 型会解析失败，内核保持默认值，不能视为已启用。
@@ -411,6 +462,8 @@ def _cmdline_value_ok(key, actual, expected):
     if nk == "efi":
         opts = {x.strip() for x in actual.split(",") if x.strip()}
         return expected in opts
+    if nk in ("intel_iommu", "amd_iommu", "iommu"):
+        return _iommu_opts_ok(nk, [x for x in actual.split(",") if x], expected)
     if nk == "slab_debug":
         # 仅纯增量调试选项可按超集处理。O 会对部分 cache 关闭调试，不能视为增强。
         # mm/slub.c 的 parse_slub_debug_flags() 用 switch (tolower(*str)) 解析单字母
@@ -441,7 +494,7 @@ def get_cmdline_report() -> CmdlineReport:
             k, v = tok.split("=", 1)
             nk = _norm_key(k)
             nk = _CMDLINE_KEY_ALIASES.get(nk, nk)
-            if nk == "efi" and present.get(nk):
+            if nk in _CMDLINE_COMMA_KEYS and present.get(nk):
                 present[nk] = f"{present[nk]},{v}"
             else:
                 present[nk] = v

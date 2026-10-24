@@ -142,6 +142,23 @@ def test_hsi_attr_tails_have_no_ambiguity():
     ("slab_debug", "fz", "FZ", True),    # 内核 parse_slub_debug_flags() 用 tolower()，大小写等价
     ("slab_debug", "fZp", "FZ", True),
     ("slab_debug", "fzo", "FZ", False),  # O 仍是削弱项
+    ("slab_debug", None, "FZ", True),     # 裸 token：mm/slub.c 启用 DEBUG_DEFAULT_FLAGS（FZPU）
+    ("slab_debug", "", "FZ", True),       # "slab_debug=" 等号后为空，同上
+    ("intel_iommu", "on,sm_on", "on", True),
+    ("intel_iommu", "sm_on,on", "on", True),
+    ("intel_iommu", "on,off", "on", False),          # 后者覆盖前者
+    ("intel_iommu", "off,on", "on", True),
+    ("intel_iommu", "on,igfx_off", "on", False),     # 集成显卡绕过 DMA 重映射
+    ("intel_iommu", "on,tboot_noforce", "on", False),
+    ("intel_iommu", "sm_on", "on", False),           # 没有 on
+    ("amd_iommu", "on,force_isolation", "force_isolation", True),   # on 在 AMD 上是 Unknown option，不影响
+    ("amd_iommu", "force_isolation,pgtbl_v2", "force_isolation", True),
+    ("amd_iommu", "force_isolation,off", "force_isolation", False),
+    ("amd_iommu", "fullflush", "force_isolation", False),
+    ("iommu", "force,nopanic", "force", True),
+    ("iommu", "force,noforce", "force", False),
+    ("iommu", "force,pt", "force", False),           # 直通，绕过地址转换
+    ("iommu", "nopt,force", "force", True),          # nopt 不是 pt
     ("mitigations", "auto,nosmt", "auto,nosmt", True),
     ("mitigations", "nosmt,auto", "auto,nosmt", False),  # 内核 strcmp 精确匹配，顺序颠倒会被整体忽略
     ("mitigations", "auto", "auto,nosmt", False),        # 弱于期望（未禁用 SMT）
@@ -330,6 +347,22 @@ def test_cmdline_bare_token_does_not_clobber_value(monkeypatch):
     # module_param(bool)：裸 token 等价于真，覆盖前面的 =0 才与内核一致
     assert by_key["module.sig_enforce"].status == "ok"
     assert by_key["module.sig_enforce"].actual is None
+
+
+def test_cmdline_comma_params_accumulate_across_tokens(monkeypatch):
+    """intel_iommu 等参数出现多次时内核依次处理，后面的 token 不会抹掉前面的选项。"""
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    cmd = {"line": ""}
+    monkeypatch.setattr(checks, "read", lambda p, default="": cmd["line"] if p == "/proc/cmdline" else default)
+
+    def status(line):
+        cmd["line"] = line
+        return {i.key: i for i in checks.get_cmdline_report().items}["intel_iommu"].status
+
+    assert status("intel_iommu=on intel_iommu=sm_on") == "ok"
+    assert status("intel_iommu=on intel_iommu=igfx_off") == "wrong"
+    assert status("intel_iommu=off intel_iommu=on") == "ok"
 
 
 def test_cmdline_aliases_and_unknown_cpu(monkeypatch):

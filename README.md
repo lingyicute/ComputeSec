@@ -171,6 +171,7 @@ computesec/
   ├── hostinfo.py       宿主机身份信息（D-Bus org.freedesktop.hostname1）
   └── data.py           知识库：HSI 说明、内核参数、sysctl、厂商信誉
 tests/                  单元测试（pytest，不依赖 GTK/D-Bus，运行：python -m pytest）
+                        其中 test_ui_smoke.py 需要 PyGObject + 显示服务器，缺任一项自动跳过
 pyproject.toml            pytest / ruff 工程配置
 data/
   └── 图标和构建信息

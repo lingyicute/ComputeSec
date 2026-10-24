@@ -46,6 +46,19 @@ jobs:
           appstreamcli validate --no-net data/uk._92li.lingyicute.ComputeSec.metainfo.xml
           xmllint --noout data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg
 
+  smoke:
+    name: UI 冒烟测试（Xvfb，真跑一遍 GTK）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装系统 Python 的 PyGObject / GTK4 / libadwaita 与 Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi python3-pytest \
+            gir1.2-gtk-4.0 gir1.2-adw-1 xvfb
+      - name: 在虚拟显示上构建五个页面并呈现一次版本线弹窗
+        run: xvfb-run -a /usr/bin/python3 -m pytest tests/test_ui_smoke.py -q
+
   flatpak:
     name: 构建 Flatpak (${{ matrix.arch }})
     strategy:

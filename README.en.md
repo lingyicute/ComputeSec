@@ -182,6 +182,7 @@ computesec/
   ├── hostinfo.py       Host identity (D-Bus org.freedesktop.hostname1)
   └── data.py           Knowledge base: HSI descriptions, kernel parameters, sysctl, vendor reputation
 tests/                  Unit tests (pytest, no GTK/D-Bus needed, run: python -m pytest)
+                        test_ui_smoke.py additionally needs PyGObject and a display; it is skipped otherwise
 pyproject.toml          pytest / ruff project config
 data/
   └── Icons and build metadata

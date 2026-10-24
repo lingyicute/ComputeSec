@@ -222,6 +222,10 @@ class CollectWizard(Adw.Window):
         self.toasts.add_toast(Adw.Toast.new(text))
 
     def on_copy_command(self, _b):
+        # 介绍页（-1）与完成页（len(steps)）上按钮只是隐藏，仍做一次边界守卫，
+        # 避免将来因焦点/快捷键变化被触发时抛 IndexError。
+        if not (0 <= self.index < len(self.steps)):
+            return
         step = self.steps[self.index]
         Gdk.Display.get_default().get_clipboard().set(step.command)
         self.toast("命令已复制，请到终端中粘贴执行")

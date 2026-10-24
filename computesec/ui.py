@@ -584,7 +584,10 @@ def build_kernel(report, win):
         if it.status == "wrong":
             sub += f"  （当前值：{it.actual if it.actual is not None else '无参数值'}）"
         if it.status == "na":
-            sub += f"  （仅 {it.cpu.upper()} 平台适用，已跳过）"
+            # cpu 为 None 时说明这个 na 不是"平台不适用"造成的（例如将来新增的
+            # 版本门控）。UI 抛异常会被 build_page 捕获成"页面渲染失败"，宁可降级成通用文案。
+            sub += (f"  （仅 {it.cpu.upper()} 平台适用，已跳过）" if it.cpu
+                    else "  （在当前平台上不适用，已跳过）")
         row.set_subtitle(esc(sub))
         row.add_prefix(status_icon(it.status))
         g1.add(row)

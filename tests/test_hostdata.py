@@ -56,6 +56,33 @@ def test_parse_sysctl_counts_permission_denied():
     assert parsed["meta"]["denied"] == 2
 
 
+def test_parse_sysctl_eio_lines_are_not_denied():
+    # procps 3.3.12 及更早在 stable_secret 未配置时，sudo sysctl -a 也会打印读错行
+    # （fgets 失败分支用 xwarnx，不带错误原因）；这不是权限问题，
+    # 不应触发「请用 sudo 重新执行」的提示。zh_CN 的两代译文都要认。
+    parsed, err = hostdata.parse_sysctl(_sysctl_text([
+        'sysctl: reading key "net.ipv6.conf.all.stable_secret"',
+        'sysctl: reading key "net.ipv6.conf.default.stable_secret"',
+        "sysctl: 读取net.ipv6.conf.enp0s3.stable_secret 时出错",     # procps ≤ 4.0.4 的 zh_CN
+        'sysctl: 读取键 "net.ipv6.conf.enp0s3.stable_secret"',      # procps ≥ 4.0.5 的 zh_CN
+    ]))
+    assert err == ""
+    assert parsed["meta"] == {}
+
+
+def test_parse_sysctl_counts_only_permission_denied():
+    # 读错行与权限拒绝行混在一起时只计后者；zh_CN 的权限拒绝消息同样要计入
+    # （旧解析按 sysctl: 前缀识别，修读错行时不能让中文提示退化丢失）。
+    parsed, err = hostdata.parse_sysctl(_sysctl_text([
+        'sysctl: reading key "net.ipv6.conf.all.stable_secret"',
+        "sysctl: permission denied on key 'vm.mmap_rnd_bits'",
+        'sysctl: 对键 "vm.mmap_rnd_compat_bits" 的权限不够',              # procps ≥ 4.0.5 的 zh_CN
+        "sysctl: 无法格式化设备 net.ipv4.tcp_fastopen_key，权限被拒绝。",  # procps ≤ 4.0.4 的 zh_CN（原译如此）
+    ]))
+    assert err == ""
+    assert parsed["meta"]["denied"] == 3
+
+
 @pytest.mark.parametrize("text", ["", "   ", "\n\n"])
 def test_parse_sysctl_empty_clipboard(text):
     parsed, err = hostdata.parse_sysctl(text)

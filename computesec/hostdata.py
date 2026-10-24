@@ -60,6 +60,17 @@ def parse_sysctl(text):
             continue
         low = line.lower()
         if low.startswith("sysctl:") or "permission denied on key" in low:
+            # "sysctl:" 前缀不等于权限问题：procps 3.3.12 及更早（RHEL 7 的 3.3.10、
+            # Ubuntu 18.04 / Debian 9 的 3.3.12）在 stable_secret 未配置时，sudo 下
+            # 也会为每个网卡打印一条 `sysctl: reading key "net.ipv6.conf.*.stable_secret"`
+            # （内核在 read() 时返回 EIO，procps 用 xwarnx 输出，不带错误原因；
+            # 3.3.13 起这一行被静默忽略）。它与是否 sudo 无关，不能计入 denied。
+            # zh_CN 译文：4.0.4 及更早是「读取%s 时出错」，4.0.5 起是「读取键 "%s"」。
+            # 其余行照旧计数——按 "sysctl:" 前缀而不是英文子串识别，zh_CN 的
+            # 权限拒绝行（旧译「…权限被拒绝」、新译「对键 … 的权限不够」）才不会被漏掉；
+            # 无法识别读错消息的其它语言退回旧行为（全部计数），宁可多提示也不漏提示。
+            if "reading key" in low or "读取键" in line or ("读取" in line and "时出错" in line):
+                continue
             denied += 1
             continue
         if "=" not in line:

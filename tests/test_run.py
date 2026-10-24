@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""run.py 的 desktop entry 编码测试。"""
+"""run.py / computesec.cli：命令行参数、desktop entry 编码与安装。"""
 
 import pytest
 
 import run as launcher
+from computesec import cli
 
 
 @pytest.mark.parametrize("arg,want", [
@@ -57,10 +58,25 @@ def test_help_lists_options(argv, capsys):
         assert opt in out
 
 
-def test_unknown_option_is_rejected(capsys):
-    """不能把打错的参数当成"启动 GUI"偷偷吞掉。"""
-    assert launcher.main(["--instal"]) == 2
-    assert "--instal" in capsys.readouterr().err
+@pytest.mark.parametrize("argv", [["--instal"], ["install"], ["foo.txt"]])
+def test_unknown_argument_is_rejected(argv, capsys):
+    """不能把打错的参数当成"启动 GUI"偷偷吞掉——不带横线的也一样，否则 GApplication
+    会把它当成要打开的文件，只报一句 "This application can not open files"。"""
+    assert launcher.main(argv) == 2
+    assert argv[0] in capsys.readouterr().err
+
+
+def test_pip_entry_point_shares_the_same_cli(capsys):
+    """pip 装出的 computesec 命令与 run.py 走同一套参数处理。"""
+    from computesec import data
+    assert cli.main(["--version"]) == 0
+    assert capsys.readouterr().out.strip() == f"{data.APP_ID} {data.VERSION}"
+
+
+def test_missing_deps_message_mentions_venv(monkeypatch):
+    monkeypatch.setattr(cli.sys, "base_prefix", "/usr")
+    monkeypatch.setattr(cli.sys, "prefix", "/tmp/venv")
+    assert "--system-site-packages" in cli._missing_deps_message("No module named 'gi'")
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +85,7 @@ def test_unknown_option_is_rejected(capsys):
 def _prepare(tmp_path, monkeypatch):
     """把 XDG_DATA_HOME 指到临时目录，并屏蔽掉系统里的 update-desktop-database。"""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    monkeypatch.setattr(launcher.shutil, "which", lambda name: None)   # 不真的去刷新缓存
+    monkeypatch.setattr(cli.shutil, "which", lambda name: None)   # 不真的去刷新缓存
     return tmp_path / "xdg"
 
 
@@ -89,6 +105,24 @@ def test_install_desktop_then_uninstall(tmp_path, monkeypatch):
 
     launcher.install_desktop(uninstall=True)
     assert not desktop.exists() and not icon.exists()
+
+
+def test_install_desktop_from_pip_layout(tmp_path, monkeypatch):
+    """pip 安装时 data/ 不在包旁边，要从 <prefix>/share 取，Exec= 写成当前命令本身。"""
+    data_home = _prepare(tmp_path, monkeypatch)
+    prefix = tmp_path / "venv"
+    share = prefix / "share"
+    (share / "applications").mkdir(parents=True)
+    (share / "icons" / "hicolor" / "scalable" / "apps").mkdir(parents=True)
+    (share / "applications" / (cli.APP_ID + ".desktop")).write_text(
+        "[Desktop Entry]\nExec=computesec\n", encoding="utf-8")
+    (share / "icons" / "hicolor" / "scalable" / "apps" / (cli.APP_ID + ".svg")).write_text("<svg/>")
+    monkeypatch.setattr(cli, "__file__", str(tmp_path / "site-packages" / "computesec" / "cli.py"))
+    monkeypatch.setattr(cli.sys, "prefix", str(prefix))
+    monkeypatch.setattr(cli.sys, "argv", [str(prefix / "bin" / "computesec")])
+    cli.install_desktop()
+    content = (data_home / "applications" / (cli.APP_ID + ".desktop")).read_text(encoding="utf-8")
+    assert f"Exec={prefix}/bin/computesec" in content
 
 
 def test_install_desktop_uninstall_is_idempotent(tmp_path, monkeypatch):

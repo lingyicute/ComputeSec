@@ -37,7 +37,7 @@ dev = ["pytest", "pytest-cov", "ruff", "fonttools", "brotli"]
 # PyGObject / GTK4 / libadwaita 只能由发行版提供（不能用 pip 装），故不写进依赖。
 
 [project.gui-scripts]
-computesec = "computesec.main:main"
+computesec = "computesec.cli:main"   # 与 run.py 共用同一套参数处理
 
 [tool.setuptools]
 packages = ["computesec"]

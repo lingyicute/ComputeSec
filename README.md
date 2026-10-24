@@ -162,20 +162,27 @@ python3 run.py --version     # 打印版本号（不需要图形环境）
 python3 run.py --help        # 全部选项
 ```
 
-也可以当作普通的 Python 包安装（会一并装出 `computesec` 命令、`.desktop`、metainfo 与图标）：
+也可以当作普通的 Python 包安装（会一并装出 `computesec` 命令、`.desktop`、metainfo 与图标）。
+PyGObject、GTK 4 与 libadwaita 只能由发行版提供（无法用 pip 安装），仍需按上面的命令装好。
+多数发行版不允许直接往系统 Python 里 `pip install`（PEP 668），请在虚拟环境里安装，
+并加上 `--system-site-packages`，否则虚拟环境看不到发行版提供的 PyGObject：
 
 ```bash
-pip install .                # 装到当前环境
-pip install -e ".[dev]"      # 开发环境：额外装上 pytest / ruff / fonttools / brotli
+python3 -m venv --system-site-packages ~/.venvs/computesec
+~/.venvs/computesec/bin/pip install .
+~/.venvs/computesec/bin/computesec --install   # 可选：把菜单项与图标装到 ~/.local/share
+pip install -e ".[dev]"                        # 开发环境：额外装上 pytest / ruff / fonttools / brotli
 ```
 
-PyGObject、GTK 4 与 libadwaita 只能由发行版提供（无法用 pip 安装），仍需按上面的命令装好。
+`computesec` 命令与 `python3 run.py` 的选项完全相同。pip 装出的 `.desktop` 与图标位于虚拟环境的
+`share/` 下，桌面环境不会去那里找，需要菜单项时请执行上面的 `computesec --install`。
 
 ## 项目结构
 
 ```
 run.py                  启动器（克隆运行 / Flatpak 内为 /app/bin/computesec）
 computesec/
+  ├── cli.py            命令行参数与桌面集成（run.py 与 pip 装出的 computesec 命令共用，不依赖 gi）
   ├── main.py           应用与窗口、导航、后台检测线程
   ├── ui.py             五个页面的构建
   ├── checks.py         数据采集与比对（fwupd、cmdline、sysctl、DMI、Flatpak、uptime、USB、NTFS）
@@ -183,7 +190,7 @@ computesec/
   ├── hostdata.py       用户协助采集的数据：解析、校验、缓存（按 boot_id 失效）
   ├── kernelver.py      内核版本线检查（kernel.org 的 mainline / stable，缓存 24 小时）
   ├── hostinfo.py       宿主机身份信息（D-Bus org.freedesktop.hostname1）
-  ├── xdg.py            XDG 数据目录（run.py / hostdata / kernelver 共用）
+  ├── xdg.py            XDG 数据目录（cli / hostdata / kernelver 共用）
   └── data.py           知识库：HSI 说明、内核参数、sysctl、厂商信誉
 tests/                  单元测试（pytest，不依赖 GTK/D-Bus，运行：python -m pytest）
                         其中 test_ui_smoke.py 需要 PyGObject + 显示服务器，缺任一项自动跳过

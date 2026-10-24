@@ -72,6 +72,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ".[dev]"
+      - name: 安装出的 computesec 命令无需图形环境即可响应 --version / --help
+        # 这里的 Python 没有 PyGObject：正好验证入口不会在参数处理前就 import gi。
+        run: |
+          computesec --version
+          computesec --help
       - name: Lint（规则见 pyproject.toml，与本地保持一致）
         run: ruff check .
       - name: 运行单元测试与覆盖率门槛

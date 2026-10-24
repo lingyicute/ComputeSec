@@ -171,21 +171,29 @@ python3 run.py --help        # all options
 ```
 
 It can also be installed as an ordinary Python package, which additionally installs the
-`computesec` command, the `.desktop` file, the metainfo file and the icon:
+`computesec` command, the `.desktop` file, the metainfo file and the icon. PyGObject, GTK 4
+and libadwaita must come from your distribution (they cannot be installed with pip), so install
+them with the commands above first. Most distributions refuse `pip install` into the system
+Python (PEP 668); use a virtual environment created with `--system-site-packages`, otherwise it
+cannot see the distribution's PyGObject:
 
 ```bash
-pip install .                # into the current environment
-pip install -e ".[dev]"      # dev environment: adds pytest / ruff / fonttools / brotli
+python3 -m venv --system-site-packages ~/.venvs/computesec
+~/.venvs/computesec/bin/pip install .
+~/.venvs/computesec/bin/computesec --install   # optional: menu entry and icon in ~/.local/share
+pip install -e ".[dev]"                        # dev environment: adds pytest / ruff / fonttools / brotli
 ```
 
-PyGObject, GTK 4 and libadwaita must come from your distribution (they cannot be installed
-with pip), so install them with the commands above first.
+The `computesec` command accepts exactly the same options as `python3 run.py`. The `.desktop`
+file and icon installed by pip live under the virtual environment's `share/`, where desktop
+environments do not look; run `computesec --install` as above if you want a menu entry.
 
 ## Project layout
 
 ```
 run.py                  Launcher (for a cloned checkout; /app/bin/computesec inside Flatpak)
 computesec/
+  ├── cli.py            Command-line options and desktop integration (shared by run.py and the pip-installed command; no gi)
   ├── main.py           Application and window, navigation, background scanning threads
   ├── ui.py             Construction of the five pages
   ├── checks.py         Data collection and comparison (fwupd, cmdline, sysctl, DMI, Flatpak, uptime, USB, NTFS)
@@ -193,7 +201,7 @@ computesec/
   ├── hostdata.py       User-assisted host data: parsing, validation, caching (expires by boot_id)
   ├── kernelver.py      Kernel version line check (kernel.org mainline / stable, cached for 24h)
   ├── hostinfo.py       Host identity (D-Bus org.freedesktop.hostname1)
-  ├── xdg.py            XDG data directory (shared by run.py / hostdata / kernelver)
+  ├── xdg.py            XDG data directory (shared by cli / hostdata / kernelver)
   └── data.py           Knowledge base: HSI descriptions, kernel parameters, sysctl, vendor reputation
 tests/                  Unit tests (pytest, no GTK/D-Bus needed, run: python -m pytest)
                         test_ui_smoke.py additionally needs PyGObject and a display; it is skipped otherwise

@@ -716,9 +716,24 @@ def test_habits_report_score():
     def check(status):
         return checks.HabitCheck("k", "t", status, "s", [], "")
     assert checks.HabitsReport(checks=[check("good"), check("bad")]).score == 50
-    assert checks.HabitsReport(checks=[check("unknown")]).score == 60
     assert checks.HabitsReport(checks=[check("warn")]).score == 40
     assert checks.HabitsReport(checks=[]).score is None
+
+
+def test_habits_unknown_is_not_scored():
+    """读不到（unknown）不计分：用户没法通过任何操作改善它，扣分等于凭空扣。
+
+    其它三个板块遇到"无法评估"都是不计分并显示「—」，这里跟随同一口径。
+    """
+    def check(status):
+        return checks.HabitCheck("k", "t", status, "s", [], "")
+    # 只有 unknown：没有可评估项 → None（界面显示「—」），而不是 60 分
+    assert checks.HabitsReport(checks=[check("unknown")]).score is None
+    # unknown 被跳过，剩下的按原口径平均
+    assert checks.HabitsReport(checks=[check("unknown"), check("good")]).score == 100
+    assert checks.HabitsReport(checks=[check("unknown"), check("good"), check("bad")]).score == 50
+    # suspect（疑似）仍然满分：疑似不是证据
+    assert checks.HabitsReport(checks=[check("suspect"), check("bad")]).score == 50
 
 
 def _report(hsi_ok=True):

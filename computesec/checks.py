@@ -818,9 +818,22 @@ class HabitsReport:
 
     @property
     def score(self):
-        # suspect（疑似）只作提醒、不影响得分，与“不扣分”的展示口径保持一致。
-        pts = {"good": 100, "suspect": 100, "unknown": 60, "warn": 40, "bad": 0}
-        return int(sum(pts.get(c.status, 0) for c in self.checks) / len(self.checks)) if self.checks else None
+        """0-100；读不到（unknown）的条目不计入评分，全部读不到时返回 None。
+
+        两种"不扣分"口径要分清：
+
+        * unknown（读不到）：本程序没权限/没枚举成功（Flatpak 列表读不到、USB 枚举
+          失败等），用户无法通过任何操作改善它。按 60 分计入等于凭空扣分，而且其它
+          三个板块遇到"无法评估"都是不计分并显示「—」，这里跟随同一口径；
+        * suspect（疑似）：只是提醒，按满分计——"疑似"不是证据，不该拉低分数。
+
+        因此打分表里没有 unknown 这一项，它被直接跳过。
+        """
+        pts = {"good": 100, "suspect": 100, "warn": 40, "bad": 0}
+        scored = [c for c in self.checks if c.status in pts]
+        if not scored:
+            return None
+        return int(sum(pts[c.status] for c in scored) / len(scored))
 
 
 def _flatpak_apps():

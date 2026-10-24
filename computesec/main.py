@@ -2,6 +2,7 @@
 """应用程序入口：窗口、导航、后台检测线程。"""
 
 import os
+import platform
 import sys
 import threading
 
@@ -35,6 +36,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._refresh_pending = False  # 检测进行中时又收到了刷新请求，结束后补跑一次
         self._wizard = None         # 当前打开的数据采集向导窗口（防止重复弹出）
         self._kernel_warned = False  # 内核版本线提示本次运行是否已经弹过
+        self._kernel_checking = False  # 版本线检查是否正在进行（防止连点菜单并发多线程）
         self._pending_kernel_warning = None  # 等采集向导关闭后再弹的版本线提示
 
         self.toast_overlay = Adw.ToastOverlay()
@@ -120,14 +122,28 @@ class MainWindow(Adw.ApplicationWindow):
 
         只读公开的 releases.json，结果缓存 24 小时；离线、代理、DNS 失败都只是
         拿不到结论，不会打扰用户，也绝不影响检测本身。
+
+        菜单项、重试按钮都直接调这里，连点几下就会并发出几个线程、几次
+        缓存写入和几次整页重建，因此用一个标志位挡住。
         """
+        if self._kernel_checking:
+            return
+        self._kernel_checking = True
+
         def worker():
-            st = kernelver.get_status()
+            # get_status 承诺不抛异常；这里再兜一层是因为上面新加了 _kernel_checking
+            # 标志——万一真的抛了，标志就再也没人复位，重试按钮会永久失效。
+            try:
+                st = kernelver.get_status()
+            except Exception as e:                                  # noqa: BLE001
+                st = kernelver.KernelSupport(release=platform.release(),
+                                             error=str(e) or e.__class__.__name__)
             GLib.idle_add(self.on_kernel_status, st)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def on_kernel_status(self, st):
+        self._kernel_checking = False
         kernelver.set_current(st)
         if self.report is not None:
             self.report.kernel_support = st

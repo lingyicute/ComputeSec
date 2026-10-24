@@ -7,6 +7,7 @@
     "finish-args": [
         "--socket=wayland",
         "--device=dri",
+        "--share=network",
         "--system-talk-name=org.freedesktop.fwupd",
         "--system-talk-name=org.freedesktop.hostname1",
         "--filesystem=/var/lib/flatpak:ro",
@@ -18,6 +19,7 @@
     "//": "Permissions justification:",
     "//-fwupd": "Read HSI via D-Bus org.freedesktop.fwupd (read-only)",
     "//-hostname1": "Read host OS pretty name, kernel, hw vendor/model via systemd-hostnamed",
+    "//-network": "Fetch the current mainline/stable kernel version from kernel.org (releases.json) to tell whether the running kernel is supported; also makes /proc/sys/net the host view instead of a private netns",
     "//-flatpak-ro": "Count installed Flatpak apps to evaluate sandbox adoption - read-only",
     "//-udev": "Enumerate USB devices from /run/udev to detect 2.4G wireless receivers",
     "//-boot": "Detect the Windows boot loader at /boot/efi, /boot/EFI (covers every ESP mount layout under /boot) - read-only",

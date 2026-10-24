@@ -11,7 +11,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import checks, data, hostdata, ui, wizard  # noqa: E402
+from . import checks, data, hostdata, kernelver, ui, wizard  # noqa: E402
 
 PAGES = [
     ("dashboard", "仪表盘", "go-home-symbolic"),
@@ -34,6 +34,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._refreshing = False    # 是否有检测线程正在运行（防止菜单/快捷键重入）
         self._refresh_pending = False  # 检测进行中时又收到了刷新请求，结束后补跑一次
         self._wizard = None         # 当前打开的数据采集向导窗口（防止重复弹出）
+        self._kernel_warned = False  # 内核版本线提示本次运行是否已经弹过
 
         self.toast_overlay = Adw.ToastOverlay()
         self.set_content(self.toast_overlay)
@@ -74,6 +75,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.header.pack_start(self.refresh_btn)
         menu = Gio.Menu()
         menu.append("重新检测", "app.refresh")
+        menu.append("重新检查内核版本线", "app.kernelcheck")
         menu.append("重新采集系统数据…", "app.collect")
         menu.append("关于", "app.about")
         menu.append("退出", "app.quit")
@@ -108,6 +110,40 @@ class MainWindow(Adw.ApplicationWindow):
         else:
             hostdata.set_current(hostdata.HostData())
             GLib.idle_add(self.open_wizard)
+        # 与首次检测并行：联网核对内核版本线（不阻塞界面，失败就安静跳过）
+        self.start_kernel_check()
+
+    # ---- 内核版本线 ----
+    def start_kernel_check(self):
+        """后台线程向 kernel.org 取最新的 mainline / stable 版本号。
+
+        只读公开的 releases.json，结果缓存 24 小时；离线、代理、DNS 失败都只是
+        拿不到结论，不会打扰用户，也绝不影响检测本身。
+        """
+        def worker():
+            st = kernelver.get_status()
+            GLib.idle_add(self.on_kernel_status, st)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_kernel_status(self, st):
+        kernelver.set_current(st)
+        if self.report is not None:
+            self.report.kernel_support = st
+            # 内核页与仪表盘用到了它，重建这两页（其余页面不受影响）
+            for key in ("dashboard", "kernel"):
+                if key in self.built:
+                    self.built.discard(key)
+                    self.build_page(key)
+        if st.known and not st.supported and not self._kernel_warned:
+            self._kernel_warned = True
+            dlg = ui.kernel_warning_dialog(st)
+            if hasattr(Adw, "AlertDialog"):
+                dlg.present(self)
+            else:
+                dlg.set_transient_for(self)
+                dlg.present()
+        return False
 
     # ---- 交互 ----
     def toast(self, text):
@@ -298,7 +334,8 @@ class Application(Adw.Application):
                     theme.add_search_path(p)
         Gtk.Window.set_default_icon_name(data.APP_ID)
         for name, cb, accel in (("about", self.on_about, None), ("quit", lambda *_: self.quit(), "<Primary>q"),
-                                ("refresh", self.on_refresh, "<Primary>r"), ("collect", self.on_collect, "<Primary>d")):
+                                ("refresh", self.on_refresh, "<Primary>r"), ("collect", self.on_collect, "<Primary>d"),
+                                ("kernelcheck", self.on_kernel_check, None)):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", cb)
             self.add_action(act)
@@ -327,6 +364,12 @@ class Application(Adw.Application):
         win = self._main_window()
         if win:
             win.open_wizard()
+
+    def on_kernel_check(self, *_):
+        win = self._main_window()
+        if win:
+            win._kernel_warned = False
+            win.start_kernel_check()
 
     def on_about(self, *_):
         kwargs = dict(

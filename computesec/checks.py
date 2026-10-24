@@ -10,7 +10,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
-from . import data, hostdata, hostinfo
+from . import data, hostdata, hostinfo, kernelver
 
 IN_FLATPAK = os.path.exists("/.flatpak-info")
 
@@ -1032,6 +1032,7 @@ class Report:
     in_flatpak: bool
     identity: object = None         # hostinfo.HostIdentity
     hostdata: object = None         # hostdata.HostData
+    kernel_support: object = None   # kernelver.KernelSupport（联网检查失败时为 None 或已知的缓存值）
 
     @staticmethod
     def _mean(values):
@@ -1065,5 +1066,5 @@ def collect() -> Report:
         hardware=_safe(get_hardware, lambda e: HardwareReport("", "", "", "", "", "", data.DEFAULT_VENDOR, "")),
         habits=_safe(get_habits, lambda e: HabitsReport(checks=[HabitCheck("err", "检测出错", "unknown", str(e), [], "")])),
         arch=arch(), cpu=cpu_model(), os_name=ident.os_name, kernel=ident.kernel, in_flatpak=IN_FLATPAK,
-        identity=ident, hostdata=hostdata.CURRENT,
+        identity=ident, hostdata=hostdata.CURRENT, kernel_support=kernelver.CURRENT,
     )

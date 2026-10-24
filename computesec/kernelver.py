@@ -1,0 +1,282 @@
+# -*- coding: utf-8 -*-
+"""内核版本线检查：本机内核是否属于上游 mainline / stable。
+
+为什么需要
+----------
+Linux 的各个 LTS 分支由于种种原因，并没有完整地包含上游所有的安全修复与安全性
+改进。ComputeSec 推荐的内核启动参数与 sysctl，同样不保证在这些旧分支上能起到
+应有的加固效果：其中一部分参数在旧内核上根本不存在，还有一部分即使写进启动
+命令行，也会被内核静默忽略——`init/main.c` 只会打印一句
+"Unknown kernel command line parameters …, will be passed to user space"。
+更糟的是，参数既然出现在 `/proc/cmdline` 里，本程序就会把它判为"已设置"，从而
+给出"已加固"的错误结论。
+
+因此启动时联网取一次 kernel.org 的版本号：若本机内核既不属于 mainline，也不属于
+stable，就明确告知用户"不要把这些加固建议当成可靠的依据"，并建议切换到
+mainline 或 stable 内核。
+
+隐私与健壮性
+------------
+- 只向 kernel.org 发一次 GET 请求读取公开的 releases.json，不上报任何信息；
+- 结果缓存 24 小时（XDG 数据目录，0600），失败就静默跳过，绝不影响界面；
+- 本模块不 import gi，可在无 GTK 环境下直接测试。
+"""
+
+import json
+import os
+import platform
+import re
+import time
+import urllib.request
+
+RELEASES_URL = "https://www.kernel.org/releases.json"
+CACHE_NAME = "kernelver.json"
+CACHE_TTL = 24 * 3600
+FETCH_TIMEOUT = 6.0
+
+# 内核 release 串：6.1.158+ / 7.2.12-200.fc44.x86_64 / 6.18.0-rc3 / 7.3
+_RELEASE_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?")
+
+TIER_ZH = {
+    "mainline": "mainline（上游主线）",
+    "stable": "stable（上游稳定版）",
+    "older": "较旧的分支（LTS 或已停止维护的版本）",
+    "unknown": "无法判断",
+}
+
+
+def _data_dir():
+    """与 hostdata 保持同一规则：XDG_DATA_HOME 为相对路径时按规范忽略。"""
+    base = os.environ.get("XDG_DATA_HOME") or ""
+    if not os.path.isabs(base):
+        base = os.path.join(os.path.expanduser("~"), ".local", "share")
+    d = os.path.join(base, "computesec")
+    try:
+        os.makedirs(d, mode=0o700, exist_ok=True)
+    except OSError:
+        pass
+    return d
+
+
+def parse_release(text):
+    """把内核 release 串解析成 (major, minor, patch)；无法解析时返回 None。
+
+    发行版后缀（-200.fc44.x86_64）、本地版本号（+）、rc 标记（-rc3）都忽略。
+    """
+    if not isinstance(text, str):
+        return None
+    m = _RELEASE_RE.match(text.strip())
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+
+
+def parse_releases_json(text):
+    """从 kernel.org 的 releases.json 里取出 (mainline, stable) 版本串。
+
+    结构形如 {"releases": [{"moniker": "mainline", "version": "7.3"},
+    {"moniker": "stable", "version": "7.2.12"}, {"moniker": "longterm", ...}]}。
+    只认 moniker，不认 latest_stable —— 后者在主线刚发布时指向的是 mainline。
+    """
+    try:
+        doc = json.loads(text)
+    except (TypeError, ValueError):
+        return "", ""
+    if not isinstance(doc, dict):
+        return "", ""
+    mainline = stable = ""
+    for rel in doc.get("releases") or []:
+        if not isinstance(rel, dict):
+            continue
+        moniker = rel.get("moniker")
+        version = rel.get("version")
+        if not isinstance(version, str):
+            continue
+        if moniker == "mainline" and not mainline:
+            mainline = version
+        elif moniker == "stable" and not stable:
+            stable = version
+    return mainline, stable
+
+
+def classify(release, mainline, stable):
+    """判断本机内核落在哪条版本线上。
+
+    返回 "mainline" / "stable" / "older" / "unknown"。以 stable 的
+    major.minor 作为"受支持"的门槛：同一条线上落后的点版本（7.2.11 对 7.2.12）
+    仍然算 stable，因为下游发行版无论如何都会落后几个补丁。
+    """
+    cur = parse_release(release)
+    ml = parse_release(mainline)
+    st = parse_release(stable)
+    if cur is None or (ml is None and st is None):
+        return "unknown"
+    cur_mm = cur[:2]
+    if ml is not None and cur_mm >= ml[:2]:
+        return "mainline"
+    if st is not None and cur_mm >= st[:2]:
+        return "stable"
+    return "older"
+
+
+class KernelSupport:
+    """本机内核的版本线信息。"""
+
+    def __init__(self, release="", mainline="", stable="", tier="unknown", checked_at=0, error=""):
+        self.release = release or ""
+        self.mainline = mainline or ""
+        self.stable = stable or ""
+        self.tier = tier
+        self.checked_at = checked_at
+        self.error = error
+
+    @property
+    def major_minor(self):
+        r = parse_release(self.release)
+        return f"{r[0]}.{r[1]}" if r else ""
+
+    @property
+    def known(self):
+        """是否成功拿到了上游版本号（拿不到就不该下任何结论）。"""
+        return bool((self.mainline or self.stable) and self.major_minor)
+
+    @property
+    def supported(self):
+        return self.tier in ("mainline", "stable")
+
+    @property
+    def tier_text(self):
+        return TIER_ZH.get(self.tier, TIER_ZH["unknown"])
+
+    def to_dict(self):
+        return dict(release=self.release, mainline=self.mainline, stable=self.stable,
+                    tier=self.tier, checked_at=self.checked_at, error=self.error)
+
+    @classmethod
+    def from_dict(cls, d):
+        """从缓存还原。只接受结构完全正确的字典，其余一律当作没有缓存。"""
+        if not isinstance(d, dict):
+            return None
+        for key in ("release", "mainline", "stable", "error"):
+            if not isinstance(d.get(key, ""), str):
+                return None
+        if d.get("tier", "unknown") not in TIER_ZH:
+            return None
+        try:
+            checked_at = int(d.get("checked_at") or 0)
+        except (TypeError, ValueError):
+            return None
+        return cls(release=d.get("release", ""), mainline=d.get("mainline", ""),
+                   stable=d.get("stable", ""), tier=d.get("tier", "unknown"),
+                   checked_at=checked_at, error=d.get("error", ""))
+
+
+def _default_fetcher(url, timeout):
+    req = urllib.request.Request(url, headers={"User-Agent": "ComputeSec"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:   # noqa: S310 (固定的 https 地址)
+        return resp.read().decode("utf-8", "replace")
+
+
+def fetch_versions(fetcher=None, timeout=FETCH_TIMEOUT, url=RELEASES_URL):
+    """取 (mainline, stable)。任何异常都向上抛，由调用方决定是否静默。"""
+    read = fetcher or _default_fetcher
+    text = read(url, timeout)
+    mainline, stable = parse_releases_json(text)
+    if not mainline and not stable:
+        raise ValueError("kernel.org 的响应里没有 mainline / stable 版本号")
+    return mainline, stable
+
+
+def load_cache(path=None, now=None):
+    path = path or os.path.join(_data_dir(), CACHE_NAME)
+    try:
+        with open(path) as f:
+            st = KernelSupport.from_dict(json.load(f))
+    except (OSError, ValueError, TypeError):
+        return None
+    if st is None:
+        return None
+    if now is not None and st.checked_at and now - st.checked_at > CACHE_TTL:
+        return None
+    return st
+
+
+def save_cache(st, path=None):
+    path = path or os.path.join(_data_dir(), CACHE_NAME)
+    tmp = path + ".tmp"
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(st.to_dict(), f)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def get_status(release=None, now=None, fetcher=None, cache_path=None, use_cache=True):
+    """汇总本机内核的版本线信息。永不抛异常，失败时 KernelSupport.error 非空。"""
+    release = platform.release() if release is None else release
+    now = int(time.time()) if now is None else int(now)
+
+    cached = load_cache(cache_path, now) if use_cache else None
+    if cached is not None:
+        mainline, stable = cached.mainline, cached.stable
+    else:
+        try:
+            mainline, stable = fetch_versions(fetcher=fetcher)
+        except Exception as e:                                    # noqa: BLE001 (离线、代理、DNS 全都要吞掉)
+            # 拿不到就用上次的缓存（哪怕过期）算出一个"仅供参考"的结论
+            stale = load_cache(cache_path, None) if use_cache else None
+            if stale is None or not (stale.mainline or stale.stable):
+                return KernelSupport(release=release, checked_at=now, error=str(e) or e.__class__.__name__)
+            mainline, stable = stale.mainline, stale.stable
+        else:
+            st = KernelSupport(release=release, mainline=mainline, stable=stable,
+                               tier=classify(release, mainline, stable), checked_at=now)
+            if use_cache:
+                save_cache(st, cache_path)
+            return st
+
+    return KernelSupport(release=release, mainline=mainline, stable=stable,
+                         tier=classify(release, mainline, stable), checked_at=now)
+
+
+# ---------------------------------------------------------------------------
+# 面向用户的文案（放在这里以便单元测试，不依赖 GTK）
+# ---------------------------------------------------------------------------
+SUPPORT_CHECK_NOTE = "版本信息来自 kernel.org 的 releases.json，仅用于判断本机内核属于哪条版本线。"
+
+
+def warning_text(st):
+    """启动弹窗的正文：解释为什么旧分支上这些加固建议不可靠。"""
+    return (
+        f"检测到您正在使用的内核是 {st.release}（{st.major_minor}），"
+        f"既不属于上游 mainline（当前 {st.mainline}），也不属于 stable（当前 {st.stable}）。\n\n"
+        "Linux 的各个 LTS 分支由于种种原因，并没有完整地包含上游所有的安全修复与安全性改进。"
+        "本程序给出的 sysctl 与内核启动参数建议，同样不保证在这些旧分支上能提供应有的加固效果："
+        "有些参数在这些内核上根本不存在；有些即使写进启动命令行，也会被内核静默忽略"
+        "（只在 dmesg 里留下一句“Unknown kernel command line parameters”），"
+        "而本程序却会因为参数出现在 /proc/cmdline 里而误判为已加固。\n\n"
+        "因此不建议您继续在这条版本线上把本程序的结论当作安全加固的依据。"
+        "如果条件允许，建议切换到 mainline 或 stable 内核：Fedora、Arch、openSUSE Tumbleweed "
+        "等快速更新的发行版默认就跟踪 stable；Debian、Ubuntu LTS 等可以安装发行版提供的新内核"
+        "（backports、HWE 或 mainline 内核包）。\n\n"
+        "本次检测仍会照常进行，但「内核加固」页面的结论请只作参考。"
+    )
+
+
+def banner_text(st):
+    """内核页顶部横幅（比弹窗短）。"""
+    return (f"当前内核 {st.release} 不在 mainline（{st.mainline}）或 stable（{st.stable}）上。"
+            "旧分支没有包含上游全部的安全修复与改进，下列 sysctl 与启动参数建议不保证生效，"
+            "请勿把它们当作加固依据；建议切换到 mainline 或 stable 内核。")
+
+
+# 进程内共享的最近一次检查结果（checks.collect() 会读取它）
+CURRENT = None
+
+
+def set_current(st):
+    global CURRENT
+    CURRENT = st
+    return CURRENT

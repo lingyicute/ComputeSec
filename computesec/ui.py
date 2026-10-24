@@ -7,7 +7,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk, Pango  # noqa: E402
 
-from . import data  # noqa: E402
+from . import data, kernelver  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +234,23 @@ def hero(icon_name, title, description=None, css=None, desc_css=None):
         box.append(d)
     return box
 
+def kernel_warning_dialog(st):
+    """构造"内核不在受支持版本线上"的提示对话框（不显示，由调用方 present）。"""
+    body = kernelver.warning_text(st)
+    if hasattr(Adw, "AlertDialog"):      # libadwaita >= 1.5
+        dlg = Adw.AlertDialog(heading="当前内核不在 mainline / stable 上", body=body)
+        dlg.add_response("ok", "我知道了")
+        dlg.set_default_response("ok")
+        dlg.set_close_response("ok")
+        return dlg
+    dlg = Adw.MessageDialog(modal=True, heading="当前内核不在 mainline / stable 上", body=body)
+    dlg.add_response("ok", "我知道了")
+    dlg.set_default_response("ok")
+    dlg.set_close_response("ok")
+    dlg.connect("response", lambda d, _r: d.close())
+    return dlg
+
+
 # ---------------------------------------------------------------------------
 # 仪表盘
 # ---------------------------------------------------------------------------
@@ -336,6 +353,10 @@ def build_dashboard(report, win, navigate):
     for c in report.habits.checks:
         if c.status in ("bad", "warn", "suspect"):
             _add_todo(esc(c.title), esc(c.summary), c.status, "habits")
+    _ks = getattr(report, "kernel_support", None)
+    if _ks is not None and _ks.known and not _ks.supported:
+        _add_todo(f"当前内核 {_ks.release} 不在 mainline / stable 版本线上",
+                  "旧分支未包含上游全部安全修复，下面的加固建议不保证生效", "warn", "kernel")
     if report.hsi.ok and report.hsi.undetermined:
         _add_todo(f"有 {len(report.hsi.undetermined)} 项 HSI 检测因为缺少数据而无法判定",
                   "这不是未通过，也无法通过改配置解决；展开 HSI 页面可查看具体项目", "unknown", "hsi")
@@ -496,6 +517,28 @@ def _collect_button(win, label="采集系统数据"):
     return btn
 
 
+def _kernel_support_block(report):
+    """内核版本线：不在 mainline / stable 上时给出醒目提示。
+
+    背景：LTS 分支没有包含上游全部安全修复，部分加固参数在旧内核上不存在，
+    或写入命令行后被内核静默忽略（/proc/cmdline 里却仍有——本程序会误判为已设置）。
+    """
+    st = getattr(report, "kernel_support", None)
+    if st is None or not st.known:
+        return []
+
+    g = group("内核版本线", kernelver.SUPPORT_CHECK_NOTE)
+    g.add(text_row("当前内核", st.release))
+    g.add(text_row("mainline", st.mainline or "未知", selectable=True))
+    g.add(text_row("stable", st.stable or "未知", selectable=True))
+    row = Adw.ActionRow(title=esc(st.tier_text))
+    row.add_prefix(status_icon("good" if st.supported else "warn"))
+    g.add(row)
+    if st.supported:
+        return [g]
+    return [banner(kernelver.banner_text(st), "warning", icon="dialog-warning-symbolic"), g]
+
+
 def build_kernel(report, win):
     c, s = report.cmdline, report.sysctl
     cpu_zh = {"intel": "Intel", "amd": "AMD"}.get(c.cpu, "未知/非 x86")
@@ -620,7 +663,7 @@ def build_kernel(report, win):
     if s.arch == "aarch64":
         g_arm = group("aarch64 ASLR 提示")
         g_arm.add(code_block(data.SYSCTL_AARCH64_NOTE))
-    return page([g_src, g1, g_fix] + sys_groups + [g_sfix, g_arm])
+    return page(_kernel_support_block(report) + [g_src, g1, g_fix] + sys_groups + [g_sfix, g_arm])
 
 
 # ---------------------------------------------------------------------------

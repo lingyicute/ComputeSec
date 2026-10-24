@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
-"""无头 GTK 冒烟测试（手动运行，CI 里会因缺少 GTK 而跳过）。
+"""无头 GTK 冒烟测试（CI 的 smoke 作业在 Xvfb 下运行；缺 PyGObject 或显示服务器时自动跳过）。
 
 目的：ui.py 的五个页面、版本线弹窗这些代码路径平时没有任何测试覆盖，
 GTK 的 API 用法（属性名、枚举、信号）只有真正构建一次才能确认没错。
 
 运行：
-    Xvfb :99 & export DISPLAY=:99
-    /usr/bin/python3 -m pytest tests/test_ui_smoke.py -q
+    xvfb-run -a /usr/bin/python3 -m pytest tests/test_ui_smoke.py -q
+
+数据目录由 conftest.py 统一隔离到临时目录；联网的版本线检查在这里被替换掉，
+测试不会访问 kernel.org。
 """
 
 import os
@@ -127,9 +129,19 @@ def test_hsi_page_without_fwupd(app):
     assert isinstance(ui.build_dashboard(report, win, lambda k: None), Gtk.ScrolledWindow)
 
 
-def test_main_window_constructs(app):
+def test_main_window_constructs(app, monkeypatch):
     """真正创建 MainWindow：能验证菜单、动作与信号连接没有写错。"""
     from computesec import main as app_main
+    calls = []
+
+    def fake_status(**kw):
+        calls.append(kw)
+        return kernelver.KernelSupport(release="7.2.12", mainline="7.3", stable="7.2.12", tier="stable")
+
+    # MainWindow 一创建就会在后台线程里联网核对版本线、并在空闲时跑一遍检测；
+    # 冒烟测试只关心控件能否构建，两者都换成不碰外部环境的替身。
+    monkeypatch.setattr(kernelver, "get_status", fake_status)
+    monkeypatch.setattr(checks, "collect", lambda: _report())
     win = app_main.MainWindow(app)
     win.present()
     assert win.listbox.get_row_at_index(0) is not None

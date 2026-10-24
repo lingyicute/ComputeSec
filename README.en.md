@@ -38,6 +38,11 @@
   * Reads `/proc/cmdline` and `/proc/sys` (the equivalent of `sysctl -a`).
   * Root-only entries (such as `vm.mmap_rnd_bits`) are filled in from the `sudo sysctl -a` output you paste via the data collection wizard; without it they are reported as "cannot read" and are **excluded from scoring**.
   * Compares them against the built-in recommended kargs list and sysctl hardening list for your architecture (amd64 / aarch64).
+* **Version line check**: at startup the app asks kernel.org for the current mainline / stable version. If your kernel belongs to neither (for example any LTS branch), it warns you that LTS branches do not carry all upstream security fixes and improvements, so the recommended sysctls and boot parameters are **not guaranteed** to provide the intended hardening there (some parameters do not exist on older kernels, others are silently ignored by the kernel even when present on the command line). It then suggests switching to a mainline or stable kernel. If the check fails (offline, blocked by a firewall) you are not bothered; you can retry it from the main menu.
+* **Three cases that are excluded from scoring** (they never lower the score, and they do not mean "passed"):
+  * **cannot read**: the file is not readable by your user (e.g. `vm.mmap_rnd_bits` is `0600 root:root`);
+  * **unverified**: readings taken inside the Flatpak sandbox cannot be trusted (without host network sharing, `net.*` belongs to a private network namespace; or the snapshot you provided does not cover the entry), so they are ignored;
+  * **suspected**: an unconfirmed 2.4G wireless receiver is only a reminder (see "Usage Habits").
 * **Quick fixes and guidance**:
   * One-click copy of the missing parameters.
   * Instructions for `grubby` / GRUB / systemd-boot / rpm-ostree.
@@ -55,7 +60,7 @@
   * Suggests using Flatpak more if you have fewer than 5 apps.
   * Recommends Pear's [harden-flatpak](https://github.com/lingyicute/harden-flatpak) project, which denies all Flatpak permissions by default, paired with Flatseal for per-app permission hardening.
 * **Uptime reminder**: when the system `uptime` exceeds one day, it reminds you to update and reboot.
-* **Peripheral security check**: detects 2.4 GHz wireless receivers and warns about potential keystroke sniffing.
+* **Peripheral security check**: detects 2.4 GHz wireless receivers and warns about potential keystroke sniffing. Confirmed receivers deduct points; devices whose vendor/model strongly suggests a 2.4 GHz dongle but whose product string never says so are reported as **"suspected"** — a reminder only, **no points deducted**, together with steps to verify it yourself.
 * **Environment isolation check**: detects NTFS partitions or a Windows installation (unauditable, and liable to contaminate your Linux environment).
 
 ## Option 1: Flatpak (recommended ⭐)
@@ -94,10 +99,18 @@ The tool has to read information from the host, so it requests the permissions b
 | --- | --- |
 | `--system-talk-name=org.freedesktop.fwupd` | Read HSI results over D-Bus |
 | `--system-talk-name=org.freedesktop.hostname1` | Read the **host's** distro name, kernel version and machine model over D-Bus (inside the sandbox `/etc/os-release` describes the runtime, not your system) |
+| `--share=network` | Read the current mainline / stable version from kernel.org to tell whether the running kernel is supported; it also makes the sandbox's `/proc/sys/net` the host's network view |
 | `--filesystem=/var/lib/flatpak:ro`, `~/.local/share/flatpak:ro` | Count installed Flatpak apps |
 | `--filesystem=/run/udev:ro`, `/boot:ro`, `/efi:ro` | Detect NTFS partitions and the Windows boot loader (`/boot:ro` covers both `/boot/efi` and `/boot/EFI` ESP layouts) |
 
 `/proc/cmdline`, `/proc/sys`, `/sys/class/dmi` and `/sys/bus/usb` are readable inside the sandbox by default and need no extra permissions.
+
+> **About the network permission**: `--share=network` is used only to fetch `releases.json` (version
+> numbers) from kernel.org at startup. Nothing about your system is uploaded, and the result is
+> cached for 24 hours. You can revoke it with Flatseal: the version line check is then skipped
+> silently, and because `net.*` inside the sandbox belongs to a private network namespace those
+> readings are no longer trusted — they show up as "unverified" and are excluded from scoring.
+> Everything else keeps working.
 
 > **This tool does not request `--talk-name=org.freedesktop.Flatpak`from version 1.0.3.**
 > That permission allows running arbitrary commands on the host as you via `flatpak-spawn --host`,
@@ -120,7 +133,9 @@ So ComputeSec shows a step-by-step wizard at startup:
 Results are stored only in `~/.local/share/computesec/hostdata.json` together with the current
 `boot_id`, so they **expire automatically on reboot** (sysctl values may have changed) and you are
 not asked again during the same boot. Every step can be skipped; skipped checks are shown as
-"cannot read" and are **excluded from scoring**. You can re-run the wizard any time from the main
+"cannot read" and are **excluded from scoring** (inside the Flatpak sandbox there is also an
+"unverified" state: the reading comes from the sandbox rather than the host, and is likewise
+excluded). You can re-run the wizard any time from the main
 menu ("Re-collect system data", Ctrl+D).
 
 ## Option 2: Clone and run directly
@@ -163,6 +178,7 @@ computesec/
   ├── checks.py         Data collection and comparison (fwupd, cmdline, sysctl, DMI, Flatpak, uptime, USB, NTFS)
   ├── wizard.py         Data collection wizard (run read-only commands step by step + read clipboard)
   ├── hostdata.py       User-assisted host data: parsing, validation, caching (expires by boot_id)
+  ├── kernelver.py      Kernel version line check (kernel.org mainline / stable, cached for 24h)
   ├── hostinfo.py       Host identity (D-Bus org.freedesktop.hostname1)
   └── data.py           Knowledge base: HSI descriptions, kernel parameters, sysctl, vendor reputation
 tests/                  Unit tests (pytest, no GTK/D-Bus needed, run: python -m pytest)

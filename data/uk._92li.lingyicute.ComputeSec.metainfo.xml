@@ -71,6 +71,18 @@
     <color type="primary" scheme_preference="dark">#1a5fb4</color>
   </branding>
   <releases>
+    <release version="1.2.0" date="2026-10-24">
+      <description>
+        <p>Accuracy, transparency and maintenance fixes.</p>
+        <ul>
+          <li>Checks the running kernel against the current mainline / stable version lines and warns when LTS branches are used, because they do not carry all upstream security fixes</li>
+          <li>Network sysctls are no longer read from a Flatpak private network namespace; unverifiable entries are excluded from scoring</li>
+          <li>Unavailable sections now show "not assessable" instead of a misleading 0, and HSI items fwupd cannot determine are no longer counted as failures</li>
+          <li>2.4G wireless receivers that cannot be confirmed are reported as "suspected" without deducting points</li>
+          <li>Host data cache is validated before use and stored with 0600 permissions</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-09-06">
       <description>
         <p>Privacy and accuracy improvements.</p>

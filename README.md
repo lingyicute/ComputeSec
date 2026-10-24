@@ -38,6 +38,11 @@
   * 读取 `/proc/cmdline` 与 `/proc/sys`（等价于 `sysctl -a`）。
   * 对于仅 root 可读的条目（`vm.mmap_rnd_bits` 等），通过「数据采集向导」由您粘贴 `sudo sysctl -a` 的结果补全；未提供时该项显示为「无法读取」并**不计入评分**。
   * 程序会根据您的当前架构，分别与内置 amd64 / aarch64 推荐 kargs 列表及 sysctl 加固列表进行对比。
+* **版本线检查**：启动时会向 kernel.org 取一次当前 mainline / stable 的版本号。若您的内核既不属于 mainline，也不属于 stable（例如各 LTS 分支），程序会提醒：LTS 分支并没有完整包含上游所有的安全修复与安全性改进，本程序给出的 sysctl 与启动参数**不保证**在其上能起到应有的加固效果（有的参数在旧内核上根本不存在，有的写进命令行后会被内核静默忽略），建议切换到 mainline 或 stable 内核。检查失败（离线、被防火墙拦截）时不会打扰您，主菜单里可手动重新检查。
+* **三种"不计入评分"的情形**（都不会把分数拉低，也不代表已通过）：
+  * **无法读取**：文件权限不足（如 `vm.mmap_rnd_bits` 为 `0600 root:root`）；
+  * **未验证**：Flatpak 沙箱内的读数不可信（未共享宿主网络时，`net.*` 属于独立的网络命名空间；或您提供的快照中没有这一项），已忽略；
+  * **疑似**：2.4G 无线接收器无法确认时只作提醒（见「使用习惯」）。
 * **快速修复与指引**：
   * 支持一键复制缺失参数。
   * 提供 `grubby` / GRUB / systemd-boot / rpm-ostree 的配置方法。
@@ -55,7 +60,7 @@
   * 数量不足 5 个时建议多使用 Flatpak。
   * 推荐使用梨的 [harden-flatpak](https://github.com/lingyicute/harden-flatpak) 项目，默认拒绝所有 Flatpak 权限，并辅以 Flatseal 进行权限加固。
 * **运行时间提醒**：检测到系统 `uptime` 超过一天时，提醒进行更新和重启。
-* **外设安全检测**：检测是否存在 2.4G 无线接收器，提示潜在的按键嗅探风险。
+* **外设安全检测**：检测是否存在 2.4G 无线接收器，提示潜在的按键嗅探风险。能确认为 2.4G 接收器的直接扣分；只有厂商/型号高度重合、但型号串里没有任何接收器字样时标为「疑似」，**只提醒、不扣分**，并给出自行确认的步骤。
 * **环境隔离检测**：检测是否存在 NTFS 分区或 Windows 系统安装（提示不可审计、可能污染 Linux 环境）。
 
 ## 方式一：Flatpak（推荐 ⭐）
@@ -92,10 +97,16 @@ flatpak run uk._92li.lingyicute.ComputeSec
 | --- | --- |
 | `--system-talk-name=org.freedesktop.fwupd` | 通过 D-Bus 读取 HSI 结果 |
 | `--system-talk-name=org.freedesktop.hostname1` | 通过 D-Bus 读取**宿主机**的发行版名称、内核版本与机型（沙箱内 `/etc/os-release` 是 runtime 的字段） |
+| `--share=network` | 向 kernel.org 读取当前 mainline / stable 版本号，判断本机内核是否在受支持的版本线上；同时让沙箱内的 `/proc/sys/net` 就是宿主机的网络视图 |
 | `--filesystem=/var/lib/flatpak:ro`、`~/.local/share/flatpak:ro` | 统计已安装的 Flatpak 应用 |
 | `--filesystem=/run/udev:ro`、`/boot:ro`、`/efi:ro` | 检测 NTFS 分区与 Windows 引导器（`/boot:ro` 覆盖 `/boot/efi` 与 `/boot/EFI` 两种 ESP 挂载方式） |
 
 `/proc/cmdline`、`/proc/sys`、`/sys/class/dmi`、`/sys/bus/usb` 在沙箱内默认可读，无需额外权限。
+
+> **关于网络权限**：`--share=network` 只用于启动时向 kernel.org 读取 `releases.json`（版本号），
+> 不上报任何信息，结果缓存 24 小时。您可以用 Flatseal 收回该权限：此时版本线检查会静默跳过，
+> 且由于沙箱内的 `net.*` 属于私有网络命名空间，程序不再采信这些读数——相关条目会显示为
+> 「未验证」且不计入评分，其余检测不受影响。
 
 > **从 v1.0.3 开始，本工具已不再请求 `--talk-name=org.freedesktop.Flatpak`。**
 > 该权限允许通过 `flatpak-spawn --host` 在宿主机上以您的身份执行任意命令，等同于沙箱逃逸，
@@ -114,7 +125,8 @@ flatpak run uk._92li.lingyicute.ComputeSec
 
 采集结果只保存在 `~/.local/share/computesec/hostdata.json`，并记录 `boot_id`：
 **重启后自动失效**（因为 sysctl 可能已改变），同一次开机内不会重复打扰您。
-任何一步都可以跳过，跳过的项目会显示为「无法读取」且不计入评分；
+任何一步都可以跳过，跳过的项目会显示为「无法读取」且不计入评分（Flatpak 沙箱内另有
+「未验证」状态：读数来自沙箱而非宿主机，同样不计入评分）；
 随时可以从主菜单的「重新采集系统数据」（Ctrl+D）重新运行向导。
 
 ## 方式二：克隆直接运行
@@ -155,6 +167,7 @@ computesec/
   ├── checks.py         数据采集与比对（fwupd、cmdline、sysctl、DMI、Flatpak、uptime、USB、NTFS）
   ├── wizard.py         数据采集向导（分步执行只读命令 + 读取剪贴板）
   ├── hostdata.py       用户协助采集的数据：解析、校验、缓存（按 boot_id 失效）
+  ├── kernelver.py      内核版本线检查（kernel.org 的 mainline / stable，缓存 24 小时）
   ├── hostinfo.py       宿主机身份信息（D-Bus org.freedesktop.hostname1）
   └── data.py           知识库：HSI 说明、内核参数、sysctl、厂商信誉
 tests/                  单元测试（pytest，不依赖 GTK/D-Bus，运行：python -m pytest）

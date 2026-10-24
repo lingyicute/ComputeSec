@@ -28,7 +28,6 @@ else:
     sys.exit(1)
 
 from computesec import cli  # noqa: E402
-from computesec.cli import APP_ID, _data_home, _quote_desktop_arg  # noqa: E402,F401  (供测试与旧代码引用)
 
 # 从源码目录安装 .desktop 时，Exec= 写成「当前解释器 + 本文件」。
 _LAUNCHER = [sys.executable, os.path.abspath(__file__)]

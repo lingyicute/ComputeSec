@@ -18,24 +18,24 @@ from computesec import cli
     ("/home/u/%u/run.py", "/home/u/%%u/run.py"),
 ])
 def test_quote_desktop_arg(arg, want):
-    assert launcher._quote_desktop_arg(arg) == want
+    assert cli._quote_desktop_arg(arg) == want
 
 
 def test_quote_desktop_arg_escapes_newline():
-    encoded = launcher._quote_desktop_arg("/home/u/a\nExec=evil")
+    encoded = cli._quote_desktop_arg("/home/u/a\nExec=evil")
     assert "\n" not in encoded
     assert r"\n" in encoded
 
 
 def test_data_home_respects_absolute_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    assert launcher._data_home() == str(tmp_path / "xdg")
+    assert cli._data_home() == str(tmp_path / "xdg")
 
 
 def test_data_home_ignores_relative_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", "relative/dir")
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert launcher._data_home() == str(tmp_path / ".local" / "share")
+    assert cli._data_home() == str(tmp_path / ".local" / "share")
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +47,7 @@ def test_version_does_not_launch_gui(argv, capsys):
     from computesec import data
     assert launcher.main(argv) == 0
     out = capsys.readouterr().out.strip()
-    assert out == f"{launcher.APP_ID} {data.VERSION}"
+    assert out == f"{cli.APP_ID} {data.VERSION}"
 
 
 @pytest.mark.parametrize("argv", [["--help"], ["-h"]])
@@ -113,8 +113,8 @@ def test_install_desktop_then_uninstall(tmp_path, monkeypatch):
     data_home = _prepare(tmp_path, monkeypatch)
     launcher.install_desktop()
 
-    desktop = data_home / "applications" / (launcher.APP_ID + ".desktop")
-    icon = data_home / "icons" / "hicolor" / "scalable" / "apps" / (launcher.APP_ID + ".svg")
+    desktop = data_home / "applications" / (cli.APP_ID + ".desktop")
+    icon = data_home / "icons" / "hicolor" / "scalable" / "apps" / (cli.APP_ID + ".svg")
     assert desktop.exists() and icon.exists()
 
     content = desktop.read_text(encoding="utf-8")
@@ -168,7 +168,7 @@ def test_data_dir_rules_are_shared(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     assert hostdata._data_dir() == str(tmp_path / "xdg" / "computesec")
     assert kernelver._data_dir() == hostdata._data_dir()
-    assert launcher._data_home() == xdg.data_home()
+    assert cli._data_home() == xdg.data_home()
 
 
 def test_data_dir_is_private(monkeypatch, tmp_path):

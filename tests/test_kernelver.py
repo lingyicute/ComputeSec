@@ -392,6 +392,39 @@ def test_banner_text_is_short():
     assert len(text) < len(kv.warning_text(_status("older")))
 
 
+def test_unknown_reason_is_not_always_the_network():
+    """本机 release 解析失败时，不能说成"没能连上 kernel.org"。
+
+    两种"没有结论"的排查方向完全不同：一个在网卡/代理，一个在内核名字上。
+    """
+    unparsable = kv.KernelSupport(release="weird-release", mainline="7.3", stable="7.2.12",
+                                  tier="unknown")
+    assert unparsable.have_upstream and not unparsable.parsed and not unparsable.known
+    assert "weird-release" in kv.fetch_failed_text(unparsable)
+    assert "kernel.org" not in kv.fetch_failed_text(unparsable)
+    assert "无法解析" in kv.recheck_result_text(unparsable)
+
+    offline = kv.KernelSupport(release="6.1.158+", error="network is unreachable")
+    assert not offline.have_upstream and not offline.known
+    assert "kernel.org" in kv.fetch_failed_text(offline)
+    assert "未能连上 kernel.org" in kv.recheck_result_text(offline)
+
+
+def test_known_requires_both_upstream_and_parseable_release():
+    assert kv.KernelSupport("7.2.12", "7.3", "7.2.12", "stable").known
+    assert not kv.KernelSupport("", "7.3", "7.2.12", "unknown").known
+    assert not kv.KernelSupport("7.2.12", "", "", "unknown").known
+
+
+@pytest.mark.parametrize("mainline,stable", [("", "7.2.12"), ("7.3", "")])
+def test_warning_text_never_prints_empty_parentheses(mainline, stable):
+    """只有一侧版本号时不能输出「（当前 ）」这种残句。"""
+    st = kv.KernelSupport(release="6.1.158+", mainline=mainline, stable=stable, tier="older")
+    for text in (kv.warning_text(st), kv.banner_text(st)):
+        assert "（）" not in text and "（当前 ）" not in text
+        assert "未知" in text
+
+
 def test_tier_text_covers_all_tiers():
     for tier in ("mainline", "stable", "older", "unknown"):
         assert kv.TIER_ZH[tier]

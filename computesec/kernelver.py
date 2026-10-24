@@ -139,9 +139,24 @@ class KernelSupport:
         return f"{r[0]}.{r[1]}" if r else ""
 
     @property
+    def have_upstream(self):
+        """是否拿到了 kernel.org 的上游版本号。"""
+        return bool(self.mainline or self.stable)
+
+    @property
+    def parsed(self):
+        """本机 release 串能否解析成 major.minor[.patch]。
+
+        解析不了（例如某些实验分支把 release 写成 ``weird-release``）时，结论同样是
+        「无法判断」，但原因与"没连上 kernel.org"完全不同——两者的排查方向一个在
+        网卡、一个在内核名字上，界面文案必须分得开。
+        """
+        return parse_release(self.release) is not None
+
+    @property
     def known(self):
-        """是否成功拿到了上游版本号（拿不到就不该下任何结论）。"""
-        return bool((self.mainline or self.stable) and self.major_minor)
+        """能否下结论：既要拿到上游版本号，也要能解析本机内核。"""
+        return self.have_upstream and self.parsed
 
     @property
     def supported(self):
@@ -342,10 +357,24 @@ def get_status(release=None, now=None, fetcher=None, cache_path=None, force=Fals
 SUPPORT_CHECK_NOTE = "版本信息来自 kernel.org 的 releases.json，仅用于判断本机内核属于哪条版本线。"
 
 
+def fetch_failed_text(st):
+    """「未能核对」的直接原因。
+
+    以前所有拿不到结论的情形都写成"没能连上 kernel.org"，可是本机 release 解析
+    失败时网络明明是好的，这会把用户引向错误的方向（去查代理、DNS、防火墙）。
+    """
+    if st.have_upstream and st.release and not st.parsed:
+        return f"无法解析本机内核版本串「{st.release}」，因此无法判断它属于哪条版本线。"
+    return ("无法从 kernel.org 取得 mainline / stable 版本号"
+            "（离线、代理拦截，或 Flatpak 的 network 权限已被收回）。")
+
+
 def recheck_result_text(st):
     """手动重新检查结束后的一句话提示（Toast）。"""
-    if not st.known:
+    if not st.have_upstream:
         return "未能连上 kernel.org，内核版本线仍未核对"
+    if not st.parsed:
+        return f"已取得上游版本号，但无法解析本机内核「{st.release}」，版本线仍未核对"
     if st.error:
         return f"未能连上 kernel.org，继续沿用 {st.age_text() or '较早'}取得的版本号"
     return f"已重新核对内核版本线：{st.tier_text}"
@@ -355,7 +384,8 @@ def warning_text(st):
     """启动弹窗的正文：解释为什么旧分支上这些加固建议不可靠。"""
     return (
         f"检测到您正在使用的内核是 {st.release}（{st.major_minor}），"
-        f"既不属于上游 mainline（当前 {st.mainline}），也不属于 stable（当前 {st.stable}）。\n\n"
+        f"既不属于上游 mainline（当前 {st.mainline or '未知'}），"
+        f"也不属于 stable（当前 {st.stable or '未知'}）。\n\n"
         "Linux 的各个 LTS 分支由于种种原因，均未包含上游全部的安全修复与加固改进。"
         "本程序据此给出的 sysctl 与内核启动参数建议，在这些旧分支上不保证能提供应有的加固效果："
         "有些参数在这些内核上根本不存在；有些即使写进启动命令行，也会被内核静默忽略"
@@ -371,7 +401,8 @@ def warning_text(st):
 
 def banner_text(st):
     """内核页顶部横幅（比弹窗短）。"""
-    return (f"当前内核 {st.release} 不在 mainline（{st.mainline}）或 stable（{st.stable}）上。"
+    return (f"当前内核 {st.release} 不在 mainline（{st.mainline or '未知'}）"
+            f"或 stable（{st.stable or '未知'}）上。"
             "旧分支未包含上游全部的安全修复与加固改进，下列 sysctl 与启动参数建议在旧分支上"
             "不保证生效，不可作为加固依据；建议切换到 mainline 或 stable 内核。")
 

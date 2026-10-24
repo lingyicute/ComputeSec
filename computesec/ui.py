@@ -553,9 +553,8 @@ def _kernel_support_block(report, win=None):
     if not st.known:
         g = group("内核版本线", kernelver.SUPPORT_CHECK_NOTE)
         row = Adw.ActionRow(title="未能核对内核版本线",
-                            subtitle="无法从 kernel.org 取得 mainline / stable 版本号"
-                                     "（离线、代理拦截，或 Flatpak 的 network 权限已被收回）。"
-                                     "这不代表内核有问题，只是本次没有结论。")
+                            subtitle=kernelver.fetch_failed_text(st)
+                                     + "这不代表内核有问题，只是本次没有结论。")
         row.add_prefix(status_icon("unknown"))
         if st.error:
             row.set_tooltip_text(st.error)

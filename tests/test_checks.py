@@ -91,7 +91,9 @@ def test_lookup_hsi_info():
     ("slab_debug", "ZF", "FZ", True),
     ("slab_debug", "F", "FZ", False),
     ("slab_debug", "OFZ", "FZ", False),  # O 会关闭部分 cache 的调试
-    ("slab_debug", "fz", "FZ", False),   # 单字母选项大小写敏感
+    ("slab_debug", "fz", "FZ", True),    # 内核 parse_slub_debug_flags() 用 tolower()，大小写等价
+    ("slab_debug", "fZp", "FZ", True),
+    ("slab_debug", "fzo", "FZ", False),  # O 仍是削弱项
     ("mitigations", "auto,nosmt", "auto,nosmt", True),
     ("mitigations", "nosmt,auto", "auto,nosmt", False),  # 内核 strcmp 精确匹配，顺序颠倒会被整体忽略
     ("mitigations", "auto", "auto,nosmt", False),        # 弱于期望（未禁用 SMT）
@@ -111,6 +113,9 @@ def test_lookup_hsi_info():
     ("module.sig_enforce", None, "1", True),
     ("bdev_allow_write_mounted", None, "0", False),   # 裸 token 等价于真，与期望值 0 相悖
     ("init_on_alloc", None, "1", False),
+    ("ia32_emulation", "off", "0", True),     # arch/x86/entry/common.c: kstrtobool
+    ("ia32_emulation", "n", "0", True),
+    ("page_alloc.shuffle", None, "1", True),  # module_param_cb + param_set_bool
 ])
 def test_cmdline_value_ok(key, actual, expected, want):
     assert checks._cmdline_value_ok(key, actual, expected) is want

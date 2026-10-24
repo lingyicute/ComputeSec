@@ -300,14 +300,18 @@ _CMDLINE_KEY_ALIASES = {
 # 注意：x86 的 pti= 只接受 on/off/auto（strcmp 精确匹配），并不使用 kstrtobool，不能放在这里。
 _CMDLINE_BOOL_KEYS = {
     "init_on_alloc", "init_on_free", "iommu.passthrough", "iommu.strict",
-    "page_alloc.shuffle", "kpti", "random.trust_bootloader", "random.trust_cpu",
+    "kpti", "random.trust_bootloader", "random.trust_cpu",
     "randomize_kstack_offset", "irqchip.gicv3_pseudo_nmi",
+    "ia32_emulation",   # arch/x86/entry/common.c: kstrtobool，off/0/n 等价
 }
 # module_param(bool) 型布尔参数：同样经 kstrtobool 解析 on/1/y 与 off/0/n，
 # 但 cmdline 上省略 = 的裸 token 会被内核置为真（param_set_bool(val=NULL) → 1）。
 _CMDLINE_MODULE_BOOL_KEYS = {
     "kvm_amd.sev", "kvm_amd.sev_es", "kvm_amd.sev_snp", "kvm.mitigate_smt_rsb",
     "module.sig_enforce", "bdev_allow_write_mounted",
+    # mm/shuffle.c 用 module_param_cb 注册、底层走 param_set_bool（FL_NOARG），
+    # 因此裸 token 同样等价于真，归类应与上面的 module_param(bool) 一致。
+    "page_alloc.shuffle",
 }
 _BOOL_TRUE = {"1", "on", "y", "yes", "true"}
 _BOOL_FALSE = {"0", "off", "n", "no", "false"}
@@ -345,11 +349,12 @@ def _cmdline_value_ok(key, actual, expected):
         opts = {x.strip() for x in actual.split(",") if x.strip()}
         return expected in opts
     if nk == "slab_debug":
-        # 仅纯增量调试选项可按超集处理。O 会对部分 cache 关闭调试，不能视为增强；
-        # 内核对这些单字母选项按大小写敏感解析，因此不能把实际值转成大写。
-        if "," not in actual:
-            flags = set(actual)
-            if flags and flags.issubset(set("FZPUTA")) and set(expected).issubset(flags):
+        # 仅纯增量调试选项可按超集处理。O 会对部分 cache 关闭调试，不能视为增强。
+        # mm/slub.c 的 parse_slub_debug_flags() 用 switch (tolower(*str)) 解析单字母
+        # 选项，因此 FZ / fz / fZp 完全等价，必须先统一大小写再比较。
+        flags = set(actual.upper())
+        if "," not in actual and ";" not in actual:
+            if flags and flags.issubset(set("FZPUTA")) and set(expected.upper()).issubset(flags):
                 return True
         return False
     if nk == "mitigations":

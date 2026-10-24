@@ -67,11 +67,23 @@ lint.ignore = []
 
 [tool.coverage.run]
 source = ["computesec", "run"]
+# ui.py / main.py / wizard.py 需要 GTK 与显示服务器才能实例化，lint 作业里根本
+# 无法导入（由 smoke 作业在 Xvfb 上跑 tests/test_ui_smoke.py 覆盖）。把它们排除，
+# 门槛才真正约束"该测的代码"。
+#
+# 不排除的后果不是数字难看，而是门槛失效：这三个模块共约 1140 条语句，占总量
+# 的 44%，全部按 0% 计入时总覆盖率只有 44%（被覆盖的语句约 1149 条），往 UI 里
+# 再加约 300 行不带测试的代码就会击穿 40%，而报错看起来像"测试变少了"，真实
+# 原因却是"新写的 UI 代码按 0% 计"。排除后总量为 1441 条、覆盖率 80%。
+omit = [
+    "computesec/ui.py",
+    "computesec/main.py",
+    "computesec/wizard.py",
+]
 
 [tool.coverage.report]
 # 覆盖率门槛：只作为"不许后退"的栏杆，不追求好看的数字。
-# ui.py / main.py / wizard.py 需要 GTK 与显示服务器才能实例化，CI 里无法导入，
-# 因此合计覆盖率天然偏低（这三个模块按 0% 计入）。改动这些模块时请人工冒烟一次。
-fail_under = 40
+# 当前实测 80%（checks.py 70% 是主要拖累项），留 2 个点余量。
+fail_under = 78
 skip_covered = false
 show_missing = true

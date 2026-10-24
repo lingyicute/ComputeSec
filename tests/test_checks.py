@@ -210,6 +210,61 @@ def test_check_usb_detects_receivers(monkeypatch):
     assert len(res.details) == 2
 
 
+def _usb_dev(vid, pid, mfr, product, cls="00"):
+    return {"vid": vid, "pid": pid, "manufacturer": mfr, "product": product, "cls": cls}
+
+
+def test_check_usb_suspect_does_not_deduct_points(monkeypatch):
+    """芯片厂商的通用型号串只能判“疑似”：提醒风险，但不扣分。"""
+    devs = [
+        # Areson/Compx 既做 2.4G 方案，也做有线外设，型号串里没有接收器字样
+        _usb_dev("25a7", "fa67", "Compx", "USB Optical Mouse"),
+        # 未知厂商、只写了 Wireless：可能是蓝牙
+        _usb_dev("1234", "5678", "Acme", "Wireless Mouse"),
+    ]
+    monkeypatch.setattr(checks, "_usb_devices", lambda: (devs, "sysfs"))
+    res = checks.check_usb()
+    assert res.status == "suspect"
+    assert "自行确认" in res.summary
+    assert len(res.details) == 3          # 2 个设备 + 1 行“不计入评分”说明
+    assert checks.HabitsReport(checks=[res]).score == 100
+
+
+def test_check_usb_confirmed_wins_over_suspect(monkeypatch):
+    devs = [
+        _usb_dev("046d", "c52b", "Logitech", "USB Receiver"),
+        _usb_dev("25a7", "fa67", "Compx", "USB Optical Mouse"),
+    ]
+    monkeypatch.setattr(checks, "_usb_devices", lambda: (devs, "sysfs"))
+    res = checks.check_usb()
+    assert res.status == "bad"
+    assert "另有 1 个疑似设备" in res.summary
+    assert any(d.startswith("疑似：") for d in res.details)
+    assert res.advice == checks.USB_ADVICE_CONFIRMED
+
+
+def test_check_usb_ignores_wired_and_video_devices(monkeypatch):
+    """有线鼠标、非 2.4G 厂商与 bDeviceClass=0x0e 的视频设备都不应产生任何提示。"""
+    devs = [
+        _usb_dev("046d", "c31c", "Logitech", "USB Keyboard"),
+        _usb_dev("04d9", "a0cd", "Holtek", "USB Keyboard"),
+        _usb_dev("1234", "0001", "Acme", "USB Optical Mouse"),
+        _usb_dev("0c45", "6366", "Sonix", "USB Device", cls="0e"),
+    ]
+    monkeypatch.setattr(checks, "_usb_devices", lambda: (devs, "sysfs"))
+    res = checks.check_usb()
+    assert res.status == "good"
+
+
+def test_habits_suspect_counts_as_full_score():
+    def check(status):
+        return checks.HabitCheck("k", "t", status, "s", [], "")
+    assert checks.HabitsReport(checks=[check("suspect")]).score == 100
+    assert checks.HabitsReport(checks=[check("suspect"), check("good")]).score == 100
+    # 但也只是不扣分，不能把明确的 bad 洗成高分
+    assert checks.HabitsReport(checks=[check("suspect"), check("bad")]).score == 50
+
+
 def test_cmdline_bare_token_does_not_clobber_value(monkeypatch):
     """裸 token 不得抹掉同名带值 token 的信息，但布尔参数仍按最后一次出现判定。"""
     monkeypatch.setattr(checks, "arch", lambda: "x86_64")

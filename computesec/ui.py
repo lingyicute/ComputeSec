@@ -78,8 +78,13 @@ STATUS_STYLE = {
     "bad": ("dialog-error-symbolic", "error"), "error": ("dialog-error-symbolic", "error"),
     "na": ("dialog-question-symbolic", "dim-label"), "unknown": ("dialog-question-symbolic", "dim-label"),
     "unverified": ("dialog-question-symbolic", "dim-label"),
+    # “疑似”只提醒、不扣分：图标与 warn 一致，但 HabitsReport 给满分
+    "suspect": ("dialog-warning-symbolic", "warning"),
     "locked": ("channel-secure-symbolic", "dim-label"),
 }
+# 使用习惯卡片里的单字符状态标记：疑似（suspect）只提醒、不扣分，用「?」区分于明确的 ✓ / ✗
+_HABIT_MARK = {"good": "✓", "suspect": "?", "warn": "✗", "bad": "✗", "unknown": "?"}
+_HABIT_ADVICE_TITLE = {"good": "继续保持", "suspect": "请自行确认"}
 RATING_STYLE = {"good": ("security-high-symbolic", "success"), "neutral": ("security-medium-symbolic", "accent"),
                 "caution": ("security-medium-symbolic", "warning"), "bad": ("security-low-symbolic", "error")}
 
@@ -245,7 +250,7 @@ def build_dashboard(report, win, navigate):
         ("hsi", "HSI 固件安全", hsi_score, f"{hsi_txt}｜{len(report.hsi.failed)} 项未通过，其中 {len(report.hsi.fixable)} 项可修复" if report.hsi.ok else report.hsi.error, "security-high-symbolic"),
         ("kernel", "内核加固", report.kernel_score, f"内核参数缺失 {len(report.cmdline.missing)} 项｜sysctl 缺失 {len(report.sysctl.missing)} 项", "emblem-system-symbolic"),
         ("hardware", "硬件品牌", report.hardware.score, f"{report.hardware.vendor['name']} · {data.RATING_ZH[report.hardware.vendor['rating']]}", "computer-symbolic"),
-        ("habits", "使用习惯", report.habits.score, "、".join(f"{c.title.split(' ')[0]}{'✓' if c.status == 'good' else '✗' if c.status in ('bad', 'warn') else '?'}" for c in report.habits.checks), "avatar-default-symbolic"),
+        ("habits", "使用习惯", report.habits.score, "、".join(f"{c.title.split(' ')[0]}{_HABIT_MARK.get(c.status, '?')}" for c in report.habits.checks), "avatar-default-symbolic"),
     ]
     for key, title, score, desc, icon_name in cards:
         btn = Gtk.Button()
@@ -304,7 +309,7 @@ def build_dashboard(report, win, navigate):
                   "查看历史安全事件与建议",
                   "bad" if report.hardware.vendor["rating"] == "bad" else "warn", "hardware")
     for c in report.habits.checks:
-        if c.status in ("bad", "warn"):
+        if c.status in ("bad", "warn", "suspect"):
             _add_todo(esc(c.title), esc(c.summary), c.status, "habits")
     if n == 0:
         todo.add(praise_row("没有待办事项，您的安全配置非常出色，请继续保持！"))
@@ -621,7 +626,15 @@ def build_hardware(report, win):
 def build_habits(report, win):
     hb = report.habits
     all_good = all(c.status == "good" for c in hb.checks)
-    top = banner("四项使用习惯检查全部通过！您的安全习惯非常好，请继续保持。", "success") if all_good else None
+    suspects = [c for c in hb.checks if c.status == "suspect"]
+    problems = [c for c in hb.checks if c.status in ("bad", "warn")]
+    if all_good:
+        top = banner("四项使用习惯检查全部通过！您的安全习惯非常好，请继续保持。", "success")
+    elif suspects and not problems:
+        top = banner(f"未发现明确风险，但有 {len(suspects)} 项需要您自行确认（不影响评分）。",
+                     "warning", icon="dialog-warning-symbolic")
+    else:
+        top = None
     groups = []
     for c in hb.checks:
         g = group(c.title)
@@ -630,11 +643,13 @@ def build_habits(report, win):
         head.add_prefix(status_icon(c.status))
         if c.status == "good":
             head.add_css_class("success")
+        elif c.status == "suspect":
+            head.add_css_class("warning")
         g.add(head)
         for d in c.details:
             g.add(text_row("详情", d))
         if c.advice:
-            g.add(text_row("建议" if c.status != "good" else "继续保持", c.advice))
+            g.add(text_row(_HABIT_ADVICE_TITLE.get(c.status, "建议"), c.advice))
         if c.key == "flatpak":
             r = text_row("harden-flatpak", data.HARDEN_FLATPAK_URL, selectable=True)
             disp = Gdk.Display.get_default()

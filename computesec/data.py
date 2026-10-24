@@ -522,6 +522,13 @@ USB_24G_VENDORS = {
 }
 # 专用于 2.4G 无线键鼠接收器方案的芯片厂商（即使产品名仅写 Mouse / Keyboard / Composite Device 也高度可疑）
 USB_24G_DEDICATED_VENDORS = {"25a7", "3938", "062a", "1d57", "248a", "3151", "3554"}
-USB_24G_KEYWORDS = ["2.4g", "2.4 g", "wireless receiver", "receiver", "dongle", "unifying", "lightspeed", "nano receiver", "usb receiver", "wireless mouse", "wireless keyboard", "wireless gaming", "wireless device"]
+# 强关键词：型号串里明确写了"接收器 / 2.4G / dongle"，命中即可确认为 2.4G 无线接收设备。
+USB_24G_CONFIRM_KEYWORDS = ["2.4g", "2.4 g", "wireless receiver", "receiver", "dongle",
+                            "unifying", "lightspeed", "nano receiver", "usb receiver"]
+# 弱关键词：只能说明是"无线"设备——也可能是蓝牙，或只是同类芯片做的有线产品，
+# 仅能作为"疑似"提示，交由用户自行确认。
+USB_24G_SUSPECT_KEYWORDS = ["wireless mouse", "wireless keyboard", "wireless gaming", "wireless device"]
+# 兼容旧引用：两者并集（不再用于"确认"判定）
+USB_24G_KEYWORDS = USB_24G_CONFIRM_KEYWORDS + USB_24G_SUSPECT_KEYWORDS
 LOGITECH_UNIFYING_PIDS = {"c52b", "c532", "c534", "c52f", "c531", "c537", "c539", "c53a", "c53f", "c541", "c545"}
 LOGITECH_BOLT_PIDS = {"c548"}

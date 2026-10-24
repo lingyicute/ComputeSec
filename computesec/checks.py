@@ -646,7 +646,7 @@ def get_hardware() -> HardwareReport:
 class HabitCheck:
     key: str
     title: str
-    status: str         # good / warn / bad / unknown
+    status: str         # good / suspect / warn / bad / unknown
     summary: str
     details: list       # [str]
     advice: str
@@ -658,7 +658,8 @@ class HabitsReport:
 
     @property
     def score(self):
-        pts = {"good": 100, "unknown": 60, "warn": 40, "bad": 0}
+        # suspect（疑似）只作提醒、不影响得分，与“不扣分”的展示口径保持一致。
+        pts = {"good": 100, "suspect": 100, "unknown": 60, "warn": 40, "bad": 0}
         return int(sum(pts.get(c.status, 0) for c in self.checks) / len(self.checks)) if self.checks else 0
 
 
@@ -749,38 +750,81 @@ def _usb_devices():
     return devs, ("lsusb" if devs else "")
 
 
+# 2.4G 键鼠相关的建议文案。"已确认"沿用原有措辞，"疑似"只提醒风险、不扣分。
+USB_ADVICE_CONFIRMED = ("绝大多数 2.4G 无线键鼠不加密或使用弱加密，攻击者在数十米外即可嗅探您输入的每一个字符"
+                        "（包括密码、密钥口令），甚至注入按键（MouseJack）。"
+                        "高安全性计算请改用有线键鼠；支持蓝牙 LE Secure Connections 的输入设备是次优选择。")
+USB_ADVICE_SUSPECT = ("这些设备的厂商或型号与常见的 2.4G 无线键鼠方案高度重合，但型号串里没有「2.4G」「接收器」"
+                      "之类的字样，ComputeSec 无法确认它是 2.4G 接收器，还是同厂的有线 / 蓝牙设备，"
+                      "因此这一项不计入评分。\n\n"
+                      "请自行确认：① 拔下该设备后重新检测，看这一条是否消失；② 检查它是否配有一个同样插在 USB 口上的"
+                      "小接收器（有则是 2.4G 无线接收器方案）；③ 在终端执行 lsusb -v 查看其接口描述符与供电需求。"
+                      "若确认是 2.4G 无线键鼠，请按「已确认」情形处理：改用有线，或支持蓝牙 LE Secure Connections 的设备。")
+
+
+def _usb_receiver_kind(d):
+    """判定单个 USB 设备与 2.4G 无线键鼠的关系。
+
+    返回 (级别, 说明)：级别为 "bad" 表示可以确认是 2.4G 无线接收设备；
+    "suspect" 表示只是疑似（厂商/型号与 2.4G 方案重合，但型号串里没有任何
+    接收器字样，可能是同厂的有线或蓝牙产品），需要用户自行确认；
+    返回 None 表示与该检测无关。
+    """
+    text = f"{d['manufacturer']} {d['product']}".lower()
+    vid, pid = d["vid"], d["pid"]
+    if vid == "046d":       # Logitech：PID 表与型号串都足够明确
+        if pid in data.LOGITECH_BOLT_PIDS:
+            return "bad", "Logitech Bolt 接收器（使用 BLE 安全连接加密，风险较低，但仍建议有线）"
+        if pid in data.LOGITECH_UNIFYING_PIDS or any(k in text for k in data.USB_24G_CONFIRM_KEYWORDS):
+            return "bad", "Logitech Unifying/Lightspeed 接收器（曾曝出 MouseJack、KeyJack 等密钥提取与按键注入漏洞）"
+        return None
+    if any(k in text for k in data.USB_24G_CONFIRM_KEYWORDS):
+        vendor = data.USB_24G_VENDORS.get(vid)
+        return "bad", f"{vendor} 2.4G 接收器" if vendor else "2.4G 无线接收器"
+    # 以下拿不到"接收器"的正面证据，只能给疑似：芯片厂商既做 2.4G 方案，也做有线外设，
+    # 仅凭 VID 或 "Mouse/Keyboard" 之类的型号串无法区分。
+    if vid in getattr(data, "USB_24G_DEDICATED_VENDORS", set()) and any(
+            k in text for k in data.USB_24G_SUSPECT_KEYWORDS + ["mouse", "keyboard", "composite"]):
+        vendor = data.USB_24G_VENDORS.get(vid, "未知厂商")
+        return "suspect", f"{vendor} 键鼠类设备（该厂商专做 2.4G 方案，但型号未标明接收器）"
+    if any(k in text for k in data.USB_24G_SUSPECT_KEYWORDS):
+        vendor = data.USB_24G_VENDORS.get(vid)
+        return "suspect", (f"{vendor} 无线设备（可能是蓝牙，无法确认是 2.4G）" if vendor
+                           else "疑似 2.4G 无线设备")
+    return None
+
+
 def check_usb() -> HabitCheck:
     devs, source = _usb_devices()
     if not source:
         return HabitCheck("usb", "2.4G 无线接收器", "unknown", "无法枚举 USB 设备", [], "")
-    suspects = []
-    dedicated_vids = getattr(data, "USB_24G_DEDICATED_VENDORS", set())
+    confirmed, suspects = [], []
     for d in devs:
         if d["vid"] in ("1d6b",):   # Linux Foundation root hubs
             continue
         text = f"{d['manufacturer']} {d['product']}".lower()
-        # 排除笔记本内置摄像头等视频设备（Sonix 0c45 / Sunplus 1bcf 常用于内置 UVC 摄像头）
-        if any(w in text for w in ("webcam", "camera", "uvc", "integrated_webcam")):
+        # 排除笔记本内置摄像头等视频设备（Sonix 0c45 / Sunplus 1bcf 常用于内置 UVC 摄像头）；
+        # bDeviceClass=0x0e 是 USB Video，即使型号串没写 camera 也不该参与键鼠判定。
+        if d.get("cls") == "0e" or any(w in text for w in ("webcam", "camera", "uvc", "integrated_webcam")):
             continue
-        hit = None
-        if d["vid"] == "046d":
-            if d["pid"] in data.LOGITECH_BOLT_PIDS:
-                hit = "Logitech Bolt 接收器（使用 BLE 安全连接加密，风险较低，但仍建议有线）"
-            elif d["pid"] in data.LOGITECH_UNIFYING_PIDS or any(k in text for k in ("unifying", "lightspeed", "receiver", "nano")):
-                hit = "Logitech Unifying/Lightspeed 接收器（曾曝出 MouseJack、KeyJack 等密钥提取与按键注入漏洞）"
-        elif d["vid"] in dedicated_vids and any(k in text for k in data.USB_24G_KEYWORDS + ["mouse", "keyboard", "composite"]):
-            hit = f"{data.USB_24G_VENDORS[d['vid']]} 2.4G 接收器"
-        elif d["vid"] in data.USB_24G_VENDORS and any(k in text for k in data.USB_24G_KEYWORDS):
-            hit = f"{data.USB_24G_VENDORS[d['vid']]} 2.4G 接收器"
-        elif any(k in text for k in data.USB_24G_KEYWORDS):
-            hit = "疑似 2.4G 无线接收器"
-        if hit:
-            desc_name = " ".join(x for x in (d["manufacturer"], d["product"]) if x)
-            suspects.append(f"{d['vid']}:{d['pid']}" + (f" {desc_name}" if desc_name else "") + f" — {hit}")
+        kind = _usb_receiver_kind(d)
+        if not kind:
+            continue
+        level, desc = kind
+        desc_name = " ".join(x for x in (d["manufacturer"], d["product"]) if x)
+        line = f"{d['vid']}:{d['pid']}" + (f" {desc_name}" if desc_name else "") + f" — {desc}"
+        (confirmed if level == "bad" else suspects).append(line)
+    if confirmed:
+        details = confirmed + [f"疑似：{s}" for s in suspects]
+        summary = f"发现 {len(confirmed)} 个 2.4G 无线接收器"
+        if suspects:
+            summary += f"，另有 {len(suspects)} 个疑似设备"
+        return HabitCheck("usb", "2.4G 无线接收器", "bad", summary, details, USB_ADVICE_CONFIRMED)
     if suspects:
-        return HabitCheck("usb", "2.4G 无线接收器", "bad", f"发现 {len(suspects)} 个 2.4G 无线接收器", suspects,
-                          "绝大多数 2.4G 无线键鼠不加密或使用弱加密，攻击者在数十米外即可嗅探您输入的每一个字符（包括密码、密钥口令），甚至注入按键（MouseJack）。"
-                          "高安全性计算请改用有线键鼠；支持蓝牙 LE Secure Connections 的输入设备是次优选择。")
+        return HabitCheck("usb", "2.4G 无线接收器", "suspect",
+                          f"发现 {len(suspects)} 个疑似 2.4G 无线设备，需要您自行确认",
+                          suspects + [f"（以上仅为疑似，不计入评分；共枚举 {len(devs)} 个 USB 设备，来源：{source}。）"],
+                          USB_ADVICE_SUSPECT)
     return HabitCheck("usb", "2.4G 无线接收器", "good", "未发现 2.4G 无线接收器", [f"共枚举 {len(devs)} 个 USB 设备（{source}）。"],
                       "很好！有线或支持蓝牙 LE Secure Connections 的输入设备能有效防止按键被嗅探，请继续保持。")
 

@@ -385,6 +385,13 @@ def get_cmdline_report() -> CmdlineReport:
         else:
             nk = _norm_key(tok)
             nk = _CMDLINE_KEY_ALIASES.get(nk, nk)
+            # 裸 token（无 =）不该抹掉同名的带值 token：内核会把两者分别交给各自的
+            # 处理函数——slab_debug 的裸 token 仍会启用 DEBUG_DEFAULT_FLAGS，efi 的
+            # 裸 token 被 parse_efi_cmdline(NULL) 拒绝并保持原值——丢掉带值形式只会
+            # 让已知信息消失。module_param(bool) 例外：内核按最后一次出现生效，
+            # 裸 token 等价于真，必须照旧覆盖才能与内核结论一致。
+            if present.get(nk) is not None and nk not in _CMDLINE_MODULE_BOOL_KEYS:
+                continue
             present[nk] = None
     ar, cv = arch(), cpu_vendor()
     items = []

@@ -210,6 +210,25 @@ def test_check_usb_detects_receivers(monkeypatch):
     assert len(res.details) == 2
 
 
+def test_cmdline_bare_token_does_not_clobber_value(monkeypatch):
+    """裸 token 不得抹掉同名带值 token 的信息，但布尔参数仍按最后一次出现判定。"""
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, default="": (
+        "slab_debug=FZ slab_debug efi=disable_early_pci_dma efi "
+        "init_on_alloc=1 init_on_alloc module.sig_enforce=0 module.sig_enforce"
+        if p == "/proc/cmdline" else default
+    ))
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert by_key["slab_debug"].status == "ok"
+    assert by_key["slab_debug"].actual == "FZ"
+    assert by_key["efi"].status == "ok"
+    assert by_key["init_on_alloc"].status == "ok"
+    # module_param(bool)：裸 token 等价于真，覆盖前面的 =0 才与内核一致
+    assert by_key["module.sig_enforce"].status == "ok"
+    assert by_key["module.sig_enforce"].actual is None
+
+
 def test_cmdline_aliases_and_unknown_cpu(monkeypatch):
     monkeypatch.setattr(checks, "arch", lambda: "x86_64")
     monkeypatch.setattr(checks, "cpu_vendor", lambda: None)

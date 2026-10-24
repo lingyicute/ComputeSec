@@ -35,6 +35,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._refresh_pending = False  # 检测进行中时又收到了刷新请求，结束后补跑一次
         self._wizard = None         # 当前打开的数据采集向导窗口（防止重复弹出）
         self._kernel_warned = False  # 内核版本线提示本次运行是否已经弹过
+        self._pending_kernel_warning = None  # 等采集向导关闭后再弹的版本线提示
 
         self.toast_overlay = Adw.ToastOverlay()
         self.set_content(self.toast_overlay)
@@ -137,12 +138,25 @@ class MainWindow(Adw.ApplicationWindow):
                     self.build_page(key)
         if st.known and not st.supported and not self._kernel_warned:
             self._kernel_warned = True
-            dlg = ui.kernel_warning_dialog(st)
-            if hasattr(Adw, "AlertDialog"):
-                dlg.present(self)
-            else:
-                dlg.set_transient_for(self)
-                dlg.present()
+            self._pending_kernel_warning = st
+            self.show_kernel_warning()
+        return False
+
+    def show_kernel_warning(self):
+        """弹出（或推迟）版本线提示。
+
+        首次运行时采集向导是模态窗口，若此时再叠一个同样以主窗口为父的模态对话框，
+        两者会互相抢焦点、甚至被向导挡在后面。因此向导开着就先记下来，等它关闭后再弹。
+        """
+        if self._pending_kernel_warning is None or self._wizard is not None:
+            return False
+        st, self._pending_kernel_warning = self._pending_kernel_warning, None
+        dlg = ui.kernel_warning_dialog(st)
+        if hasattr(Adw, "AlertDialog"):
+            dlg.present(self)
+        else:
+            dlg.set_transient_for(self)
+            dlg.present()
         return False
 
     # ---- 交互 ----
@@ -164,6 +178,7 @@ class MainWindow(Adw.ApplicationWindow):
     def on_wizard_finish(self, _hd):
         self._wizard = None
         self.refresh()
+        self.show_kernel_warning()
 
     def on_row_selected(self, _lb, row):
         if row is None:

@@ -44,11 +44,9 @@ def _quote_desktop_arg(arg):
 
 
 def _data_home():
-    """XDG_DATA_HOME；按 XDG 规范，相对路径视为无效并忽略。"""
-    base = os.environ.get("XDG_DATA_HOME") or ""
-    if not os.path.isabs(base):
-        base = os.path.join(os.path.expanduser("~"), ".local", "share")
-    return base
+    """XDG_DATA_HOME；规则与 computesec.xdg 共用一份。"""
+    from computesec import xdg
+    return xdg.data_home()
 
 
 def install_desktop(uninstall=False):
@@ -80,13 +78,44 @@ def install_desktop(uninstall=False):
     print("完成。")
 
 
-if __name__ == "__main__":
-    if "--install" in sys.argv:
+HELP = """\
+用法: run.py [选项]
+
+  （无选项）      启动图形界面
+  --install       安装 .desktop 与图标到 ~/.local/share，使任务栏/启动器正确显示图标
+  --uninstall     移除上面安装的文件
+  --version, -V   打印版本号
+  -h, --help      显示本帮助
+"""
+
+
+def _print_help(stream=None):
+    # 不把 sys.stdout 写成默认参数：那样会在导入时就把流固定下来，
+    # 之后（测试、重定向）替换 sys.stdout 就不再生效。
+    (stream or sys.stdout).write(HELP)
+
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # 参数在导入 gi 之前处理：没有图形环境的机器上，--version / --help 也该能用。
+    if "--version" in argv or "-V" in argv:
+        from computesec import data
+        print(f"{APP_ID} {data.VERSION}")
+        return 0
+    if "-h" in argv or "--help" in argv:
+        _print_help()
+        return 0
+    if "--install" in argv:
         install_desktop()
-        sys.exit(0)
-    if "--uninstall" in sys.argv:
+        return 0
+    if "--uninstall" in argv:
         install_desktop(uninstall=True)
-        sys.exit(0)
+        return 0
+    unknown = [a for a in argv if a.startswith("-")]
+    if unknown:
+        sys.stderr.write(f"未知选项：{' '.join(unknown)}\n\n")
+        _print_help(sys.stderr)
+        return 2
     try:
         import gi  # noqa: F401
         gi.require_version("Gtk", "4.0")
@@ -98,6 +127,10 @@ if __name__ == "__main__":
             "  Fedora:        sudo dnf install python3-gobject gtk4 libadwaita fwupd\n"
             "  Debian/Ubuntu: sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 fwupd\n"
             "  Arch:          sudo pacman -S python-gobject gtk4 libadwaita fwupd\n")
-        sys.exit(1)
-    from computesec.main import main
+        return 1
+    from computesec.main import main as gui_main
+    return gui_main()
+
+
+if __name__ == "__main__":
     sys.exit(main())

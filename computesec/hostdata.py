@@ -23,6 +23,8 @@ import os
 import re
 import time
 
+from . import xdg
+
 CACHE_NAME = "hostdata.json"
 SYSCTL_KEY_RE = re.compile(r"^[A-Za-z0-9_.\-/:]+$")
 # 判断粘贴的内容确实是 sysctl 输出的“锚点”键
@@ -31,19 +33,8 @@ SYSCTL_ANCHORS = ("kernel.ostype", "kernel.osrelease", "kernel.version", "kernel
 
 
 def _data_dir():
-    # 与 run.py 的安装目录保持同一规则：XDG_DATA_HOME 为相对路径时按规范忽略。
-    base = os.environ.get("XDG_DATA_HOME") or ""
-    if not os.path.isabs(base):
-        base = os.path.join(os.path.expanduser("~"), ".local", "share")
-    d = os.path.join(base, "computesec")
-    try:
-        os.makedirs(d, mode=0o700, exist_ok=True)
-        # 旧版本以 0755 创建，这里顺手收紧（仅本程序的私有目录）。
-        if (os.stat(d).st_mode & 0o077) != 0:
-            os.chmod(d, 0o700)
-    except OSError:
-        pass
-    return d
+    """本程序的数据目录（规则见 computesec.xdg）。"""
+    return xdg.data_dir()
 
 
 def boot_id():

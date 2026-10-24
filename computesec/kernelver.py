@@ -29,6 +29,8 @@ import re
 import time
 import urllib.request
 
+from . import xdg
+
 RELEASES_URL = "https://www.kernel.org/releases.json"
 CACHE_NAME = "kernelver.json"
 CACHE_TTL = 24 * 3600
@@ -49,16 +51,8 @@ TIER_ZH = {
 
 
 def _data_dir():
-    """与 hostdata 保持同一规则：XDG_DATA_HOME 为相对路径时按规范忽略。"""
-    base = os.environ.get("XDG_DATA_HOME") or ""
-    if not os.path.isabs(base):
-        base = os.path.join(os.path.expanduser("~"), ".local", "share")
-    d = os.path.join(base, "computesec")
-    try:
-        os.makedirs(d, mode=0o700, exist_ok=True)
-    except OSError:
-        pass
-    return d
+    """本程序的数据目录（规则见 computesec.xdg）。"""
+    return xdg.data_dir()
 
 
 def parse_release(text):

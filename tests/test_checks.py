@@ -47,6 +47,8 @@ def test_sysctl_value_ok(actual, expected, cmp, want):
 def test_flags_to_set():
     assert checks._flags_to_set(1) == {"success"}
     assert checks._flags_to_set(3) == {"success", "obsoleted"}
+    # fwupd 1.9.6 起的 can-fix / can-undo 两个标记位
+    assert checks._flags_to_set((1 << 14) | (1 << 15)) == {"can-fix", "can-undo"}
     assert checks._flags_to_set(["a", "b"]) == {"a", "b"}
     assert checks._flags_to_set("a|b") == {"a", "b"}
     assert checks._flags_to_set(0) == set()
@@ -83,6 +85,27 @@ def test_lookup_hsi_info():
     assert checks._lookup_hsi_info("com.example.Tpm.Version20")["name"] == "TPM 2.0"
     # 完全未知返回空字典（调用方用 .get 做降级）
     assert checks._lookup_hsi_info("org.example.Nope") == {}
+
+
+def test_lookup_hsi_info_upstream_ids():
+    """键名必须与 fwupd 的真实 Appstream ID 完全一致（libfwupd/fwupd-security-attr-private.h）。
+
+    拼写偏差（例如把 BootserviceVars 多写成一段 Uefi.Bootservice.Vars）会让
+    直接命中失败，而尾段 "Vars" 又在通用词表里、模糊匹配也救不回来——该检测项
+    将丢失全部人工整理的含义/风险/修复说明。"""
+    assert checks._lookup_hsi_info("org.fwupd.hsi.Uefi.BootserviceVars")["name"] == "UEFI 引导服务变量"
+    assert checks._lookup_hsi_info("org.fwupd.hsi.Bios.CapsuleUpdates")["name"] == "固件胶囊更新"
+    assert checks._lookup_hsi_info("org.fwupd.hsi.Bios.RollbackProtection")["name"] == "固件回滚保护"
+    # Amd / Bios 两条目共享末段 RollbackProtection：两段尾缀各自唯一可命中，
+    # 单段模糊无法区分归属，必须放弃（返回 {}）而不是随手挑一条。
+    assert checks._lookup_hsi_info("com.example.Amd.RollbackProtection")["name"] == "AMD 固件回滚保护"
+    assert checks._lookup_hsi_info("com.example.RollbackProtection") == {}
+    # fwupd main 把 db 证书检测拆成 MsUefi / Production 两项；发布版仍报的 Uefi.Db 照常命中
+    assert checks._lookup_hsi_info("org.fwupd.hsi.Uefi.Db")["name"] == "UEFI 签名数据库 (db)"
+    assert checks._lookup_hsi_info("org.fwupd.hsi.Uefi.Db.MsUefi")["name"] == "UEFI 签名数据库 (db)"
+    assert checks._lookup_hsi_info("org.fwupd.hsi.Uefi.Db.Production")["name"] == "UEFI 签名数据库只含生产证书"
+    # fwupd 1.9.4 起上报的 Downfall 微码检测
+    assert checks._lookup_hsi_info("org.fwupd.hsi.IntelGds")["name"] == "Intel GDS (Downfall) 微码缓解"
 
 
 def test_hsi_tail_is_generic():

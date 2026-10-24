@@ -30,6 +30,7 @@ HSI_FLAG_BITS = {
     1 << 0: "success", 1 << 1: "obsoleted", 1 << 2: "missing-data",
     1 << 8: "runtime-updates", 1 << 9: "runtime-attestation", 1 << 10: "runtime-issue",
     1 << 11: "action-contact-oem", 1 << 12: "action-config-fw", 1 << 13: "action-config-os",
+    1 << 14: "can-fix", 1 << 15: "can-undo",
 }
 
 HSI_ATTRS = {
@@ -43,7 +44,7 @@ HSI_ATTRS = {
         meaning="平台密钥不应是固件厂商（如 AMI）遗留的公开测试密钥。",
         risk="若 PK 是已泄露的测试密钥（2024 年曝光的 PKfail 事件），攻击者可签名任意引导程序，安全启动形同虚设。",
         fix="联系 OEM 获取修复固件（通过 fwupdmgr update 或厂商官网）。进阶用户可以使用 sbctl 注册自己的 PK/KEK/db 密钥。"),
-    "org.fwupd.hsi.Uefi.Bootservice.Vars": dict(
+    "org.fwupd.hsi.Uefi.BootserviceVars": dict(
         name="UEFI 引导服务变量", kind="oem",
         meaning="仅供引导阶段使用的 UEFI 变量不应在运行时暴露给操作系统。",
         risk="运行时可读写这些变量可能泄漏敏感数据或让恶意软件篡改引导配置。",
@@ -53,6 +54,11 @@ HSI_ATTRS = {
         meaning="db 中不应包含已被撤销或已知有漏洞的证书（如 Microsoft UEFI CA 2011）。",
         risk="已知存在漏洞的旧版引导程序仍能被加载，BlackLotus 之类的 Bootkit 可绕过安全启动。",
         fix="运行 `fwupdmgr refresh --force && fwupdmgr update` 应用 dbx 撤销列表更新；新证书（Microsoft UEFI CA 2023）通常由 OEM 固件更新提供。"),
+    "org.fwupd.hsi.Uefi.Db.Production": dict(
+        name="UEFI 签名数据库只含生产证书", kind="bios",
+        meaning="db 中只应有正式发布的生产签名证书，不得残留开发调试用的测试签名证书（例如签名工具自带的默认测试证书）。",
+        risk="测试证书的私钥往往随开发工具或样例公开流传，任何人都能用它签名出可以通过安全启动校验的引导组件，安全启动形同虚设。",
+        fix="进入固件设置 (BIOS/UEFI) 的安全启动密钥管理界面删除该测试证书，或恢复出厂默认密钥；若出厂密钥本身就带测试证书，需联系 OEM 获取修复固件。进阶用户也可以使用 sbctl 注册自己的 PK/KEK/db。"),
     "org.fwupd.hsi.Uefi.MemoryProtection": dict(
         name="UEFI 内存保护", kind="oem",
         meaning="固件应启用 NX、栈保护等内存防护特性。",
@@ -206,12 +212,17 @@ HSI_ATTRS = {
         meaning="CPU 应仍在厂商的支持周期内，可获得微码更新。",
         risk="新发现的侧信道漏洞（Spectre 家族等）将不再获得微码修补。",
         fix="无法软件修复，考虑更换较新的硬件。"),
-    "org.fwupd.hsi.BiosCapsuleUpdates": dict(
+    "org.fwupd.hsi.IntelGds": dict(
+        name="Intel GDS (Downfall) 微码缓解", kind="os",
+        meaning="CPU 微码应提供 Gather Data Sampling（CVE-2022-40982，Downfall）漏洞的缓解。",
+        risk="缺少缓解时，本地恶意程序可借助向量 gather 指令窃取其他进程处理过的敏感数据。",
+        fix="安装或更新 CPU 微码包并重启（Debian/Ubuntu：intel-microcode；Fedora/RHEL 系：microcode_ctl；Arch：intel-ucode），OEM 固件更新通常也会携带新微码；应急时可在内核启动参数加入 gather_data_sampling=force。"),
+    "org.fwupd.hsi.Bios.CapsuleUpdates": dict(
         name="固件胶囊更新", kind="bios",
         meaning="固件应支持 UEFI Capsule 更新，这样才能通过 fwupd/LVFS 及时修补。",
         risk="固件漏洞难以被及时修复。",
         fix="在固件设置中启用 UEFI Capsule Update / Windows UEFI Firmware Update；或联系 OEM。"),
-    "org.fwupd.hsi.BiosRollbackProtection": dict(
+    "org.fwupd.hsi.Bios.RollbackProtection": dict(
         name="固件回滚保护", kind="bios",
         meaning="应禁止把固件降级到旧版本。", risk="攻击者可刷回有漏洞的旧固件。",
         fix="在固件设置中启用 Anti-Rollback。"),
@@ -254,7 +265,10 @@ HSI_ALIASES = {
     "org.fwupd.hsi.Cet.Enabled": "org.fwupd.hsi.IntelCet.Enabled",
     "org.fwupd.hsi.Cet.Active": "org.fwupd.hsi.IntelCet.Active",
     "org.fwupd.hsi.Smap": "org.fwupd.hsi.IntelSmap",
-    "org.fwupd.hsi.Bios.RollbackProtection": "org.fwupd.hsi.BiosRollbackProtection",
+    # fwupd main（51d4f4f54a，尚未进入任何发布版；2.1.8 / 2.1.9 仍只报 Uefi.Db）
+    # 把 db 证书检测拆成 MsUefi / Production 两项：前者检查的正是原有 Uefi.Db
+    # 条目描述的微软证书问题，直接沿用；后者单独立了一条。Uefi.Db 条目必须保留。
+    "org.fwupd.hsi.Uefi.Db.MsUefi": "org.fwupd.hsi.Uefi.Db",
 }
 HSI_KIND_ZH = {"os": "在操作系统中修复", "bios": "在固件设置 (BIOS/UEFI) 中修复", "oem": "需要厂商 (OEM) 固件更新"}
 

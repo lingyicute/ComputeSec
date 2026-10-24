@@ -206,6 +206,9 @@ def _result_to_str(v):
 # 尾段过于通用的属性名，单靠最后一段模糊匹配会跨类别误中（例如把任意 *.Enabled 误判为 IntelBootguard.Enabled）
 _HSI_GENERIC_TAILS = {
     "Enabled", "Active", "Verified", "Version", "Policy", "Otp", "Acm", "Updates", "Plugins", "Vars", "Pk", "Db",
+    # Amd.RollbackProtection 与 Bios.RollbackProtection 是 fwupd 的两个不同检测项，
+    # 单凭末段无法区分归属；真实 ID 直接命中，跨厂商的两段尾缀也各自唯一。
+    "RollbackProtection",
 }
 
 

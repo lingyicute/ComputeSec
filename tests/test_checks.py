@@ -350,6 +350,53 @@ def test_sysctl_user_snapshot_does_not_hide_new_native_entries(monkeypatch):
     assert item.actual == current
 
 
+def test_sysctl_flatpak_snapshot_gap_is_unverified(monkeypatch):
+    """Flatpak 内快照没有覆盖的条目不能被沙箱 /proc/sys 顶替（M2）。"""
+    ok_key, gap_key = "net.ipv4.tcp_syncookies", "kernel.sysrq"
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {ok_key: "1"}}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [
+        ("t", [dict(key=ok_key, value="1", desc="d"), dict(key=gap_key, value="0", desc="d")]),
+    ])
+    # 沙箱里读到的是 kernel.sysrq=1（未加固）。修复前它会被当成宿主机读数判为 missing。
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _k: ({ok_key: "1", gap_key: "1"}, False))
+
+    rep = checks.get_sysctl_report()
+    by_key = {i.key: i for i in rep.all_items}
+    assert by_key[ok_key].status == "ok"
+    assert by_key[ok_key].source == "用户提供"
+    assert by_key[gap_key].status == "unverified"
+    assert by_key[gap_key].actual == {}
+    assert by_key[gap_key].source == "快照缺失"
+    assert by_key[gap_key].actual_text == "（您提供的快照中没有这一项）"
+    assert [i.key for i in rep.unverified] == [gap_key]
+    assert rep.unknown == [] and rep.missing == []
+    assert rep.score == 100        # unverified 不参与评分
+
+
+def test_sysctl_native_still_merges_snapshot(monkeypatch):
+    """原生环境维持原有行为：快照只覆盖同名键，新出现的接口仍用 /proc 读数（不回归）。"""
+    key = "net.ipv4.conf.*.accept_redirects"
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {
+        "net.ipv4.conf.all.accept_redirects": "0",
+        "net.ipv4.conf.default.accept_redirects": "0",
+    }}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [("t", [dict(key=key, value="0", desc="d")])])
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _k: ({
+        "net.ipv4.conf.all.accept_redirects": "1",
+        "net.ipv4.conf.default.accept_redirects": "1",
+        "net.ipv4.conf.eth0.accept_redirects": "1",
+    }, False))
+
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.status == "missing"
+    assert item.actual["net.ipv4.conf.eth0.accept_redirects"] == "1"
+    assert item.actual["net.ipv4.conf.all.accept_redirects"] == "0"
+
+
 def test_habits_report_score():
     def check(status):
         return checks.HabitCheck("k", "t", status, "s", [], "")

@@ -425,13 +425,15 @@ class SysctlItem:
     expected: str
     cmp: str
     actual: dict            # 具体键 -> 值 (None 表示不存在)
-    status: str             # ok / missing / na / unknown
+    status: str             # ok / missing / na / unknown / unverified
     desc: str
     note: str = ""
-    source: str = ""        # proc / 用户提供
+    source: str = ""        # proc / 用户提供 / 快照缺失
 
     @property
     def actual_text(self):
+        if self.status == "unverified":
+            return "（您提供的快照中没有这一项）"
         if self.status == "unknown":
             return "（无法读取，需要 root 权限）"
         if not self.actual:
@@ -464,8 +466,13 @@ class SysctlReport:
         return [i for i in self.all_items if i.status == "unknown"]
 
     @property
+    def unverified(self):
+        """Flatpak 内用户快照没有覆盖、又不该拿沙箱读数顶替的条目。"""
+        return [i for i in self.all_items if i.status == "unverified"]
+
+    @property
     def score(self):
-        ap = [i for i in self.all_items if i.status not in ("na", "unknown")]
+        ap = [i for i in self.all_items if i.status not in ("na", "unknown", "unverified")]
         return int(100 * sum(1 for i in ap if i.status == "ok") / len(ap)) if ap else 0
 
 
@@ -537,6 +544,7 @@ def get_sysctl_report() -> SysctlReport:
             cmp = e.get("cmp", "eq")
             actual, unreadable = _sysctl_from_proc(key)
             source = "proc"
+            snapshot_gap = False
             # 用户提供的 sysctl -a（以 root 执行、在宿主机上执行）优先级更高：
             # 它既能补上权限不足的条目，也能补上被 Flatpak 沙箱屏蔽或隔离的条目。
             if user_values:
@@ -554,7 +562,15 @@ def get_sysctl_report() -> SysctlReport:
                             source = "用户提供"
                         actual = merged
                     unreadable = False
-            if unreadable and not actual:
+                elif IN_FLATPAK:
+                    # 沙箱内的 /proc/sys 不是宿主机视图（可能被屏蔽、改写或加了命名空间），
+                    # 快照没有覆盖这一项时不能拿沙箱读数顶替，否则会把沙箱的值当成
+                    # 宿主机结果报出来。明确标成 unverified 并排除出评分。
+                    actual, source, snapshot_gap = {}, "快照缺失", True
+                    unreadable = False
+            if snapshot_gap:
+                status = "unverified"
+            elif unreadable and not actual:
                 status = "unknown"
             elif not actual or all(v is None for v in actual.values()):
                 status = "na"

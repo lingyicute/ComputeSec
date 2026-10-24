@@ -77,6 +77,7 @@ STATUS_STYLE = {
     "warn": ("dialog-warning-symbolic", "warning"),
     "bad": ("dialog-error-symbolic", "error"), "error": ("dialog-error-symbolic", "error"),
     "na": ("dialog-question-symbolic", "dim-label"), "unknown": ("dialog-question-symbolic", "dim-label"),
+    "unverified": ("dialog-question-symbolic", "dim-label"),
     "locked": ("channel-secure-symbolic", "dim-label"),
 }
 RATING_STYLE = {"good": ("security-high-symbolic", "success"), "neutral": ("security-medium-symbolic", "accent"),
@@ -452,11 +453,15 @@ def build_kernel(report, win):
 
     # ---- 数据来源 / 采集提示 ----
     g_src = None
-    if s.user_supplied or s.unknown or report.in_flatpak:
+    if s.user_supplied or s.unknown or s.unverified or report.in_flatpak:
         n = len(s.unknown)
+        m = len(s.unverified)
         if s.user_supplied:
             desc = (f"已使用您提供的 sysctl 输出（{report.hostdata.age_text if report.hostdata else ''}采集）。"
                     + (f"仍有 {n} 项无法判定，可能是您执行命令时没有加 sudo。" if n else ""))
+            if m:
+                desc += (f"另有 {m} 项不在您提供的输出中（可能被 2>/dev/null 过滤，或该内核没有这一项）；"
+                         "沙箱内的读数不可信，已忽略，未计入评分。")
             title = "数据来源：您提供的 sysctl -a"
         else:
             desc = (f"当前有 {n} 项 sysctl 因为文件仅 root 可读而无法判定（例如 vm.mmap_rnd_bits），未计入评分。"
@@ -507,9 +512,9 @@ def build_kernel(report, win):
 
     # ---- sysctl ----
     sys_groups = []
-    order = {"missing": 0, "unknown": 1, "ok": 2, "na": 3}
+    order = {"missing": 0, "unknown": 1, "unverified": 1, "ok": 2, "na": 3}
     for title, items in s.groups:
-        g = group(f"sysctl · {title}", f"{sum(1 for i in items if i.status == 'ok')} / {sum(1 for i in items if i.status not in ('na', 'unknown'))} 项已设置")
+        g = group(f"sysctl · {title}", f"{sum(1 for i in items if i.status == 'ok')} / {sum(1 for i in items if i.status not in ('na', 'unknown', 'unverified'))} 项已设置")
         for it in sorted(items, key=lambda i: (order.get(i.status, 9), i.key)):
             row = Adw.ActionRow(title=f"<tt>{esc(it.key)}</tt> = <tt>{esc(it.expected)}</tt>" + (" <small>(≥)</small>" if it.cmp == "ge" else ""))
             sub = it.desc + (f"  ⚠ {it.note}" if it.note else "")
@@ -519,6 +524,9 @@ def build_kernel(report, win):
                 sub += "  （内核不支持或模块未加载）"
             elif it.status == "unknown":
                 sub += "  （该文件仅 root 可读，未参与评分；请用主菜单的「重新采集系统数据」提供 sudo sysctl -a 的结果）"
+            elif it.status == "unverified":
+                sub += ("  （您提供的 sysctl -a 快照中没有这一项；沙箱内的读数不是宿主机视图，"
+                        "已忽略且未参与评分）")
             row.set_subtitle(esc(sub))
             row.add_prefix(status_icon("locked" if it.status == "unknown" else it.status))
             if it.source == "用户提供":

@@ -537,12 +537,20 @@ USB_24G_GENERIC_KEYWORDS = ["receiver", "dongle"]
 # 同样走 HID 协议，却与无线输入毫无关系。
 USB_24G_INPUT_KEYWORDS = ["mouse", "keyboard", "keypad", "trackball", "touchpad", "presenter"]
 # 明确不是键鼠接收器的无线 / 接收类设备：命中即排除，不进入 2.4G 判定（按单词边界匹配）。
+#
+# 其中的乐器 / 遥控 / 条码枪 / 打印机几项是补上的：它们的型号串同样会写
+# "USB Receiver"、"Wireless Receiver"（例如 "Wireless Guitar USB Receiver"），
+# 命中强关键词就会被判成「已确认」并把这一项扣到 0 分——而它们根本不传键盘输入，
+# 不存在"键入内容被嗅探"的风险。注意不要把 presenter（翻页器）列进来：它本身就是
+# 一带按键的输入设备，属于本检测的范围。
 USB_NON_INPUT_RADIO_RE = (r"bluetooth|bluecore|\bbt\b|infrared|\bc?ir\b|\bdvb|\bd?tv\b|tuner|\bisdb"
                           r"|\batsc|\bdab\b|\ba/v\b|\bgps\b|gnss|802\.11|\bwlan\b|wi-?fi|wireless lan"
                           r"|wireless network|ethernet|headset|headphone|\baudio\b|speaker|sound"
                           r"|microphone|\bmic\b|\bsdr\b|sniffer|licen[cs]e|unikey|\bhasp\b|sentinel"
                           r"|matrixlock|smart ?card|security key|irda|\bkvm\b|\bfm\b|satellite|hdmi|hdbaset"
-                          r"|video|\bvga\b|telephone|weather|heart rate|\b11[abgn]/")
+                          r"|video|\bvga\b|telephone|weather|heart rate|\b11[abgn]/"
+                          r"|guitar|\bdrum|nunchuk|\bmidi\b|karaoke|turntable|theremin"
+                          r"|remote control|\bremote\b|barcode|\bpos\b|printer|scanner|projector")
 # 无线手柄 / 方向盘的接收器：同样是 2.4G，但不传键盘输入，不存在键入内容被嗅探的问题。
 # 只在型号里没有键鼠字样时才排除（"Cordless Keyboard for Wii" 仍然是键盘）。
 USB_GAME_CONTROLLER_RE = r"game ?pad|joystick|\bwheel|xbox|playstation|\bps[2-5]\b|\bwii\b|controller"

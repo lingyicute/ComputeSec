@@ -299,6 +299,16 @@ def _usb_dev(vid, pid, mfr, product, cls="00"):
     # 只有泛化词：无法确认，按「疑似」处理（不扣分）
     (("1a81", "1701", "Holtek", "Wireless dongle", ""), "suspect"),
     (("256f", "c652", "3Dconnexion", "Universal Receiver", ""), "suspect"),
+    # 型号里带 Receiver、但属于乐器 / 遥控 / 条码枪 / 打印机：不传键盘输入，直接排除。
+    # 漏掉这几项时，强关键词 "usb receiver" 会把它们判成「已确认」并扣到 0 分。
+    (("0b0e", "0001", "Line6", "Wireless Guitar USB Receiver", ""), None),
+    (("0582", "0123", "Roland", "Wireless MIDI Receiver", ""), None),
+    (("1234", "0002", "Acme", "USB Receiver for Wireless Drum Kit", ""), None),
+    (("0bda", "0003", "Realtek", "Remote Control USB Receiver", ""), None),
+    (("05e0", "1200", "Symbol", "Wireless Barcode Scanner USB Receiver", ""), None),
+    (("03f0", "0004", "HP", "Wireless Printer USB Receiver", ""), None),
+    # 翻页器 / 遥控笔属于带按键的输入设备，仍在检测范围内（不能被上面的排除带走）
+    (("046d", "c534", "Logitech, Inc.", "Wireless Presenter USB Receiver", ""), "bad"),
 ])
 def test_usb_receiver_kind_keywords(dev, want):
     vid, pid, mfr, product, cls = dev

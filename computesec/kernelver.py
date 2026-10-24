@@ -3,9 +3,9 @@
 
 为什么需要
 ----------
-Linux 的各个 LTS 分支由于种种原因，并没有完整地包含上游所有的安全修复与安全性
-改进。ComputeSec 推荐的内核启动参数与 sysctl，同样不保证在这些旧分支上能起到
-应有的加固效果：其中一部分参数在旧内核上根本不存在，还有一部分即使写进启动
+Linux 的各个 LTS 分支由于种种原因，均未包含上游全部的安全修复与加固改进。
+ComputeSec 推荐的内核启动参数与 sysctl，在这些旧分支上不保证能提供应有的
+加固效果：其中一部分参数在旧内核上根本不存在，还有一部分即使写进启动
 命令行，也会被内核静默忽略——`init/main.c` 只会打印一句
 "Unknown kernel command line parameters …, will be passed to user space"。
 更糟的是，参数既然出现在 `/proc/cmdline` 里，本程序就会把它判为"已设置"，从而
@@ -252,24 +252,24 @@ def warning_text(st):
     return (
         f"检测到您正在使用的内核是 {st.release}（{st.major_minor}），"
         f"既不属于上游 mainline（当前 {st.mainline}），也不属于 stable（当前 {st.stable}）。\n\n"
-        "Linux 的各个 LTS 分支由于种种原因，并没有完整地包含上游所有的安全修复与安全性改进。"
-        "本程序给出的 sysctl 与内核启动参数建议，同样不保证在这些旧分支上能提供应有的加固效果："
+        "Linux 的各个 LTS 分支由于种种原因，均未包含上游全部的安全修复与加固改进。"
+        "本程序据此给出的 sysctl 与内核启动参数建议，在这些旧分支上不保证能提供应有的加固效果："
         "有些参数在这些内核上根本不存在；有些即使写进启动命令行，也会被内核静默忽略"
         "（只在 dmesg 里留下一句“Unknown kernel command line parameters”），"
         "而本程序却会因为参数出现在 /proc/cmdline 里而误判为已加固。\n\n"
-        "因此不建议您继续在这条版本线上把本程序的结论当作安全加固的依据。"
-        "如果条件允许，建议切换到 mainline 或 stable 内核：Fedora、Arch、openSUSE Tumbleweed "
+        "因此不建议您继续使用这条版本线上的内核：本程序在这些内核上给出的结论，不可作为安全加固的依据。"
+        "如果条件允许，建议切换到 mainline 或 stable 内核：Fedora、openSUSE Tumbleweed "
         "等快速更新的发行版默认就跟踪 stable；Debian、Ubuntu LTS 等可以安装发行版提供的新内核"
         "（backports、HWE 或 mainline 内核包）。\n\n"
-        "本次检测仍会照常进行，但「内核加固」页面的结论请只作参考。"
+        "本次检测仍会照常进行，但「内核加固」页面的结论不可作为加固依据。"
     )
 
 
 def banner_text(st):
     """内核页顶部横幅（比弹窗短）。"""
     return (f"当前内核 {st.release} 不在 mainline（{st.mainline}）或 stable（{st.stable}）上。"
-            "旧分支没有包含上游全部的安全修复与改进，下列 sysctl 与启动参数建议不保证生效，"
-            "请勿把它们当作加固依据；建议切换到 mainline 或 stable 内核。")
+            "旧分支未包含上游全部的安全修复与加固改进，下列 sysctl 与启动参数建议在旧分支上"
+            "不保证生效，不可作为加固依据；建议切换到 mainline 或 stable 内核。")
 
 
 # 进程内共享的最近一次检查结果（checks.collect() 会读取它）

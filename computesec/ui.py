@@ -356,7 +356,7 @@ def build_dashboard(report, win, navigate):
     _ks = getattr(report, "kernel_support", None)
     if _ks is not None and _ks.known and not _ks.supported:
         _add_todo(f"当前内核 {_ks.release} 不在 mainline / stable 版本线上",
-                  "旧分支未包含上游全部安全修复，下面的加固建议不保证生效", "warn", "kernel")
+                  "旧分支未包含上游全部安全修复与加固改进，下面的加固建议不保证生效", "warn", "kernel")
     if report.hsi.ok and report.hsi.undetermined:
         _add_todo(f"有 {len(report.hsi.undetermined)} 项 HSI 检测因为缺少数据而无法判定",
                   "这不是未通过，也无法通过改配置解决；展开 HSI 页面可查看具体项目", "unknown", "hsi")
@@ -520,7 +520,7 @@ def _collect_button(win, label="采集系统数据"):
 def _kernel_support_block(report):
     """内核版本线：不在 mainline / stable 上时给出醒目提示。
 
-    背景：LTS 分支没有包含上游全部安全修复，部分加固参数在旧内核上不存在，
+    背景：LTS 分支未包含上游全部安全修复与加固改进，部分加固参数在旧内核上不存在，
     或写入命令行后被内核静默忽略（/proc/cmdline 里却仍有——本程序会误判为已设置）。
     """
     st = getattr(report, "kernel_support", None)

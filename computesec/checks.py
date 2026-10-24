@@ -166,7 +166,16 @@ class HsiReport:
 
     @property
     def score(self):
-        """0-100 的通过率；无法评估时返回 None（而不是误导性的 0）。"""
+        """0-100 的通过率；无法评估时返回 None（而不是误导性的 0）。
+
+        取整口径：分项评分一律用 int() **截断**，不用四舍五入。用户在界面上能
+        看到「x / y 项通过」，分项分必须能被手算复现：2/3 就是 66，四舍五入成 67
+        会让"通过项数 ÷ 可评估项数"对不上，看起来像算错了。
+
+        综合分（Report.overall）不同：它是几个分数的平均，没有"项数"可数，因此
+        那边用四舍五入（见 Report._mean）。两处口径不同是有意的——改这里之前请先
+        确认界面上的"x / y"是否也需要跟着改。
+        """
         if not self.ok:
             return None
         act = self.scored
@@ -345,7 +354,11 @@ class CmdlineReport:
 
     @property
     def score(self):
-        """0-100 的通过率；没有可评估项（如非 x86/arm 架构）时返回 None。"""
+        """0-100 的通过率；没有可评估项（如非 x86/arm 架构）时返回 None。
+
+        与 HsiReport.score 相同，这里用 int() 截断（不是四舍五入），
+        以便与界面上「x / y 项」的手算结果一致；理由详见 HsiReport.score。
+        """
         ap = self.applicable
         return int(100 * sum(1 for i in ap if i.status == "ok") / len(ap)) if ap else None
 
@@ -593,7 +606,10 @@ class SysctlReport:
 
     @property
     def score(self):
-        """0-100 的通过率；没有可评估项时返回 None。"""
+        """0-100 的通过率；没有可评估项时返回 None。
+
+        同样用 int() 截断，理由详见 HsiReport.score。
+        """
         ap = self.scored
         return int(100 * sum(1 for i in ap if i.status == "ok") / len(ap)) if ap else None
 

@@ -66,6 +66,26 @@ def test_unknown_argument_is_rejected(argv, capsys):
     assert argv[0] in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("argv", [["--version", "--install"], ["--install", "--help"]])
+def test_conflicting_actions_are_rejected(argv, capsys):
+    """同时给出两个动作时直接报错：任何"先命中哪个做哪个"的规则都是猜。"""
+    assert launcher.main(argv) == 2
+    assert "不能同时使用" in capsys.readouterr().err
+
+
+def test_unknown_argument_is_not_carried_by_a_valid_one(capsys):
+    """打错的参数不能被旁边的正确参数"带过"（--install --instal）。"""
+    assert launcher.main(["--install", "--instal"]) == 2
+    assert "--instal" in capsys.readouterr().err
+
+
+def test_same_action_twice_is_harmless(capsys):
+    """重复给同一个参数不算冲突（用户手滑按了两下），也不该报错。"""
+    from computesec import data
+    assert launcher.main(["--version", "-V"]) == 0
+    assert capsys.readouterr().out.strip() == f"{data.APP_ID} {data.VERSION}"
+
+
 def test_pip_entry_point_shares_the_same_cli(capsys):
     """pip 装出的 computesec 命令与 run.py 走同一套参数处理。"""
     from computesec import data

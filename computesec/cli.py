@@ -121,26 +121,60 @@ def _missing_deps_message(err):
     return msg
 
 
+# 认识的参数。启动 GUI 时不带任何参数。
+_OPTIONS = {
+    "--version": "version", "-V": "version",
+    "--help": "help", "-h": "help",
+    "--install": "install",
+    "--uninstall": "uninstall",
+}
+
+
+def _parse(argv):
+    """把参数列表解析成 (动作, 未知参数列表)。
+
+    逐个识别，而不是用 ``"--install" in argv`` 这样的成员判断：那种写法下
+    ``computesec --version --install`` 会静默只做先命中的那一件，
+    ``computesec --install --instal``（打错一个字母）也会被正确参数"带过"。
+    """
+    actions, unknown = [], []
+    for arg in argv:
+        action = _OPTIONS.get(arg)
+        if action is None:
+            unknown.append(arg)
+        elif action not in actions:
+            actions.append(action)
+    return actions, unknown
+
+
 def main(argv=None, prog=None, launcher=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     prog = prog or os.path.basename(sys.argv[0] or "") or "computesec"
     # 参数在导入 gi 之前处理：没有图形环境的机器上，--version / --help 也该能用。
-    if "--version" in argv or "-V" in argv:
-        print(f"{APP_ID} {data.VERSION}")
-        return 0
-    if "-h" in argv or "--help" in argv:
-        _print_help(prog)
-        return 0
-    if "--install" in argv:
-        install_desktop(launcher=launcher)
-        return 0
-    if "--uninstall" in argv:
-        install_desktop(uninstall=True)
-        return 0
-    if argv:
-        sys.stderr.write(f"未知参数：{' '.join(argv)}\n\n")
+    actions, unknown = _parse(argv)
+    if unknown:
+        sys.stderr.write(f"未知参数：{' '.join(unknown)}\n\n")
         _print_help(prog, sys.stderr)
         return 2
+    if len(actions) > 1:
+        # --install 与 --version 同时给出时，任何"先命中哪个做哪个"的规则都是
+        # 用户没写清楚的意图，直接报错比猜要诚实。
+        sys.stderr.write(f"参数不能同时使用：{' '.join(a for a in argv if a in _OPTIONS)}\n\n")
+        _print_help(prog, sys.stderr)
+        return 2
+    action = actions[0] if actions else None
+    if action == "version":
+        print(f"{APP_ID} {data.VERSION}")
+        return 0
+    if action == "help":
+        _print_help(prog)
+        return 0
+    if action == "install":
+        install_desktop(launcher=launcher)
+        return 0
+    if action == "uninstall":
+        install_desktop(uninstall=True)
+        return 0
     try:
         import gi
         gi.require_version("Gtk", "4.0")

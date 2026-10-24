@@ -157,12 +157,12 @@ def _build_identity() -> HostIdentity:
             ident.source += f" + {src}"
 
     if not ident.pretty_name:
-        ident.pretty_name = ident.os_release.get("PRETTY_NAME", "")
+        ident.pretty_name = ident.os_release.get("PRETTY_NAME") or ident.os_release.get("NAME") or ""
 
     # 兜底：runtime 的 /etc/os-release（Flatpak 内不准确，仅在别无选择时使用）
     if not ident.pretty_name and not ident.os_release:
         ident.os_release = parse_os_release(_read("/etc/os-release"))
-        ident.pretty_name = ident.os_release.get("PRETTY_NAME", "")
+        ident.pretty_name = ident.os_release.get("PRETTY_NAME") or ident.os_release.get("NAME") or ""
         ident.source = "/etc/os-release（Flatpak 内为 runtime 字段，可能不准确）" if IN_FLATPAK else "/etc/os-release"
 
     if not ident.kernel_release:

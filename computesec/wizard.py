@@ -116,7 +116,14 @@ class CollectWizard(Adw.Window):
         self.go(-1)
 
     # -- 导航 ------------------------------------------------------------
+    def _set_controls_sensitive(self, sensitive):
+        self.primary_btn.set_sensitive(sensitive)
+        self.back_btn.set_sensitive(sensitive)
+        self.skip_btn.set_sensitive(sensitive)
+
     def go(self, index):
+        self._busy = False
+        self._set_controls_sensitive(True)
         self.index = max(-1, min(index, len(self.steps)))
         total = len(self.steps) + 1
         self.progress.set_fraction((self.index + 1) / total)
@@ -236,28 +243,40 @@ class CollectWizard(Adw.Window):
 
     # -- 剪贴板 ----------------------------------------------------------
     def read_clipboard(self):
-        if self._busy:
+        if self._busy or not (0 <= self.index < len(self.steps)):
             return
         self._busy = True
-        self.primary_btn.set_sensitive(False)
+        self._set_controls_sensitive(False)
         self.set_status("正在读取剪贴板…", "dim-label")
+        step_index = self.index
         clipboard = Gdk.Display.get_default().get_clipboard()
-        clipboard.read_text_async(None, self._on_clipboard_text)
+        clipboard.read_text_async(None, self._on_clipboard_text, step_index)
 
-    def _on_clipboard_text(self, clipboard, result):
-        self._busy = False
-        self.primary_btn.set_sensitive(True)
+    def _on_clipboard_text(self, clipboard, result, step_index=None):
+        if self._finished:
+            return
+        idx = self.index if step_index is None else step_index
+        if idx != self.index or not (0 <= idx < len(self.steps)):
+            self._busy = False
+            self._set_controls_sensitive(True)
+            return
         try:
             text = clipboard.read_text_finish(result)
         except GLib.Error as e:
+            self._busy = False
+            self._set_controls_sensitive(True)
             self.set_status(f"无法读取剪贴板：{e.message}", "error")
             return
         except Exception as e:
+            self._busy = False
+            self._set_controls_sensitive(True)
             self.set_status(f"无法读取剪贴板：{e}", "error")
             return
-        step = self.steps[self.index]
+        step = self.steps[idx]
         parsed, err = step.parser(text or "")
         if err:
+            self._busy = False
+            self._set_controls_sensitive(True)
             self.set_status(err, "error")
             return
         self.hd.set(step.key, parsed)
@@ -271,7 +290,7 @@ class CollectWizard(Adw.Window):
                 extra += ("；有 %d 行提示权限不足——如果您没有加 sudo，"
                           "请用 sudo 重新执行以获取 vm.mmap_rnd_bits 等参数" % denied)
         self.toast(f"已读取「{step.title}」的结果{extra}")
-        GLib.timeout_add(220, lambda: (self.go(self.index + 1), False)[1])
+        GLib.timeout_add(220, lambda: (None if self._finished or self.index != idx else self.go(idx + 1), False)[1])
 
     def set_status(self, text, css):
         self.status.set_label(text)

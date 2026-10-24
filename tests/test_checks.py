@@ -7,7 +7,7 @@
 
 import pytest
 
-from computesec import checks, data
+from computesec import checks, data, hostdata
 
 
 # ---------------------------------------------------------------------------
@@ -67,11 +67,53 @@ def test_lookup_hsi_info():
     # 别名解析
     alias = checks._lookup_hsi_info("org.fwupd.hsi.Cet.Enabled")
     assert alias["name"] == "控制流强制技术 (CET) 支持"
+    # 两段后缀匹配
+    tail2 = checks._lookup_hsi_info("com.example.IntelCet.Enabled")
+    assert tail2["name"] == "控制流强制技术 (CET) 支持"
     # 去掉厂商前缀的模糊匹配
     fuzzy = checks._lookup_hsi_info("com.example.Foo.SecureBoot")
     assert fuzzy["name"] == "UEFI 安全启动"
+    # 通用属性尾段（如 .Enabled / .Version）不应跨类别误匹配到 Intel Boot Guard 或 ME
+    assert checks._lookup_hsi_info("org.fwupd.hsi.Unknown.Enabled") == {}
+    assert checks._lookup_hsi_info("org.fwupd.hsi.Bios.Version") == {}
     # 完全未知返回空字典（调用方用 .get 做降级）
     assert checks._lookup_hsi_info("org.example.Nope") == {}
+
+
+@pytest.mark.parametrize("key,actual,expected,want", [
+    ("slab_nomerge", None, None, True),
+    ("slab_nomerge", checks.MISSING, None, False),
+    ("efi", "disable_early_pci_dma", "disable_early_pci_dma", True),
+    ("efi", "noruntime,disable_early_pci_dma", "disable_early_pci_dma", True),
+    ("efi", "noruntime", "disable_early_pci_dma", False),
+    ("slab_debug", "FZ", "FZ", True),
+    ("slab_debug", "FZP", "FZ", True),
+    ("slab_debug", "ZF", "FZ", True),
+    ("slab_debug", "F", "FZ", False),
+    ("slab_debug", "OFZ", "FZ", False),  # O 会关闭部分 cache 的调试
+    ("slab_debug", "fz", "FZ", False),   # 单字母选项大小写敏感
+    ("mitigations", "auto,nosmt", "auto,nosmt", True),
+    ("mitigations", "nosmt,auto", "auto,nosmt", False),  # 内核 strcmp 精确匹配，顺序颠倒会被整体忽略
+    ("mitigations", "auto", "auto,nosmt", False),        # 弱于期望（未禁用 SMT）
+    ("mitigations", "auto,nosmt", "auto", True),         # 强于期望，aarch64 上合法
+    ("mitigations", "off", "auto", False),
+    ("l1tf", "full,force", "full,force", True),
+    ("l1tf", "force,full", "full,force", False),         # 内核按固定选项列表精确匹配
+    ("randomize_kstack_offset", "1", "on", True),
+    ("random.trust_cpu", "0", "off", True),
+    ("init_on_alloc", "on", "1", True),
+    ("kpti", "1", "on", True),
+    ("pti", "1", "on", False),           # x86 pti= 不使用 kstrtobool
+    ("pti", "yes", "on", False),
+    ("rodata", "on", "full", False),
+    # 裸 token（无 =）：module_param 型布尔参数被内核置为真，early_param 型无效
+    ("kvm_amd.sev", None, "1", True),
+    ("module.sig_enforce", None, "1", True),
+    ("bdev_allow_write_mounted", None, "0", False),   # 裸 token 等价于真，与期望值 0 相悖
+    ("init_on_alloc", None, "1", False),
+])
+def test_cmdline_value_ok(key, actual, expected, want):
+    assert checks._cmdline_value_ok(key, actual, expected) is want
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +141,85 @@ def test_ntfs_from_lsblk_json():
 def test_ntfs_from_lsblk_json_empty():
     assert checks._ntfs_from_lsblk_json({"blockdevices": []}) == []
     assert checks._ntfs_from_lsblk_json({}) == []
+    assert checks._ntfs_from_lsblk_json({"blockdevices": "invalid"}) == []
+
+
+def test_ntfs_from_lsblk_json_mountpoints_list():
+    j = {"blockdevices": [
+        {"name": "nvme0n1p3", "fstype": "ntfs", "label": "Win", "size": "100G",
+         "mountpoints": [None, "/mnt/win"]},
+    ]}
+    found = checks._ntfs_from_lsblk_json(j)
+    assert len(found) == 1
+    assert "挂载: /mnt/win" in found[0]
+
+
+def test_ntfs_partitions_checks_mounts_despite_udev_data(monkeypatch):
+    """udev 中有其它文件系统记录时，也不能漏掉只出现在挂载表里的 NTFS。"""
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    monkeypatch.setattr(checks.glob, "glob", lambda _pattern: ["/run/udev/data/b8:1"])
+
+    def fake_read(path, default=""):
+        if path == "/run/udev/data/b8:1":
+            return "E:ID_FS_TYPE=ext4\nE:DEVNAME=/dev/sda1\n"
+        if path == "/proc/mounts":
+            return "/dev/sdb1 /mnt/windows ntfs3 rw 0 0\n"
+        return default
+
+    monkeypatch.setattr(checks, "read", fake_read)
+    found, source = checks._ntfs_partitions()
+    assert len(found) == 1
+    assert "/dev/sdb1" in found[0] and "/mnt/windows" in found[0]
+    assert source == "udev + /proc/mounts"
+
+
+def test_vendor_kw_match_word_boundary():
+    assert checks._vendor_kw_match("hp", "hp elitebook") is True
+    assert checks._vendor_kw_match("hp", "touchpad controller") is False
+    assert checks._vendor_kw_match("msi", "msi gaming") is True
+    assert checks._vendor_kw_match("lenovo", "lenovo thinkpad") is True
+
+
+def test_check_usb_avoids_false_positives(monkeypatch):
+    # YubiKey Nano、内置摄像头与普通有线键盘不应被误报为 2.4G 接收器
+    devs = [
+        {"vid": "1050", "pid": "0407", "manufacturer": "Yubico", "product": "YubiKey 5 Nano", "cls": "00"},
+        {"vid": "2c97", "pid": "0001", "manufacturer": "Ledger", "product": "Nano S", "cls": "00"},
+        {"vid": "0c45", "pid": "6710", "manufacturer": "Sonix", "product": "Integrated_Webcam_HD", "cls": "ef"},
+        {"vid": "04d9", "pid": "a0cd", "manufacturer": "Holtek", "product": "USB Keyboard", "cls": "00"},
+    ]
+    monkeypatch.setattr(checks, "_usb_devices", lambda: (devs, "sysfs"))
+    res = checks.check_usb()
+    assert res.status == "good"
+
+
+def test_check_usb_detects_receivers(monkeypatch):
+    devs = [
+        {"vid": "046d", "pid": "c52b", "manufacturer": "Logitech", "product": "USB Receiver", "cls": "00"},
+        {"vid": "25a7", "pid": "fa67", "manufacturer": "Compx", "product": "2.4G Receiver", "cls": "00"},
+    ]
+    monkeypatch.setattr(checks, "_usb_devices", lambda: (devs, "sysfs"))
+    res = checks.check_usb()
+    assert res.status == "bad"
+    assert len(res.details) == 2
+
+
+def test_cmdline_aliases_and_unknown_cpu(monkeypatch):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: None)
+    monkeypatch.setattr(checks, "read", lambda p, default="": (
+        "slub_debug=FZP efi=noruntime efi=disable_early_pci_dma randomize_kstack_offset=1"
+        if p == "/proc/cmdline" else default
+    ))
+    rep = checks.get_cmdline_report()
+    by_key = {i.key: i for i in rep.items}
+    assert by_key["slab_debug"].status == "ok"
+    assert by_key["efi"].status == "ok"
+    assert by_key["randomize_kstack_offset"].status == "ok"
+    # CPU 厂商未知且未显式传入对应参数时，专属参数应标记为 na 而非同时要求 Intel 与 AMD
+    assert by_key["intel_iommu"].status == "na"
+    assert by_key["amd_iommu"].status == "na"
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +304,26 @@ def test_sysctl_item_actual_text():
                               {"net.ipv4.conf.all.x": "0", "net.ipv4.conf.default.x": "1"},
                               "missing", "").actual_text
     assert "all=0" in multi and "default=1" in multi
+
+
+def test_sysctl_user_snapshot_does_not_hide_new_native_entries(monkeypatch):
+    key = "net.ipv4.conf.*.accept_redirects"
+    supplied = {
+        "net.ipv4.conf.all.accept_redirects": "0",
+        "net.ipv4.conf.default.accept_redirects": "0",
+    }
+    current = dict(supplied, **{"net.ipv4.conf.eth0.accept_redirects": "1"})
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": supplied}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [
+        ("test", [dict(key=key, value="0", desc="test")]),
+    ])
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _key: (current, False))
+
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.status == "missing"
+    assert item.actual == current
 
 
 def test_habits_report_score():

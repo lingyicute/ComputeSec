@@ -225,7 +225,10 @@ def build_dashboard(report, win, navigate):
     grade = "安全状况良好，请继续保持！" if overall >= 90 else ("还有一些可以改进的地方" if overall >= 70 else "存在多项需要处理的风险")
     head.append(wrapped_label(grade, css=("title-4",)))
     head.get_last_child().set_halign(Gtk.Align.CENTER)
-    sub = wrapped_label(f"{report.os_name} · 内核 {report.kernel} · {report.arch} · {report.cpu}", css=("dim-label", "caption"))
+    parts = [report.os_name, f"内核 {report.kernel}", report.arch]
+    if report.cpu and report.cpu != report.arch:
+        parts.append(report.cpu)
+    sub = wrapped_label(" · ".join(parts), css=("dim-label", "caption"))
     sub.set_halign(Gtk.Align.CENTER)
     sub.set_justify(Gtk.Justification.CENTER)
     head.append(sub)
@@ -241,7 +244,7 @@ def build_dashboard(report, win, navigate):
         ("hsi", "HSI 固件安全", hsi_score, f"{hsi_txt}｜{len(report.hsi.failed)} 项未通过，其中 {len(report.hsi.fixable)} 项可修复" if report.hsi.ok else report.hsi.error, "security-high-symbolic"),
         ("kernel", "内核加固", report.kernel_score, f"内核参数缺失 {len(report.cmdline.missing)} 项｜sysctl 缺失 {len(report.sysctl.missing)} 项", "emblem-system-symbolic"),
         ("hardware", "硬件品牌", report.hardware.score, f"{report.hardware.vendor['name']} · {data.RATING_ZH[report.hardware.vendor['rating']]}", "computer-symbolic"),
-        ("habits", "使用习惯", report.habits.score, "、".join(f"{c.title.split(' ')[0]}{'✓' if c.status == 'good' else '✗' if c.status in ('bad', 'warn') else '?'}" for c in report.habits.checks), "user-info-symbolic"),
+        ("habits", "使用习惯", report.habits.score, "、".join(f"{c.title.split(' ')[0]}{'✓' if c.status == 'good' else '✗' if c.status in ('bad', 'warn') else '?'}" for c in report.habits.checks), "avatar-default-symbolic"),
     ]
     for key, title, score, desc, icon_name in cards:
         btn = Gtk.Button()
@@ -271,45 +274,37 @@ def build_dashboard(report, win, navigate):
         if child is not None:
             child.set_focusable(False)
 
-    todo = group("待办摘要", "点击上方卡片查看详情与修复方法")
+    todo = group("待办摘要", "点击卡片或下方条目查看详情与修复方法")
     n = 0
+
+    def _add_todo(title, subtitle, status, target):
+        nonlocal n
+        r = Adw.ActionRow(title=title, subtitle=subtitle)
+        r.add_prefix(status_icon(status))
+        r.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        r.set_activatable(True)
+        r.connect("activated", lambda *_, t=target: navigate(t))
+        todo.add(r)
+        n += 1
+
     if report.hsi.ok:
         for it in report.hsi.fixable[:6]:
-            r = Adw.ActionRow(title=esc(it.name), subtitle=esc(data.HSI_KIND_ZH.get(it.info.get("kind"), "")))
-            r.add_prefix(status_icon("warn"))
-            r.set_activatable(True)
-            r.connect("activated", lambda *_: navigate("hsi"))
-            todo.add(r)
-            n += 1
+            _add_todo(esc(it.name), esc(data.HSI_KIND_ZH.get(it.info.get("kind"), "")), "warn", "hsi")
     if report.cmdline.missing:
-        r = Adw.ActionRow(title=f"添加 {len(report.cmdline.missing)} 个内核启动参数", subtitle=esc(" ".join(i.token for i in report.cmdline.missing[:8]) + (" …" if len(report.cmdline.missing) > 8 else "")))
-        r.add_prefix(status_icon("warn"))
-        r.set_activatable(True)
-        r.connect("activated", lambda *_: navigate("kernel"))
-        todo.add(r)
-        n += 1
+        _add_todo(f"添加 {len(report.cmdline.missing)} 个内核启动参数",
+                  esc(" ".join(i.token for i in report.cmdline.missing[:8]) + (" …" if len(report.cmdline.missing) > 8 else "")),
+                  "warn", "kernel")
     if report.sysctl.missing:
-        r = Adw.ActionRow(title=f"设置 {len(report.sysctl.missing)} 个 sysctl 项", subtitle=esc("、".join(i.key for i in report.sysctl.missing[:6]) + (" …" if len(report.sysctl.missing) > 6 else "")))
-        r.add_prefix(status_icon("warn"))
-        r.set_activatable(True)
-        r.connect("activated", lambda *_: navigate("kernel"))
-        todo.add(r)
-        n += 1
+        _add_todo(f"设置 {len(report.sysctl.missing)} 个 sysctl 项",
+                  esc("、".join(i.key for i in report.sysctl.missing[:6]) + (" …" if len(report.sysctl.missing) > 6 else "")),
+                  "warn", "kernel")
     if report.hardware.vendor["rating"] in ("bad", "caution"):
-        r = Adw.ActionRow(title=esc(f"硬件品牌 {report.hardware.vendor['name']}：{data.RATING_ZH[report.hardware.vendor['rating']]}"), subtitle="查看历史安全事件与建议")
-        r.add_prefix(status_icon("bad" if report.hardware.vendor["rating"] == "bad" else "warn"))
-        r.set_activatable(True)
-        r.connect("activated", lambda *_: navigate("hardware"))
-        todo.add(r)
-        n += 1
+        _add_todo(esc(f"硬件品牌 {report.hardware.vendor['name']}：{data.RATING_ZH[report.hardware.vendor['rating']]}"),
+                  "查看历史安全事件与建议",
+                  "bad" if report.hardware.vendor["rating"] == "bad" else "warn", "hardware")
     for c in report.habits.checks:
         if c.status in ("bad", "warn"):
-            r = Adw.ActionRow(title=esc(c.title), subtitle=esc(c.summary))
-            r.add_prefix(status_icon(c.status))
-            r.set_activatable(True)
-            r.connect("activated", lambda *_: navigate("habits"))
-            todo.add(r)
-            n += 1
+            _add_todo(esc(c.title), esc(c.summary), c.status, "habits")
     if n == 0:
         todo.add(praise_row("没有待办事项，您的安全配置非常出色，请继续保持！"))
 
@@ -366,7 +361,8 @@ def _hsi_item_row(it):
     row = Adw.ExpanderRow(title=esc(it.name))
     res = data.HSI_RESULT_ZH.get(it.result, it.result)
     row.set_subtitle(esc(f"{res}" + (f" · {it.summary}" if it.summary and it.summary != it.name else "")))
-    row.add_prefix(status_icon("ok" if it.passed else ("warn" if it.info.get("fix") else "bad")))
+    fixable = bool(it.info.get("fix") and it.info.get("kind") in ("os", "bios"))
+    row.add_prefix(status_icon("ok" if it.passed else ("warn" if fixable else "bad")))
     lvl = Gtk.Label(label=f"HSI:{it.level}" if it.level else "运行时", valign=Gtk.Align.CENTER)
     lvl.add_css_class("dim-label")
     lvl.add_css_class("caption")
@@ -377,7 +373,8 @@ def _hsi_item_row(it):
         r.add_row(text_row("检测项含义", info.get("meaning") or it.summary or "fwupd 未提供说明。"))
         r.add_row(text_row("缺失的危害", info.get("risk") or "该项未通过会削弱平台信任链。"))
         if info.get("fix"):
-            r.add_row(text_row(f"修复方法（{data.HSI_KIND_ZH.get(info.get('kind'), '')}）", info["fix"]))
+            kind_zh = data.HSI_KIND_ZH.get(info.get("kind"), "")
+            r.add_row(text_row(f"修复方法（{kind_zh}）" if kind_zh else "修复方法", info["fix"]))
         if it.flags - {"success"}:
             r.add_row(text_row("fwupd 标记", ", ".join(sorted(it.flags))))
         r.add_row(text_row("AppStream ID", it.id + (f"  ·  {it.uri}" if it.uri else ""), selectable=True))
@@ -455,7 +452,7 @@ def build_kernel(report, win):
 
     # ---- 数据来源 / 采集提示 ----
     g_src = None
-    if s.unknown or not s.user_supplied:
+    if s.user_supplied or s.unknown or report.in_flatpak:
         n = len(s.unknown)
         if s.user_supplied:
             desc = (f"已使用您提供的 sysctl 输出（{report.hostdata.age_text if report.hostdata else ''}采集）。"
@@ -479,7 +476,7 @@ def build_kernel(report, win):
         if it.note:
             sub += f"  ⚠ {it.note}"
         if it.status == "wrong":
-            sub += f"  （当前值：{it.actual}）"
+            sub += f"  （当前值：{it.actual if it.actual is not None else '无参数值'}）"
         if it.status == "na":
             sub += f"  （仅 {it.cpu.upper()} 平台适用，已跳过）"
         row.set_subtitle(esc(sub))
@@ -538,8 +535,8 @@ def build_kernel(report, win):
         g_sfix = group("如何设置 sysctl", "将以下内容写入 /etc/sysctl.d/99-computesec-hardening.conf 后执行 sudo sysctl --system 立即生效并在重启后保持。带 * 的通配符由 systemd-sysctl 支持。")
         g_sfix.set_header_suffix(copy_button(win, conf, "复制配置"))
         g_sfix.add(code_block(conf.strip()))
-        cmd = f"sudo tee /etc/sysctl.d/99-computesec-hardening.conf > /dev/null <<'EOF'\n{conf}EOF\nsudo sysctl --system"
-        r = text_row("一键写入命令", "用 sudo tee 把上方配置写入 /etc/sysctl.d/99-computesec-hardening.conf，然后执行 sudo sysctl --system。点击右侧按钮复制完整命令（已包含上方配置内容）。")
+        cmd = f"sudo tee -a /etc/sysctl.d/99-computesec-hardening.conf > /dev/null <<'EOF'\n{conf}EOF\nsudo sysctl --system"
+        r = text_row("一键写入命令", "用 sudo tee -a 把上方配置追加写入 /etc/sysctl.d/99-computesec-hardening.conf，然后执行 sudo sysctl --system。追加模式不会覆盖此前已写入的旧配置；重复执行产生的同名重复条目由 sysctl 按最后一条生效，不影响结果。点击右侧按钮复制完整命令（已包含上方配置内容）。")
         r.add_suffix(copy_button(win, cmd, "复制命令"))
         g_sfix.add(r)
         notes = [i for i in s.missing if i.note]
@@ -585,7 +582,8 @@ def build_hardware(report, win):
             if val:
                 sysinfo.add(text_row(label, val, selectable=True))
         if ident.dbus_error:
-            sysinfo.add(text_row("⚠ D-Bus 读取失败", ident.dbus_error + "（已回退到 /run/host/os-release）"))
+            fb = f"（已回退到 {ident.source}）" if ident.source else ""
+            sysinfo.add(text_row("⚠ D-Bus 读取失败", ident.dbus_error + fb))
         info_extra = sysinfo
     else:
         info_extra = None
@@ -631,8 +629,14 @@ def build_habits(report, win):
             g.add(text_row("建议" if c.status != "good" else "继续保持", c.advice))
         if c.key == "flatpak":
             r = text_row("harden-flatpak", data.HARDEN_FLATPAK_URL, selectable=True)
-            btn = Gtk.Button(valign=Gtk.Align.CENTER, icon_name="external-link-symbolic" if Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).has_icon("external-link-symbolic") else "web-browser-symbolic")
-            btn.connect("clicked", lambda *_: Gtk.UriLauncher.new(data.HARDEN_FLATPAK_URL).launch(win, None, None, None))
+            disp = Gdk.Display.get_default()
+            has_ext = disp is not None and Gtk.IconTheme.get_for_display(disp).has_icon("external-link-symbolic")
+            btn = Gtk.Button(valign=Gtk.Align.CENTER, tooltip_text="在浏览器中打开",
+                             icon_name="external-link-symbolic" if has_ext else "web-browser-symbolic")
+            btn.connect("clicked", lambda *_: (
+                Gtk.UriLauncher.new(data.HARDEN_FLATPAK_URL).launch(win, None, None, None)
+                if hasattr(Gtk, "UriLauncher") else Gtk.show_uri(win, data.HARDEN_FLATPAK_URL, Gdk.CURRENT_TIME)
+            ))
             r.add_suffix(btn)
             g.add(r)
             g.add(text_row("快速上手", "git clone https://github.com/lingyicute/harden-flatpak && cd harden-flatpak && ./lockdown.sh\n之后安装 Flatseal（com.github.tchx84.Flatseal）逐个应用按需放开权限。", selectable=True))

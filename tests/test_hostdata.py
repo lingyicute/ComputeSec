@@ -122,6 +122,24 @@ def test_parse_lsblk_ignores_prompt_noise_around_json():
     assert "blockdevices" in parsed
 
 
+def test_parse_lsblk_handles_braces_in_shell_prompt():
+    text = "{user@testbox ~} $ lsblk -J\n" + json.dumps(_lsblk_obj()) + "\n{0} [user@testbox ~]$\n"
+    parsed, err = hostdata.parse_lsblk(text)
+    assert err == ""
+    assert parsed["blockdevices"][0]["name"] == "sda"
+
+
+@pytest.mark.parametrize("prefix", [
+    '{"foo": 1}',
+    '{"blockdevices": "not-a-list"}',
+])
+def test_parse_lsblk_skips_other_json_objects(prefix):
+    text = prefix + " $ lsblk -J\n" + json.dumps(_lsblk_obj())
+    parsed, err = hostdata.parse_lsblk(text)
+    assert err == ""
+    assert parsed["blockdevices"][0]["name"] == "sda"
+
+
 @pytest.mark.parametrize("text", ["", "   "])
 def test_parse_lsblk_empty(text):
     parsed, err = hostdata.parse_lsblk(text)
@@ -139,6 +157,9 @@ def test_parse_lsblk_wrong_json():
     parsed, err = hostdata.parse_lsblk(json.dumps({"foo": [1, 2, 3]}))
     assert parsed is None
     assert "blockdevices" in err
+    parsed2, err2 = hostdata.parse_lsblk(json.dumps({"blockdevices": "not-a-list"}))
+    assert parsed2 is None
+    assert "blockdevices" in err2
 
 
 # ---------------------------------------------------------------------------

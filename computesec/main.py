@@ -33,6 +33,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._idle_build_id = 0     # 空闲增量构建的 source id
         self._refreshing = False    # 是否有检测线程正在运行（防止菜单/快捷键重入）
         self._refresh_pending = False  # 检测进行中时又收到了刷新请求，结束后补跑一次
+        self._wizard = None         # 当前打开的数据采集向导窗口（防止重复弹出）
 
         self.toast_overlay = Adw.ToastOverlay()
         self.set_content(self.toast_overlay)
@@ -114,13 +115,18 @@ class MainWindow(Adw.ApplicationWindow):
 
     def open_wizard(self, *_):
         """打开数据采集向导。向导保证 on_finish 恰好回调一次（完成或被关闭）。"""
+        if self._wizard is not None:
+            self._wizard.present()
+            return False
         existing = hostdata.CURRENT if hostdata.CURRENT.any_data else hostdata.HostData.load()
         if not existing.fresh:
             existing = hostdata.HostData()
-        wizard.CollectWizard(self, host_data=existing, on_finish=self.on_wizard_finish).present()
+        self._wizard = wizard.CollectWizard(self, host_data=existing, on_finish=self.on_wizard_finish)
+        self._wizard.present()
         return False
 
     def on_wizard_finish(self, _hd):
+        self._wizard = None
         self.refresh()
 
     def on_row_selected(self, _lb, row):
@@ -254,12 +260,17 @@ class MainWindow(Adw.ApplicationWindow):
 
     def render_error(self, error):
         self._refreshing = False
+        if self._idle_build_id:
+            GLib.source_remove(self._idle_build_id)
+            self._idle_build_id = 0
         self.title_widget.set_subtitle("检测失败")
         sel = self.listbox.get_selected_row()
         current = sel.page_key if sel else "dashboard"
-        self.bins[current].set_child(Adw.StatusPage(
-            icon_name="dialog-error-symbolic", title="检测时发生错误",
-            description=f"{error}\n\n点击刷新按钮重试。"))
+        targets = self.bins.keys() if self.report is None else (current,)
+        for k in targets:
+            self.bins[k].set_child(Adw.StatusPage(
+                icon_name="dialog-error-symbolic", title="检测时发生错误",
+                description=f"{error}\n\n点击刷新按钮重试。"))
         self.refresh_btn.set_sensitive(True)
         self._run_pending_refresh()
         return False
@@ -293,17 +304,26 @@ class Application(Adw.Application):
             if accel:
                 self.set_accels_for_action(f"app.{name}", [accel])
 
+    def _main_window(self):
+        win = self.props.active_window
+        if isinstance(win, MainWindow):
+            return win
+        for w in self.get_windows():
+            if isinstance(w, MainWindow):
+                return w
+        return None
+
     def do_activate(self):
-        win = self.props.active_window or MainWindow(self)
+        win = self._main_window() or MainWindow(self)
         win.present()
 
     def on_refresh(self, *_):
-        win = self.props.active_window
+        win = self._main_window()
         if win:
             win.refresh()
 
     def on_collect(self, *_):
-        win = self.props.active_window
+        win = self._main_window()
         if win:
             win.open_wizard()
 

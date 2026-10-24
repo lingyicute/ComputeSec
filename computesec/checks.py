@@ -70,10 +70,19 @@ def cpu_vendor():
 
 
 def cpu_model():
-    for line in read("/proc/cpuinfo").splitlines():
+    lines = read("/proc/cpuinfo").splitlines()
+    for line in lines:
         if line.lower().startswith("model name"):
-            return line.split(":", 1)[1].strip()
-    return platform.processor() or platform.machine()
+            val = line.split(":", 1)[1].strip()
+            if val:
+                return val
+    for prefix in ("hardware", "cpu model", "uarch", "processor"):
+        for line in lines:
+            k, sep, val = line.partition(":")
+            if sep and k.strip().lower() == prefix and val.strip() and not val.strip().isdigit():
+                return val.strip()
+    soc = read("/sys/devices/soc0/machine").strip()
+    return soc or platform.processor() or platform.machine()
 
 
 # ---------------------------------------------------------------------------
@@ -141,14 +150,29 @@ def _result_to_str(v):
     return str(v or "unknown")
 
 
+# 尾段过于通用的属性名，单靠最后一段模糊匹配会跨类别误中（例如把任意 *.Enabled 误判为 IntelBootguard.Enabled）
+_HSI_GENERIC_TAILS = {
+    "Enabled", "Active", "Verified", "Version", "Policy", "Otp", "Acm", "Updates", "Plugins", "Vars", "Pk", "Db",
+}
+
+
 def _lookup_hsi_info(aid):
     aid = data.HSI_ALIASES.get(aid, aid)
     if aid in data.HSI_ATTRS:
         return data.HSI_ATTRS[aid]
-    # 尝试去掉厂商前缀的模糊匹配
-    for k, v in data.HSI_ATTRS.items():
-        if k.split(".")[-1] == aid.split(".")[-1]:
-            return v
+    parts = aid.split(".")
+    # 优先尝试最后两段精确匹配（如 com.example.IntelCet.Enabled -> IntelCet.Enabled）
+    if len(parts) >= 2:
+        tail2 = parts[-2:]
+        for k, v in data.HSI_ATTRS.items():
+            if k.split(".")[-2:] == tail2:
+                return v
+    # 尝试去掉厂商前缀的单段模糊匹配（排除通用属性名及存在歧义的尾段）
+    tail1 = parts[-1]
+    if tail1 and tail1 not in _HSI_GENERIC_TAILS:
+        matches = [v for k, v in data.HSI_ATTRS.items() if k.split(".")[-1] == tail1]
+        if len(matches) == 1:
+            return matches[0]
     return {}
 
 
@@ -171,7 +195,7 @@ def get_hsi() -> HsiReport:
     # 1) D-Bus（Flatpak 内也可用，需 --system-talk-name=org.freedesktop.fwupd）
     try:
         import gi
-        from gi.repository import Gio
+        from gi.repository import Gio, GLib
         bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
         proxy = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, "org.freedesktop.fwupd", "/",
                                        "org.freedesktop.fwupd", None)
@@ -181,6 +205,15 @@ def get_hsi() -> HsiReport:
         p = proxy.get_cached_property("HostSecurityId")
         if p is not None:
             host_id = p.unpack()
+        if not host_id:
+            try:
+                pres = bus.call_sync(
+                    "org.freedesktop.fwupd", "/", "org.freedesktop.DBus.Properties", "Get",
+                    GLib.Variant("(ss)", ("org.freedesktop.fwupd", "HostSecurityId")),
+                    GLib.VariantType("(v)"), Gio.DBusCallFlags.NONE, 5000, None)
+                host_id = pres.unpack()[0] or ""
+            except Exception:
+                pass
         if raw:
             return HsiReport(ok=True, source="fwupd D-Bus", host_id=host_id, items=_normalize_attrs(raw))
     except Exception:
@@ -258,15 +291,96 @@ def _norm_key(k):
     return k.replace("-", "_")
 
 
+# 内核参数别名（如 slub_debug 与 slab_debug 在 mm/slub.c 中同义）
+_CMDLINE_KEY_ALIASES = {
+    "slub_debug": "slab_debug",
+}
+# 内核用 kstrtobool 解析的 early_param 型布尔参数，on/1/y 与 off/0/n 等价。
+# 这类参数必须写成 key=value；省略 = 的裸 token 无效（内核保持默认值）。
+# 注意：x86 的 pti= 只接受 on/off/auto（strcmp 精确匹配），并不使用 kstrtobool，不能放在这里。
+_CMDLINE_BOOL_KEYS = {
+    "init_on_alloc", "init_on_free", "iommu.passthrough", "iommu.strict",
+    "page_alloc.shuffle", "kpti", "random.trust_bootloader", "random.trust_cpu",
+    "randomize_kstack_offset", "irqchip.gicv3_pseudo_nmi",
+}
+# module_param(bool) 型布尔参数：同样经 kstrtobool 解析 on/1/y 与 off/0/n，
+# 但 cmdline 上省略 = 的裸 token 会被内核置为真（param_set_bool(val=NULL) → 1）。
+_CMDLINE_MODULE_BOOL_KEYS = {
+    "kvm_amd.sev", "kvm_amd.sev_es", "kvm_amd.sev_snp", "kvm.mitigate_smt_rsb",
+    "module.sig_enforce", "bdev_allow_write_mounted",
+}
+_BOOL_TRUE = {"1", "on", "y", "yes", "true"}
+_BOOL_FALSE = {"0", "off", "n", "no", "false"}
+
+# mitigations= 的合法取值及缓解强度。kernel/cpu.c 的 mitigations_parse_cmdline()
+# 对三个值做 strcmp 精确匹配（"nosmt,auto" 等非常规顺序会被整体忽略并保持默认），
+# 因此只能按强度序比较，不能做顺序无关的集合比较。
+_MITIGATIONS_RANK = {"off": 0, "auto": 1, "auto,nosmt": 2}
+
+
+def _cmdline_bool_norm(v):
+    low = v.strip().lower()
+    if low in _BOOL_TRUE:
+        return "1"
+    if low in _BOOL_FALSE:
+        return "0"
+    return v.strip()
+
+
+def _cmdline_value_ok(key, actual, expected):
+    if expected is None:
+        return actual is not MISSING
+    if actual is MISSING:
+        return False
+    nk = _norm_key(key)
+    if actual is None:
+        # 裸 token（无 =）仅对 module_param 型布尔参数等价于真；
+        # early_param 型会解析失败，内核保持默认值，不能视为已启用。
+        if nk not in _CMDLINE_MODULE_BOOL_KEYS:
+            return False
+        actual = "1"
+    if actual == expected:
+        return True
+    if nk == "efi":
+        opts = {x.strip() for x in actual.split(",") if x.strip()}
+        return expected in opts
+    if nk == "slab_debug":
+        # 仅纯增量调试选项可按超集处理。O 会对部分 cache 关闭调试，不能视为增强；
+        # 内核对这些单字母选项按大小写敏感解析，因此不能把实际值转成大写。
+        if "," not in actual:
+            flags = set(actual)
+            if flags and flags.issubset(set("FZPUTA")) and set(expected).issubset(flags):
+                return True
+        return False
+    if nk == "mitigations":
+        # 仅接受内核合法取值；实际值不弱于期望值即通过（如 aarch64 期望 auto，
+        # 用户显式写了更强的 auto,nosmt 同样是内核接受的合法配置）。
+        rank_a = _MITIGATIONS_RANK.get(actual)
+        rank_e = _MITIGATIONS_RANK.get(expected)
+        return rank_a is not None and rank_e is not None and rank_a >= rank_e
+    # l1tf= 由内核在固定选项列表（off/flush/flush,nosmt/flush,nowarn/full/full,force）
+    # 中做精确匹配，任何改写顺序的值都会被忽略，因此不做集合比较，仅精确匹配。
+    if nk in _CMDLINE_BOOL_KEYS or nk in _CMDLINE_MODULE_BOOL_KEYS:
+        return _cmdline_bool_norm(actual) == _cmdline_bool_norm(expected)
+    return False
+
+
 def get_cmdline_report() -> CmdlineReport:
     cmdline = read("/proc/cmdline").strip()
     present = {}
     for tok in cmdline.split():
         if "=" in tok:
             k, v = tok.split("=", 1)
-            present[_norm_key(k)] = v
+            nk = _norm_key(k)
+            nk = _CMDLINE_KEY_ALIASES.get(nk, nk)
+            if nk == "efi" and present.get(nk):
+                present[nk] = f"{present[nk]},{v}"
+            else:
+                present[nk] = v
         else:
-            present[_norm_key(tok)] = None
+            nk = _norm_key(tok)
+            nk = _CMDLINE_KEY_ALIASES.get(nk, nk)
+            present[nk] = None
     ar, cv = arch(), cpu_vendor()
     items = []
     for p in data.KERNEL_PARAMS:
@@ -277,13 +391,11 @@ def get_cmdline_report() -> CmdlineReport:
             exp = exp.get(ar)
         nk = _norm_key(p["key"])
         actual = present.get(nk, MISSING)
-        if p.get("cpu") and cv and p["cpu"] != cv:
+        if p.get("cpu") and p["cpu"] != cv and (cv is not None or actual is MISSING):
             status = "na"
         elif actual is MISSING:
             status = "missing"
-        elif exp is None:
-            status = "ok"
-        elif actual == exp:
+        elif _cmdline_value_ok(p["key"], actual, exp):
             status = "ok"
         else:
             status = "wrong"
@@ -389,7 +501,9 @@ def _sysctl_from_proc(key):
     """
     actual, unreadable = {}, False
     for p in _sysctl_paths(key):
-        k = p[len("/proc/sys/"):].replace("/", ".")
+        # 与 procps sysctl 保持一致：目录名自带的 '.' 转为 '/'（如 VLAN 接口 eth0.100 -> eth0/100）
+        rel = p[len("/proc/sys/"):]
+        k = ".".join(part.replace(".", "/") for part in rel.split("/"))
         try:
             with open(p) as f:
                 actual[k] = f.read().strip()
@@ -412,19 +526,25 @@ def get_sysctl_report() -> SysctlReport:
             actual, unreadable = _sysctl_from_proc(key)
             source = "proc"
             # 用户提供的 sysctl -a（以 root 执行、在宿主机上执行）优先级更高：
-            # 它既能补上权限不足的条目，也能补上被 Flatpak 沙箱屏蔽的条目。
+            # 它既能补上权限不足的条目，也能补上被 Flatpak 沙箱屏蔽或隔离的条目。
             if user_values:
                 supplied = hd.sysctl_lookup(key)
                 if supplied:
-                    merged = dict(actual)
-                    merged.update(supplied)      # 用户值覆盖沙箱内读到的值
-                    if unreadable or merged != actual:
+                    if IN_FLATPAK:
+                        # 沙箱里的 /proc/sys 可能属于隔离视图，不能混入宿主机快照。
+                        actual = dict(supplied)
                         source = "用户提供"
-                    actual = merged
+                    else:
+                        # 原生环境保留快照采集后新出现的接口等条目，用户值仅覆盖同名键。
+                        merged = dict(actual)
+                        merged.update(supplied)
+                        if unreadable or merged != actual:
+                            source = "用户提供"
+                        actual = merged
                     unreadable = False
             if unreadable and not actual:
                 status = "unknown"
-            elif not actual:
+            elif not actual or all(v is None for v in actual.values()):
                 status = "na"
             elif all(_sysctl_value_ok(v, e["value"], cmp) for v in actual.values()):
                 status = "ok"
@@ -456,6 +576,13 @@ class HardwareReport:
         return data.RATING_SCORE.get(self.vendor["rating"], 50)
 
 
+def _vendor_kw_match(kw, text):
+    # 短缩写（如 "hp"、"msi"）按单词边界匹配，避免把 "touchpad" 等含 "hp" 的普通单词误判为 HP
+    if len(kw) <= 3 and kw.isalnum():
+        return bool(re.search(rf"\b{re.escape(kw)}\b", text))
+    return kw in text
+
+
 def get_hardware() -> HardwareReport:
     dmi = lambda n: read(f"/sys/class/dmi/id/{n}").strip()
     sv, pn, bv, biosv, biosver = dmi("sys_vendor"), dmi("product_name"), dmi("board_vendor"), dmi("bios_vendor"), dmi("bios_version")
@@ -466,7 +593,6 @@ def get_hardware() -> HardwareReport:
         sv = sv or ident.hw_vendor
         pn = pn or ident.hw_model
         biosver = biosver or ident.firmware_version
-        model = model or ident.hw_model
     except Exception:
         pass
     candidates = [("系统厂商", sv), ("产品名称", pn), ("主板厂商", bv), ("设备型号", model)]
@@ -476,7 +602,7 @@ def get_hardware() -> HardwareReport:
         if not t:
             continue
         for v in data.VENDORS:
-            if any(m in t for m in v["match"]):
+            if any(_vendor_kw_match(m, t) for m in v["match"]):
                 vendor, matched = v, f"{label}: {text}"
                 break
         if matched:
@@ -524,12 +650,14 @@ def _flatpak_apps():
         if out:
             apps.update(l.strip() for l in out.splitlines() if l.strip() and "." in l)
             source = "flatpak list"
+        elif rc == 0 and not source:
+            source = "flatpak list"
     return apps, source
 
 
 def check_flatpak() -> HabitCheck:
     apps, source = _flatpak_apps()
-    user_apps = sorted(a for a in apps if not a.startswith(data.FLATPAK_EXCLUDE_PREFIXES))
+    user_apps = sorted(a for a in apps if not a.startswith(data.FLATPAK_EXCLUDE_PREFIXES) and not a.endswith(".BaseApp"))
     advice = ("使用梨的 harden-flatpak 项目（{url}）默认拒绝除 Wayland 与 dri 之外的所有权限，"
               "配合 Flatseal 按需为每个应用开放最少的权限，可以使 flatpak 的安全性更上一层楼。向应用授予权限时，尽量不要授予 D-Bus（session-bus / system-bus）和进程间通信 (ipc) 等敏感权限。").format(url=data.HARDEN_FLATPAK_URL)
     if not source:
@@ -566,8 +694,22 @@ def _usb_devices():
         vid = read(os.path.join(d, "idVendor")).strip()
         if not vid:
             continue
-        devs.append(dict(vid=vid.lower(), pid=read(os.path.join(d, "idProduct")).strip().lower(),
-                         product=read(os.path.join(d, "product")).strip(), manufacturer=read(os.path.join(d, "manufacturer")).strip(),
+        pid = read(os.path.join(d, "idProduct")).strip().lower()
+        product = read(os.path.join(d, "product")).strip()
+        manufacturer = read(os.path.join(d, "manufacturer")).strip()
+        # 若 sysfs 字符串为空，尝试从 /run/udev/data/+usb:<dev> 补全 hwdb 名称
+        if not product or not manufacturer:
+            udev_txt = read(f"/run/udev/data/+usb:{os.path.basename(d)}")
+            if udev_txt:
+                if not manufacturer:
+                    m_v = re.search(r"^E:ID_VENDOR_FROM_DATABASE=(.+)$", udev_txt, re.M)
+                    if m_v:
+                        manufacturer = m_v.group(1).strip()
+                if not product:
+                    m_p = re.search(r"^E:ID_MODEL_FROM_DATABASE=(.+)$", udev_txt, re.M)
+                    if m_p:
+                        product = m_p.group(1).strip()
+        devs.append(dict(vid=vid.lower(), pid=pid, product=product, manufacturer=manufacturer,
                          cls=read(os.path.join(d, "bDeviceClass")).strip()))
     if devs:
         return devs, "sysfs"
@@ -584,22 +726,29 @@ def check_usb() -> HabitCheck:
     if not source:
         return HabitCheck("usb", "2.4G 无线接收器", "unknown", "无法枚举 USB 设备", [], "")
     suspects = []
+    dedicated_vids = getattr(data, "USB_24G_DEDICATED_VENDORS", set())
     for d in devs:
         if d["vid"] in ("1d6b",):   # Linux Foundation root hubs
             continue
         text = f"{d['manufacturer']} {d['product']}".lower()
+        # 排除笔记本内置摄像头等视频设备（Sonix 0c45 / Sunplus 1bcf 常用于内置 UVC 摄像头）
+        if any(w in text for w in ("webcam", "camera", "uvc", "integrated_webcam")):
+            continue
         hit = None
         if d["vid"] == "046d":
             if d["pid"] in data.LOGITECH_BOLT_PIDS:
                 hit = "Logitech Bolt 接收器（使用 BLE 安全连接加密，风险较低，但仍建议有线）"
             elif d["pid"] in data.LOGITECH_UNIFYING_PIDS or any(k in text for k in ("unifying", "lightspeed", "receiver", "nano")):
                 hit = "Logitech Unifying/Lightspeed 接收器（曾曝出 MouseJack、KeyJack 等密钥提取与按键注入漏洞）"
-        elif d["vid"] in data.USB_24G_VENDORS and any(k in text for k in data.USB_24G_KEYWORDS + ["mouse", "keyboard", "composite"]):
+        elif d["vid"] in dedicated_vids and any(k in text for k in data.USB_24G_KEYWORDS + ["mouse", "keyboard", "composite"]):
+            hit = f"{data.USB_24G_VENDORS[d['vid']]} 2.4G 接收器"
+        elif d["vid"] in data.USB_24G_VENDORS and any(k in text for k in data.USB_24G_KEYWORDS):
             hit = f"{data.USB_24G_VENDORS[d['vid']]} 2.4G 接收器"
         elif any(k in text for k in data.USB_24G_KEYWORDS):
             hit = "疑似 2.4G 无线接收器"
         if hit:
-            suspects.append(f"{d['vid']}:{d['pid']} {d['manufacturer']} {d['product']} — {hit}")
+            desc_name = " ".join(x for x in (d["manufacturer"], d["product"]) if x)
+            suspects.append(f"{d['vid']}:{d['pid']}" + (f" {desc_name}" if desc_name else "") + f" — {hit}")
     if suspects:
         return HabitCheck("usb", "2.4G 无线接收器", "bad", f"发现 {len(suspects)} 个 2.4G 无线接收器", suspects,
                           "绝大多数 2.4G 无线键鼠不加密或使用弱加密，攻击者在数十米外即可嗅探您输入的每一个字符（包括密码、密钥口令），甚至注入按键（MouseJack）。"
@@ -613,11 +762,17 @@ def _ntfs_from_lsblk_json(j):
 
     def walk(nodes):
         for n in nodes:
+            if not isinstance(n, dict):
+                continue
             if (n.get("fstype") or "").lower() in ("ntfs", "ntfs3", "exfat-ntfs"):
-                found.append(f"/dev/{n.get('name')}  {n.get('size', '')}  标签: {n.get('label') or '-'}  挂载: {n.get('mountpoint') or '-'}")
+                mp = n.get("mountpoint")
+                if not mp and isinstance(n.get("mountpoints"), list):
+                    mp = ", ".join(str(x) for x in n["mountpoints"] if x)
+                found.append(f"/dev/{n.get('name')}  {n.get('size', '')}  标签: {n.get('label') or '-'}  挂载: {mp or '-'}")
             walk(n.get("children", []) or [])
 
-    walk(j.get("blockdevices", []) or [])
+    if isinstance(j, dict) and isinstance(j.get("blockdevices"), list):
+        walk(j["blockdevices"])
     return found
 
 
@@ -637,25 +792,41 @@ def _ntfs_partitions():
         except ValueError:
             pass
     if not source:
-        for f in glob.glob("/run/udev/data/b*"):
+        has_udev_fs = False
+        seen_devices = set()
+        for f in sorted(glob.glob("/run/udev/data/b*")):
             content = read(f)
-            if "E:ID_FS_TYPE=ntfs" in content:
-                name = re.search(r"E:DEVNAME=(\S+)", content)
-                label = re.search(r"E:ID_FS_LABEL=(\S+)", content)
-                found.append(f"{name.group(1) if name else f}  标签: {label.group(1) if label else '-'}")
+            if "E:ID_FS_TYPE=" in content:
+                has_udev_fs = True
+            if re.search(r"^E:ID_FS_TYPE=(ntfs3?|exfat-ntfs)\s*$", content, re.M | re.I):
+                name = re.search(r"^E:DEVNAME=(\S+)", content, re.M)
+                devname = name.group(1) if name else ""
+                if not devname:
+                    uevent = read(f"/sys/dev/block/{os.path.basename(f)[1:]}/uevent")
+                    m_dev = re.search(r"^DEVNAME=(\S+)", uevent, re.M)
+                    devname = f"/dev/{m_dev.group(1)}" if m_dev else f
+                label = re.search(r"^E:ID_FS_LABEL=(\S+)", content, re.M)
+                found.append(f"{devname}  标签: {label.group(1) if label else '-'}")
+                seen_devices.add(devname)
                 source = "udev"
-    if not source:
+        if has_udev_fs and not source:
+            source = "udev"
+        # udev 数据库可能缺少后挂载设备的记录；即使已有 udev 数据，也必须用挂载表补全。
         for line in read("/proc/mounts").splitlines():
             parts = line.split()
-            if len(parts) > 2 and parts[2] in ("ntfs", "ntfs3", "fuseblk"):
-                found.append(f"{parts[0]} 挂载于 {parts[1]} ({parts[2]})")
-        source = "/proc/mounts"
+            if len(parts) > 2 and (parts[2] in ("ntfs", "ntfs3", "fuse.ntfs", "fuse.ntfs-3g")
+                                   or (parts[2] == "fuseblk" and parts[0].startswith("/dev/"))):
+                if parts[0] not in seen_devices:
+                    found.append(f"{parts[0]} 挂载于 {parts[1]} ({parts[2]})")
+                    seen_devices.add(parts[0])
+        source = f"{source} + /proc/mounts" if source else "/proc/mounts"
     return found, source
 
 
 def _windows_installed():
     hints = []
-    for p in ("/boot/efi/EFI/Microsoft/Boot/bootmgfw.efi", "/efi/EFI/Microsoft/Boot/bootmgfw.efi"):
+    for p in ("/boot/efi/EFI/Microsoft/Boot/bootmgfw.efi", "/efi/EFI/Microsoft/Boot/bootmgfw.efi",
+              "/boot/EFI/Microsoft/Boot/bootmgfw.efi"):
         if os.path.exists(p):
             hints.append(f"发现 Windows 引导管理器：{p}")
     for f in glob.glob("/sys/firmware/efi/efivars/Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]-*"):

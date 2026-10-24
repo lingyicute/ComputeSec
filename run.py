@@ -28,10 +28,25 @@ else:
     sys.exit(1)
 
 
+def _quote_desktop_arg(arg):
+    """按 Desktop Entry 规范编码 Exec 中的单个参数（不是 shell 引号）。"""
+    reserved = ' \t\n\r"\'\\><~|&;$*?#()`'
+    quoted = not arg or any(ch in arg for ch in reserved)
+    if quoted:
+        # Exec 层：双引号内这些字符需要前置反斜杠。
+        arg = "".join("\\" + ch if ch in ('"', '`', '$', '\\') else ch for ch in arg)
+    # desktop string 层先于 Exec 层解码，因此上面的反斜杠还需再转义一次。
+    arg = (arg.replace("\\", "\\\\")
+              .replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r"))
+    # %u 等是启动器字段代码；字面百分号必须写成 %%。
+    arg = arg.replace("%", "%%")
+    return f'"{arg}"' if quoted else arg
+
+
 def install_desktop(uninstall=False):
-    home = os.path.expanduser("~")
-    apps_dir = os.path.join(home, ".local", "share", "applications")
-    icon_dir = os.path.join(home, ".local", "share", "icons", "hicolor", "scalable", "apps")
+    data_home = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    apps_dir = os.path.join(data_home, "applications")
+    icon_dir = os.path.join(data_home, "icons", "hicolor", "scalable", "apps")
     desktop_path = os.path.join(apps_dir, APP_ID + ".desktop")
     icon_path = os.path.join(icon_dir, APP_ID + ".svg")
     if uninstall:
@@ -45,13 +60,13 @@ def install_desktop(uninstall=False):
         shutil.copy(os.path.join(PKG_ROOT, "data", "icons", "hicolor", "scalable", "apps", APP_ID + ".svg"), icon_path)
         with open(os.path.join(PKG_ROOT, "data", APP_ID + ".desktop")) as f:
             content = f.read()
-        exec_line = f"{sys.executable} {os.path.join(PKG_ROOT, 'run.py')}"
+        exec_line = f"{_quote_desktop_arg(sys.executable)} {_quote_desktop_arg(os.path.join(PKG_ROOT, 'run.py'))}"
         content = content.replace("Exec=computesec", f"Exec={exec_line}")
         with open(desktop_path, "w") as f:
             f.write(content)
         print("已安装", desktop_path)
         print("已安装", icon_path)
-    for cmd in (["update-desktop-database", apps_dir], ["gtk-update-icon-cache", "-f", "-t", os.path.join(home, ".local", "share", "icons", "hicolor")]):
+    for cmd in (["update-desktop-database", apps_dir], ["gtk-update-icon-cache", "-f", "-t", os.path.join(data_home, "icons", "hicolor")]):
         if shutil.which(cmd[0]):
             os.spawnvp(os.P_WAIT, cmd[0], cmd)
     print("完成。")

@@ -340,15 +340,15 @@ SYSCTL_GROUPS = [
         dict(key="net.ipv4.conf.all.drop_gratuitous_arp", value="1", desc="丢弃免费 ARP，防 ARP 欺骗。"),
         dict(key="net.ipv4.conf.*.accept_source_route", value="0", desc="拒绝源路由报文。"),
         dict(key="net.ipv6.conf.*.accept_source_route", value="0", desc="IPv6 同上。"),
-        dict(key="net.ipv6.conf.all.use_tempaddr", value="2", desc="优先使用 IPv6 临时隐私地址。"),
-        dict(key="net.ipv6.conf.default.use_tempaddr", value="2", desc="新接口默认使用临时隐私地址。"),
+        dict(key="net.ipv6.conf.all.use_tempaddr", value="2", cmp="ge", desc="优先使用 IPv6 临时隐私地址。"),
+        dict(key="net.ipv6.conf.default.use_tempaddr", value="2", cmp="ge", desc="新接口默认使用临时隐私地址。"),
         dict(key="net.ipv4.conf.all.log_martians", value="1", desc="记录来源可疑的数据包。"),
         dict(key="net.ipv4.conf.default.log_martians", value="1", desc="新接口同上。"),
     ]),
     ("eBPF 与内核漏洞缓解", [
         dict(key="net.core.bpf_jit_harden", value="2", desc="对所有用户的 BPF JIT 进行加固（常量致盲）。"),
         dict(key="kernel.yama.ptrace_scope", value="1", cmp="ge", desc="限制 ptrace 只能附加到子进程，防止凭据窃取。"),
-        dict(key="kernel.unprivileged_bpf_disabled", value="1", desc="禁止非特权 eBPF（eBPF 是内核漏洞利用的高发区）。"),
+        dict(key="kernel.unprivileged_bpf_disabled", value="1", cmp="ge", desc="禁止非特权 eBPF（eBPF 是内核漏洞利用的高发区）。"),
         dict(key="kernel.sysrq", value="0", desc="禁用 SysRq 魔术键。"),
         dict(key="kernel.perf_event_paranoid", value="3", cmp="ge", desc="禁止非特权用户使用 perf（侧信道与信息泄漏）。"),
         dict(key="kernel.kptr_restrict", value="2", desc="对所有用户隐藏内核指针。"),
@@ -520,6 +520,8 @@ USB_24G_VENDORS = {
     "1d57": "Xenta / Compx (通用 2.4G)", "248a": "Maxxter / Telink (通用 2.4G)", "1a2c": "China Resource Semico", "0c45": "Microdia / Sonix",
     "04d9": "Holtek", "1ea7": "SHARKOON / 通用 2.4G", "2ea8": "Primax", "3151": "Yichip", "1bcf": "Sunplus", "3554": "Compx",
 }
-USB_24G_KEYWORDS = ["2.4g", "2.4 g", "wireless receiver", "receiver", "dongle", "unifying", "lightspeed", "nano", "usb receiver", "wireless mouse", "wireless keyboard"]
+# 专用于 2.4G 无线键鼠接收器方案的芯片厂商（即使产品名仅写 Mouse / Keyboard / Composite Device 也高度可疑）
+USB_24G_DEDICATED_VENDORS = {"25a7", "3938", "062a", "1d57", "248a", "3151", "3554"}
+USB_24G_KEYWORDS = ["2.4g", "2.4 g", "wireless receiver", "receiver", "dongle", "unifying", "lightspeed", "nano receiver", "usb receiver", "wireless mouse", "wireless keyboard", "wireless gaming", "wireless device"]
 LOGITECH_UNIFYING_PIDS = {"c52b", "c532", "c534", "c52f", "c531", "c537", "c539", "c53a", "c53f", "c541", "c545"}
 LOGITECH_BOLT_PIDS = {"c548"}

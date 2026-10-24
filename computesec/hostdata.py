@@ -90,12 +90,30 @@ def parse_lsblk(text):
     end = text.rfind("}")
     if start < 0 or end <= start:
         return None, "剪贴板里没有找到 JSON 内容。请确认复制的是 lsblk -J 命令的完整输出。"
+    j = None
+    last_err = None
     try:
         j = json.loads(text[start:end + 1])
     except ValueError as e:
-        return None, f"JSON 解析失败：{e}。请重新复制完整输出（不要漏掉开头的 {{ 或结尾的 }}）。"
-    if "blockdevices" not in j:
-        return None, "JSON 中没有 blockdevices 字段，这似乎不是 lsblk -J 的输出。"
+        last_err = e
+        # 终端提示符中若恰巧含有 { 或 }，从每个 { 起尝试解码首个完整 JSON 对象
+        decoder = json.JSONDecoder()
+        pos = start
+        while pos >= 0:
+            try:
+                cand, _ = decoder.raw_decode(text, pos)
+                if isinstance(cand, dict):
+                    j = cand
+                    # 提示符或先前命令可能也包含 JSON；跳过非 lsblk 对象继续找。
+                    if isinstance(cand.get("blockdevices"), list):
+                        break
+            except ValueError:
+                pass
+            pos = text.find("{", pos + 1)
+    if j is None:
+        return None, f"JSON 解析失败：{last_err}。请重新复制完整输出（不要漏掉开头的 {{ 或结尾的 }}）。"
+    if not isinstance(j, dict) or not isinstance(j.get("blockdevices"), list):
+        return None, "JSON 中没有有效的 blockdevices 列表字段，这似乎不是 lsblk -J 的输出。"
     return j, ""
 
 
@@ -208,7 +226,10 @@ class HostData:
 
     # -- 修改 ------------------------------------------------------------
     def set(self, key, data):
-        self.payload.setdefault("steps", {})[key] = {"data": data, "at": int(time.time())}
+        now = int(time.time())
+        self.payload.setdefault("steps", {})[key] = {"data": data, "at": now}
+        self.payload["collected_at"] = now
+        self.payload["boot_id"] = boot_id()
         self.payload["skipped"] = False
 
     def mark_done(self, skipped=False):
@@ -222,7 +243,8 @@ class HostData:
         path = os.path.join(_data_dir(), CACHE_NAME)
         try:
             with open(path) as f:
-                return cls(json.load(f))
+                data = json.load(f)
+            return cls(data if isinstance(data, dict) else None)
         except (OSError, ValueError):
             return cls()
 

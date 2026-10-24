@@ -14,14 +14,21 @@ on:
       - '*.json'
       - '*.yml'
       - '.github/workflows/**'
+  # 必须与 push.paths 保持一致：lint 作业也检查 web/ 的字体子集、scripts/ 与
+  # workflow 本身，少一项就会出现「PR 全绿、合进 main 才变红」。
   pull_request:
     paths:
       - 'computesec/**'
       - 'run.py'
       - 'tests/**'
       - 'data/**'
+      - 'web/**'
+      - 'scripts/**'
       - 'pyproject.toml'
       - 'conftest.py'
+      - '*.json'
+      - '*.yml'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 # 默认只读：lint / smoke 不需要写权限。只有 release 作业单独提权到 write，
@@ -29,11 +36,15 @@ on:
 permissions:
   contents: read
 
-# 连续 push 时取消上一轮：release 作业是"先删 nightly 再重建"，两个 run 同时
-# 执行会互相踩，甚至让 nightly 指向错误的 commit。
+# 同一分支上同时只跑一个 run，避免两个 release 同时操作 nightly。
+# - PR：新提交直接取消旧 run，省时间；
+# - push：只排队、不取消。release 作业是"先删 nightly 再重建"，若恰好在两步之间
+#   被取消，仓库会一直没有 nightly。workflow 级的取消会连同正在跑的 job 一起取消，
+#   给 release 单独设 job 级 concurrency 挡不住，所以只能在这里区分事件类型。
+#   GitHub 对同一 group 只保留最新的一个待运行 run，连续 push 不会无限排队。
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
@@ -57,10 +68,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: 编译检查
         run: python -m compileall -q computesec run.py scripts
-      - name: 安装检查工具
+      - name: 以包的形式安装（顺带验证 pyproject 的打包配置）
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov ruff
+          pip install ".[dev]"
       - name: Lint（规则见 pyproject.toml，与本地保持一致）
         run: ruff check .
       - name: 运行单元测试与覆盖率门槛
@@ -123,7 +134,9 @@ jobs:
   release:
     name: 发布 Nightly
     if: github.ref == 'refs/heads/main'
-    needs: flatpak
+    # 必须等所有检查通过：此前只依赖 flatpak，lint 失败时照样覆盖发布了 nightly
+    # （Run 40087019083）。
+    needs: [lint, smoke, flatpak]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

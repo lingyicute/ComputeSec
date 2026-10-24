@@ -12,7 +12,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk, Pango  # noqa: E402
 
-from . import hostdata  # noqa: E402
+from . import hostdata, xdg  # noqa: E402
 
 INTRO_TEXT = (
     "有一部分系统信息，普通用户权限读不到（例如 <tt>vm.mmap_rnd_bits</tt> 这类 ASLR 参数的文件是 "
@@ -208,7 +208,8 @@ class CollectWizard(Adw.Window):
                              + "。相关检测项会显示为「无法读取」，不影响其它结果；"
                                "您随时可以从主菜单的「重新采集系统数据」再来一次。",
                              css=("body", "dim-label"), center=True))
-        box.append(_body("数据仅保存在本机（~/.local/share/computesec/），重启后自动失效。",
+        # 不能写死 ~/.local/share：遵守 XDG 规范的用户会把 XDG_DATA_HOME 指到别处。
+        box.append(_body(f"数据仅保存在本机（{xdg.display_dir()}/），重启后自动失效。",
                          css=("caption", "dim-label"), center=True))
         self.bin.set_child(box)
         self.header_title.set_subtitle("完成")

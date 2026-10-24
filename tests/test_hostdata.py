@@ -357,6 +357,25 @@ def test_data_dir_ignores_relative_xdg(monkeypatch, tmp_path):
     assert hostdata._data_dir() == str(tmp_path / ".local" / "share" / "computesec")
 
 
+def test_display_dir_shortens_home(monkeypatch, tmp_path):
+    """界面提示要用真实的数据目录，不能写死 ~/.local/share。"""
+    from computesec import xdg
+
+    # 默认位置：家目录缩成 ~，读起来和写死的文案一样，但它是算出来的
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert xdg.display_dir() == "~/.local/share/computesec"
+    assert not (tmp_path / ".local").exists()          # 只算路径，不建目录
+
+    # 自定义 XDG_DATA_HOME：提示必须跟着走（仍在家目录下，照样缩写）
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    assert xdg.display_dir() == "~/xdg/computesec"
+
+    # 不在家目录下时原样返回，不做无意义的前缀替换
+    monkeypatch.setenv("XDG_DATA_HOME", "/opt/data")
+    assert xdg.display_dir() == "/opt/data/computesec"
+
+
 def test_data_dir_respects_absolute_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     assert hostdata._data_dir() == str(tmp_path / "xdg" / "computesec")

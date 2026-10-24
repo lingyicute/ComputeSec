@@ -37,3 +37,17 @@ def data_dir(name="computesec", create=True):
     except OSError:
         pass
     return d
+
+
+def display_dir(name="computesec"):
+    """给人看的数据目录路径：家目录缩成 ``~``，其余原样。
+
+    界面上的提示（采集向导的"数据仅保存在本机（…）"）不能写死
+    ``~/.local/share/computesec/``：遵守 XDG 规范的用户会把 XDG_DATA_HOME 指到
+    别处，写死之后那句提示就是错的。只算路径，不碰文件系统。
+    """
+    d = data_dir(name, create=False)
+    home = os.path.expanduser("~")
+    if home and home != os.sep and (d == home or d.startswith(home + os.sep)):
+        return "~" + d[len(home):]
+    return d

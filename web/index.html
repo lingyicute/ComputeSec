@@ -617,6 +617,10 @@
               <span>本工具<strong>已不再请求</strong> <code style="font-family:var(--mono);font-size:.8rem;">--talk-name=org.freedesktop.Flatpak</code>——此权限可在宿主机上执行任意代码，那样就失去了作为 flatpak 运行的意义。需要 root 才能读取的信息（如 <code style="font-family:var(--mono);font-size:.8rem;">vm.mmap_rnd_bits</code>）由「数据采集向导」引导您自己执行只读命令并复制结果，点击「我已复制结果」即可。收回任何权限后，对应功能只会显示「无法获取」。</span>
             </div>
             <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
+              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+              <span><strong style="color: var(--on-surface);">关于 <code style="font-family:var(--mono);font-size:.8rem;">--share=network</code>：</strong>1.2.0 起，程序启动时会向 <code style="font-family:var(--mono);font-size:.8rem;">kernel.org</code> 读取一次公开的 <code style="font-family:var(--mono);font-size:.8rem;">releases.json</code>，用来判断您的内核是否还在 mainline / stable 版本线上，结果在本机缓存 24 小时。<strong>只读这一个公开文件，不上报任何信息。</strong>用 Flatseal 收回该权限后，版本线检查会显示「未能核对」并提供一个重试按钮，其余检测照常进行。</span>
+            </div>
+            <div style="display:flex; gap:.75rem; align-items:flex-start; background: var(--surface-container); border-radius: var(--shape-lg); padding: .9rem 1rem; font-size:.88rem; color: var(--on-surface-variant);">
               <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--primary);flex:none;margin-top:2px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
               <span>App ID：<code style="font-family:var(--mono);font-size:.8rem;">uk._92li.lingyicute.ComputeSec</code> · 由 GitHub Actions 自动构建 x86_64 / aarch64 包。</span>
             </div>

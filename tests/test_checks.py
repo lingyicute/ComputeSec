@@ -720,6 +720,14 @@ def test_sysctl_item_actual_text():
                               {"net.ipv4.conf.all.x": "0", "net.ipv4.conf.default.x": "1"},
                               "missing", "").actual_text
     assert "all=0" in multi and "default=1" in multi
+    # 混合了「读不出来」（None）时也要说人话，不能把 Python 的 None 印到界面上
+    mixed = checks.SysctlItem("k", "0", "eq",
+                             {"net.ipv4.conf.eth0.x": None, "net.ipv4.conf.lo.x": "1"},
+                             "missing", "").actual_text
+    assert "eth0=（无法读取）" in mixed and "lo=1" in mixed and "None" not in mixed
+    # 只有一个值、而且是「读不出来」时，同样不能与「内核不支持」混为一谈
+    one = checks.SysctlItem("k", "0", "eq", {"net.ipv6.conf.eth0.x": None}, "missing", "").actual_text
+    assert one == "（无法读取）"
 
 
 def test_sysctl_user_snapshot_does_not_hide_new_native_entries(monkeypatch):

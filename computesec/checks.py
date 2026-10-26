@@ -558,6 +558,17 @@ def get_cmdline_report() -> CmdlineReport:
 # ---------------------------------------------------------------------------
 # sysctl
 # ---------------------------------------------------------------------------
+def _sysctl_value_text(v):
+    """把一项 sysctl 的读数变成界面上的文字。
+
+    None 表示「文件在、但 read() 失败」（_sysctl_from_proc 的 OSError 分支；内核
+    在 stable_secret 未配置时对 net.ipv6.conf.*.stable_secret 就返回 EIO）。这不是
+    「内核不支持这一项」，写成「（不存在）」会把排查方向带偏，因此与真正读不到的
+    情形分开表述。
+    """
+    return "（无法读取）" if v is None else v
+
+
 @dataclass
 class SysctlItem:
     key: str
@@ -579,9 +590,12 @@ class SysctlItem:
             return "（内核不支持）"
         vals = {v for v in self.actual.values()}
         if len(vals) == 1:
-            v = vals.pop()
-            return v if v is not None else "（不存在）"
-        return ", ".join(f"{k.split('.')[-2]}={v}" for k, v in sorted(self.actual.items()))
+            return _sysctl_value_text(vals.pop())
+        # 多个接口的值不一样时逐个列出。None 必须在这里也翻译成人话：此前只有
+        # 「所有接口同一个值」的分支做了翻译，混合情形下界面上会出现「eth0=None」。
+        return ", ".join(
+            f"{k.split('.')[-2]}={_sysctl_value_text(v)}"
+            for k, v in sorted(self.actual.items()))
 
 
 @dataclass

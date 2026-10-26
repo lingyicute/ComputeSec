@@ -35,10 +35,18 @@
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     transition: background-color .4s var(--motion-standard), color .4s var(--motion-standard);
-    overflow-x: hidden;
+    /* clip 而不是 hidden：hidden 会让 body 变成滚动容器（overflow-y 被算成
+       auto），clip 只裁切、不产生滚动区域，sticky 顶栏也更稳。
+       布局溢出已在各自源头修掉，这里只作为兜底。 */
+    overflow-x: hidden; /* 旧浏览器兜底 */
+    overflow-x: clip;
   }
   a { color: inherit; text-decoration: none; }
   img { max-width: 100%; display: block; }
+  /* 内联 <code>（/sys/bus/usb、vm.mmap_rnd_bits 等）内部没有断点，
+     极窄屏（280–300px）上会整块顶出容器。允许在任意位置断行。
+     .code / .tree 两个 <pre> 用 white-space:pre 自带横向滚动，不受影响。 */
+  code { overflow-wrap: anywhere; }
   ::selection { background: var(--primary-container); color: var(--on-primary-container); }
 
   /* ---------- Typography ---------- */
@@ -68,8 +76,10 @@
   }
   .appbar.scrolled { background: color-mix(in oklab, var(--surface-container) 88%, transparent); box-shadow: var(--elev-1); }
   .appbar .inner { display: flex; align-items: center; gap: .75rem; height: 64px; }
-  .brand { display: flex; align-items: center; gap: .65rem; font-weight: 600; font-size: 1.1rem; }
-  .brand img { width: 32px; height: 32px; }
+  .brand { display: flex; align-items: center; gap: .65rem; font-weight: 600; font-size: 1.1rem; white-space: nowrap; }
+  .brand img { width: 32px; height: 32px; flex: none; }
+  /* 顶栏按钮不参与收缩，否则 320px 下品牌名会被挤到裁切 */
+  .appbar .inner > .icon-btn, .appbar .inner > .btn { flex: none; }
   .nav { display: flex; gap: .25rem; margin-left: 1rem; }
   .nav a {
     padding: .5rem .9rem; border-radius: var(--shape-full);
@@ -79,6 +89,17 @@
   .nav a:hover { background: color-mix(in oklab, var(--on-surface) 8%, transparent); color: var(--on-surface); }
   .spacer { flex: 1; }
   @media (max-width: 860px) { .nav { display: none; } }
+  /* 窄屏顶栏放不下「品牌名 + 主题切换 + GitHub 文字按钮」三件套：
+     320px 下品牌名会被压缩到 min-content 以下而被裁掉约 10px。
+     此处把 GitHub 收成纯图标按钮（保留无障碍名称）。 */
+  @media (max-width: 400px) {
+    .appbar .btn-gh { width: 40px; padding: 0; }
+    .appbar .btn-label {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap; border: 0;
+    }
+  }
 
   /* ---------- Buttons ---------- */
   .btn {
@@ -125,7 +146,12 @@
   .chip svg { width: 16px; height: 16px; fill: currentColor; }
 
   /* ---------- Hero ---------- */
-  .hero { padding-block: clamp(2.5rem, 6vw, 5rem) clamp(3rem, 6vw, 5rem); position: relative; }
+  /* 截断层：.shot-frame::before 的光晕用 inset:-18% 故意溢出卡片，溢出量随卡片
+     宽度线性增长（1180px 容器下约 99px），会把 ICB 撑大 —— 移动端 Chrome 因此
+     整体缩小页面，position:fixed 的 FAB 也被推到屏幕外。
+     hero 与视口同宽，在这里横向 clip 只会裁掉本来就在屏幕外的那部分光晕，
+     肉眼无差别，但可滚动溢出被彻底掐断（clip 不产生滚动容器，y 轴保持 visible）。*/
+  .hero { padding-block: clamp(2.5rem, 6vw, 5rem) clamp(3rem, 6vw, 5rem); position: relative; overflow-x: clip; }
   .hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 3rem; align-items: center; }
   @media (max-width: 960px) { .hero-grid { grid-template-columns: 1fr; } }
   .hero-icon { width: 88px; height: 88px; border-radius: 26px; background: var(--primary-container); display: grid; place-items: center; margin-bottom: 1.5rem; box-shadow: var(--elev-1); }
@@ -254,7 +280,11 @@
   .perm th, .perm td { text-align: left; padding: .85rem 1rem; vertical-align: top; }
   .perm th { background: var(--surface-container-high); font-weight: 600; font-size: .8rem; letter-spacing: .03em; color: var(--on-surface-variant); }
   .perm td { background: var(--surface-container-lowest); border-top: 1px solid var(--surface-container); color: var(--on-surface-variant); }
+  /* 表格是 auto 布局：--system-talk-name=org.freedesktop.hostname1 这类
+     不可断行长 token 会把 min-content 撑得比容器宽，进而撑破整页。
+     anywhere（而非 break-word）会一并缩小 min-content 尺寸。 */
   .perm td:first-child { font-family: var(--mono); font-size: .78rem; color: var(--on-surface); width: 42%; }
+  .perm td, .perm th { overflow-wrap: anywhere; }
   .perm tr:hover td { background: var(--surface-container-low); }
 
   /* ---------- Notes ---------- */
@@ -385,9 +415,9 @@
     <button class="icon-btn" id="themeBtn" aria-label="切换明暗主题" title="切换明暗主题">
       <svg viewBox="0 0 24 24" id="themeIcon"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
     </button>
-    <a class="btn btn-tonal" href="https://github.com/lingyicute/ComputeSec" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8 0 3.2.9.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1 .9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
-      GitHub
+    <a class="btn btn-tonal btn-gh" href="https://github.com/lingyicute/ComputeSec" target="_blank" rel="noopener" aria-label="在 GitHub 上查看 ComputeSec 源码">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8 0 3.2.9.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1 .9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
+      <span class="btn-label">GitHub</span>
     </a>
   </div>
 </header>

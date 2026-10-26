@@ -10,7 +10,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
-from . import data, hostdata, hostinfo, kernelver
+from . import data, hostdata, hostinfo, kernelver, xdg
 
 IN_FLATPAK = os.path.exists("/.flatpak-info")
 
@@ -846,9 +846,31 @@ class HabitsReport:
         return int(sum(pts[c.status] for c in scored) / len(scored))
 
 
+def _flatpak_app_dirs():
+    """可能存放已安装 Flatpak 应用的目录（去重，按可靠性排序）。
+
+    - ``/var/lib/flatpak/app``：系统级安装（``flatpak install``，默认）；
+    - ``$XDG_DATA_HOME/flatpak/app``：用户级安装。此前这里写死成
+      ``~/.local/share/flatpak/app``，遵守 XDG 规范把 XDG_DATA_HOME 指到别处的
+      机器上，``flatpak install --user`` 装的应用一个都数不到；
+    - ``~/.local/share/flatpak/app``：XDG_DATA_HOME 被指走之后的兜底，也是
+      Flatpak 版的唯一可用路径——沙箱里的 XDG_DATA_HOME 是
+      ``~/.var/app/<id>/data``，而清单只授予了 ``~/.local/share/flatpak:ro``。
+    """
+    dirs = ["/var/lib/flatpak/app",
+            os.path.join(xdg.data_home(), "flatpak", "app"),
+            os.path.join(os.path.expanduser("~"), ".local", "share", "flatpak", "app")]
+    seen, out = set(), []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
 def _flatpak_apps():
     apps, source = set(), ""
-    dirs = ["/var/lib/flatpak/app", os.path.expanduser("~/.local/share/flatpak/app")]
+    dirs = _flatpak_app_dirs()
     for d in dirs:
         try:
             for name in os.listdir(d):

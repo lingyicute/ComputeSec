@@ -12,7 +12,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import checks, data, hostdata, kernelver, ui, wizard  # noqa: E402
+from . import checks, data, hostdata, kernelver, ui, wizard, xdg  # noqa: E402
 
 PAGES = [
     ("dashboard", "仪表盘", "go-home-symbolic"),
@@ -407,7 +407,10 @@ class Application(Adw.Application):
         if display is not None:
             theme = Gtk.IconTheme.get_for_display(display)
             theme.add_search_path(os.path.join(PROJECT_ROOT, "data", "icons"))
-            for p in (os.path.expanduser("~/.local/share/icons"),
+            # --install 写的就是 $XDG_DATA_HOME/icons（见 cli.install_desktop），
+            # 这里必须用同一条规则去找，否则设了 XDG_DATA_HOME 的机器装上菜单项后
+            # 仍然找不到图标。
+            for p in (os.path.join(xdg.data_home(), "icons"),
                       os.path.join(sys.prefix, "share", "icons"),   # pip install .
                       "/app/share/icons"):                          # Flatpak
                 if os.path.isdir(p):

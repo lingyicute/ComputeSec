@@ -6,6 +6,7 @@
 """
 
 import json
+import os
 
 import pytest
 
@@ -463,6 +464,42 @@ def test_check_usb_ignores_wired_and_video_devices(monkeypatch):
     monkeypatch.setattr(checks, "_usb_devices", lambda: (devs, "sysfs"))
     res = checks.check_usb()
     assert res.status == "good"
+
+
+def test_flatpak_app_dirs_cover_xdg_and_home(monkeypatch, tmp_path):
+    """三个目录都要扫：系统级、XDG 用户级、以及沙箱里唯一可见的 ~/.local/share。
+
+    Flatpak 沙箱里的 XDG_DATA_HOME 是 ~/.var/app/<id>/data，清单只授予了
+    ~/.local/share/flatpak:ro，所以不能只留 XDG 那一条。
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    dirs = checks._flatpak_app_dirs()
+    assert "/var/lib/flatpak/app" in dirs
+    assert os.path.join(os.environ["XDG_DATA_HOME"], "flatpak", "app") in dirs
+    assert str(tmp_path / ".local" / "share" / "flatpak" / "app") in dirs
+    assert len(dirs) == len(set(dirs))
+
+
+def test_flatpak_apps_finds_home_copy_when_xdg_points_elsewhere(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    legacy = tmp_path / ".local" / "share" / "flatpak" / "app" / "org.example.Legacy"
+    legacy.mkdir(parents=True)
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    apps, _source = checks._flatpak_apps()
+    assert "org.example.Legacy" in apps
+
+
+def test_flatpak_apps_respect_xdg_data_home(monkeypatch):
+    """用户安装的 Flatpak 应用在 $XDG_DATA_HOME/flatpak/app，不是写死的 ~/.local/share。
+
+    conftest.py 已经把 XDG_DATA_HOME 指到临时目录，这里在里面造一个应用目录；
+    按旧实现（expanduser("~/.local/share/...")）它是扫不到的，这一项就会少算。
+    """
+    os.makedirs(os.path.join(os.environ["XDG_DATA_HOME"], "flatpak", "app", "org.example.Tool"))
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))   # 不真的调用 flatpak list
+    apps, source = checks._flatpak_apps()
+    assert "org.example.Tool" in apps
+    assert source == "目录扫描"
 
 
 def test_habits_suspect_counts_as_full_score():

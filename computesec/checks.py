@@ -1077,11 +1077,17 @@ def _ntfs_from_lsblk_json(j):
         for n in nodes:
             if not isinstance(n, dict):
                 continue
-            if (n.get("fstype") or "").lower() in ("ntfs", "ntfs3", "exfat-ntfs"):
+            ftype = (n.get("fstype") or "").lower()
+            if ftype in data.WINDOWS_FS_TYPES:
                 mp = n.get("mountpoint")
                 if not mp and isinstance(n.get("mountpoints"), list):
                     mp = ", ".join(str(x) for x in n["mountpoints"] if x)
-                found.append(f"/dev/{n.get('name')}  {n.get('size', '')}  标签: {n.get('label') or '-'}  挂载: {mp or '-'}")
+                line = (f"/dev/{n.get('name')}  {n.get('size', '')}  标签: {n.get('label') or '-'}"
+                        f"  挂载: {mp or '-'}")
+                if ftype == data.BITLOCKER_FS_TYPE:
+                    # 加密卷看不出里面是 NTFS，界面上要说清楚是被什么加密的。
+                    line += "  （BitLocker 加密）"
+                found.append(line)
             walk(n.get("children", []) or [])
 
     if isinstance(j, dict) and isinstance(j.get("blockdevices"), list):
@@ -1120,7 +1126,9 @@ def _ntfs_partitions():
             content = read(f)
             if "E:ID_FS_TYPE=" in content:
                 has_udev_fs = True
-            if re.search(r"^E:ID_FS_TYPE=(ntfs3?|exfat-ntfs)\s*$", content, re.M | re.I):
+            m_fs = re.search(r"^E:ID_FS_TYPE=(%s)\s*$" % "|".join(data.WINDOWS_FS_TYPES),
+                             content, re.M | re.I)
+            if m_fs:
                 name = re.search(r"^E:DEVNAME=(\S+)", content, re.M)
                 devname = name.group(1) if name else ""
                 if not devname:
@@ -1128,7 +1136,10 @@ def _ntfs_partitions():
                     m_dev = re.search(r"^DEVNAME=(\S+)", uevent, re.M)
                     devname = f"/dev/{m_dev.group(1)}" if m_dev else f
                 label = re.search(r"^E:ID_FS_LABEL=(\S+)", content, re.M)
-                found.append(f"{devname}  标签: {label.group(1) if label else '-'}")
+                line = f"{devname}  标签: {label.group(1) if label else '-'}"
+                if m_fs.group(1).lower() == data.BITLOCKER_FS_TYPE:
+                    line += "  （BitLocker 加密）"
+                found.append(line)
                 seen_devices.add(devname)
                 source = "udev"
         if has_udev_fs and not source:
@@ -1167,17 +1178,18 @@ def check_ntfs() -> HabitCheck:
                           "请从主菜单选择「重新采集系统数据」，按向导执行 lsblk 并粘贴结果，即可完成此项检测。")
     if parts or win:
         details = parts + win
+        label = ("NTFS / BitLocker 分区" if any("BitLocker" in p for p in parts) else "NTFS 分区")
         if win:
-            summary = "检测到 Windows 安装" + (f"及 {len(parts)} 个 NTFS 分区" if parts else "")
+            summary = "检测到 Windows 安装" + (f"及 {len(parts)} 个 {label}" if parts else "")
             advice = ("Windows 是闭源系统，无法审计，存在被植入后门的风险，不应当用于高安全性计算。"
                       "更严重的是：当前设备上安装了 Windows，那么 Windows 中的恶意软件或后门可能已经污染了这套 Linux 环境本身、引导分区甚至固件（例如篡改 EFI 分区、写入 UEFI 变量、乃至利用 SMM 漏洞向固件植入 Rootkit）。"
                       "在完全重装系统（最好同时重新刷写固件并重置 UEFI 密钥）之前，此硬件不应当用于高安全性计算。")
         else:
-            summary = f"检测到 {len(parts)} 个 NTFS 分区"
+            summary = f"检测到 {len(parts)} 个 {label}"
             advice = ("NTFS 分区通常意味着与 Windows 共用数据。Windows 无法审计、存在后门风险，不应用于高安全性计算；"
                       "若该分区曾在 Windows 中使用，其中的文件（尤其是可执行文件、Office 文档、宏）可能已被污染。建议将必要数据迁移到加密的 Linux 文件系统（LUKS + btrfs/ext4）后移除 NTFS 分区。")
         return HabitCheck("ntfs", "NTFS / Windows 检测", "bad", summary, details, advice)
-    return HabitCheck("ntfs", "NTFS / Windows 检测", "good", "未发现 NTFS 分区或 Windows 安装", [f"检测方式：{source or '综合'}"],
+    return HabitCheck("ntfs", "NTFS / Windows 检测", "good", "未发现 NTFS / BitLocker 分区或 Windows 安装", [f"检测方式：{source or '综合'}"],
                       "太棒了！纯 Linux 环境避免了闭源系统带来的不可审计风险，请继续保持。")
 
 

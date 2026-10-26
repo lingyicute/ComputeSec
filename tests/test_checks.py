@@ -250,6 +250,45 @@ def test_ntfs_from_lsblk_json_mountpoints_list():
     assert "挂载: /mnt/win" in found[0]
 
 
+def test_ntfs_from_lsblk_json_recognizes_bitlocker():
+    """BitLocker 卷的 FSTYPE 是 bitlocker，不是 ntfs（Windows 11 默认全盘加密）。"""
+    j = {"blockdevices": [
+        {"name": "nvme0n1p3", "fstype": "BitLocker", "label": "OS", "size": "400G",
+         "mountpoint": None},
+    ]}
+    found = checks._ntfs_from_lsblk_json(j)
+    assert len(found) == 1
+    assert "/dev/nvme0n1p3" in found[0] and "BitLocker" in found[0]
+
+
+def test_ntfs_partitions_detects_bitlocker_from_udev(monkeypatch):
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    monkeypatch.setattr(checks.glob, "glob", lambda _pattern: ["/run/udev/data/b259:3"])
+
+    def fake_read(path, default=""):
+        if path == "/run/udev/data/b259:3":
+            return "E:ID_FS_TYPE=BitLocker\nE:DEVNAME=/dev/nvme0n1p3\nE:ID_FS_LABEL=OS\n"
+        if path == "/proc/mounts":
+            return ""
+        return default
+
+    monkeypatch.setattr(checks, "read", fake_read)
+    found, _source = checks._ntfs_partitions()
+    assert len(found) == 1 and "BitLocker" in found[0]
+
+
+def test_check_ntfs_bitlocker_is_reported_as_windows_partition(monkeypatch):
+    parts = ["/dev/nvme0n1p3  400G  标签: OS  挂载: -  （BitLocker 加密）"]
+    monkeypatch.setattr(checks, "_ntfs_partitions", lambda: (parts, "lsblk"))
+    monkeypatch.setattr(checks, "_windows_installed", lambda: [])
+    res = checks.check_ntfs()
+    assert res.status == "bad"
+    # 数字与量词之间要有空格：不能变成「1 个NTFS / BitLocker 分区」
+    assert "1 个 NTFS / BitLocker 分区" in res.summary
+    assert "BitLocker 加密" in res.details[0]
+
+
 def test_ntfs_partitions_checks_mounts_despite_udev_data(monkeypatch):
     """udev 中有其它文件系统记录时，也不能漏掉只出现在挂载表里的 NTFS。"""
     monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())

@@ -21,6 +21,14 @@
 
 </div>
 
+## Why build this?
+
+To take the distance out of security hardening.
+
+For users without a technical background, "security hardening" often feels impossibly far away: most professional security advice reads as something you could never actually do. So I built this little tool.
+
+Here, security advice is plain-spoken and actionable. ComputeSec will not tell you "your CPU has a silicon erratum" — that is just useless scaremongering. It will tell you "your IOMMU is disabled in the BIOS; reboot and turn it on" — that is what security engineering actually looks like.
+
 ## Pages
 
 ### 1. Dashboard
@@ -58,7 +66,7 @@
 * **Flatpak ecosystem assessment**:
   * Counts installed apps (runtimes and desktop-environment bundled packages are excluded automatically).
   * Suggests using Flatpak more if you have fewer than 5 apps.
-  * Recommends Pear's [harden-flatpak](https://github.com/lingyicute/harden-flatpak) project, which denies all Flatpak permissions by default, paired with Flatseal for per-app permission hardening.
+  * Recommends my [harden-flatpak](https://github.com/lingyicute/harden-flatpak) project, which denies all Flatpak permissions by default, paired with Flatseal for per-app permission hardening.
 * **Uptime reminder**: when the system `uptime` exceeds one day, it reminds you to update and reboot.
 * **Peripheral security check**: detects 2.4 GHz wireless receivers and warns about potential keystroke sniffing. Confirmed receivers deduct points; devices whose vendor/model strongly suggests a 2.4 GHz dongle but which cannot be confirmed as a keyboard/mouse receiver (for example the product string only says Receiver / Dongle) are reported as **"suspected"** — a reminder only, **no points deducted**, together with steps to verify it yourself. Bluetooth adapters, IR receivers, TV tuners and other radios are not considered.
 * **Environment isolation check**: detects NTFS partitions or a Windows installation (unauditable, and liable to contaminate your Linux environment).
@@ -219,7 +227,7 @@ uk._92li.lingyicute.ComputeSec.json      Flatpak manifest
 - Some hardening parameters have minor side effects (for example `module.sig_enforce=1` blocks the proprietary NVIDIA driver from loading, `ia32_emulation=0` breaks Steam/Wine, and `mitigations=auto,nosmt` disables hyper-threading). Each of those is flagged with a ⚠ in the UI. It is a good idea to test them once by pressing `e` in the GRUB menu and adding them temporarily.
 
 > [!IMPORTANT]
-> For security reasons, Pear recommends against using the closed-source NVIDIA driver and closed-source kernel modules, and against running Windows programs of unknown origin under Wine.
+> For security reasons, I recommends against using the closed-source NVIDIA driver and closed-source kernel modules, and against running Windows programs of unknown origin under Wine.
 
 - Vendor reputation information is drawn from public reporting and CVE records, and is provided for reference only.
 

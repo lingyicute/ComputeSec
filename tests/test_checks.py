@@ -5,6 +5,8 @@
 宽松冒烟测试（只断言结构合法，不断言具体数值）。
 """
 
+import json
+
 import pytest
 
 from computesec import checks, data, hostdata
@@ -265,6 +267,73 @@ def test_ntfs_partitions_checks_mounts_despite_udev_data(monkeypatch):
     assert len(found) == 1
     assert "/dev/sdb1" in found[0] and "/mnt/windows" in found[0]
     assert source == "udev + /proc/mounts"
+
+
+def _lsblk_json(*fstypes):
+    return json.dumps({"blockdevices": [
+        {"name": f"sd{a}", "fstype": t, "label": None, "size": "10G", "mountpoint": None}
+        for a, t in zip("abcdef", fstypes, strict=False)
+    ]})
+
+
+def test_ntfs_native_prefers_live_lsblk_over_snapshot(monkeypatch):
+    """原生环境里快照不得压过实时的 lsblk。
+
+    快照只在同一次开机内有效，用户之后可能刚接上（或刚格式化掉）一块 Windows 磁盘。
+    反过来（快照优先）会让「未发现 NTFS」这句话停留在采快照的那一刻——这正是
+    sysctl 那边已经修过的同一类错误。
+    """
+    snapshot = hostdata.HostData({"steps": {"lsblk": {"data": {
+        "blockdevices": [{"name": "sdz1", "fstype": "ntfs", "label": "旧", "size": "1G",
+                          "mountpoint": None}]}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", snapshot)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks, "run", lambda *_: (0, _lsblk_json("vfat", "ext4")))
+
+    found, source = checks._ntfs_partitions()
+    assert found == []
+    assert source == "lsblk"
+
+
+def test_ntfs_native_sees_disk_missing_from_snapshot(monkeypatch):
+    snapshot = hostdata.HostData({"steps": {"lsblk": {"data": {
+        "blockdevices": [{"name": "sda1", "fstype": "ext4", "label": None, "size": "1G",
+                          "mountpoint": "/"}]}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", snapshot)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks, "run", lambda *_: (0, _lsblk_json("ext4", "ntfs")))
+
+    found, source = checks._ntfs_partitions()
+    assert [f for f in found if "/dev/sdb" in f]
+    assert source == "lsblk"
+
+
+def test_ntfs_flatpak_uses_supplied_snapshot(monkeypatch):
+    """沙箱内的 lsblk 看不到宿主机块设备，快照仍是唯一来源。"""
+    snapshot = hostdata.HostData({"steps": {"lsblk": {"data": {
+        "blockdevices": [{"name": "sda2", "fstype": "ntfs", "label": "Win", "size": "1G",
+                          "mountpoint": None}]}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", snapshot)
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))     # 沙箱里 lsblk 不可用
+
+    found, source = checks._ntfs_partitions()
+    assert len(found) == 1 and "/dev/sda2" in found[0]
+    assert source == "lsblk（用户提供）"
+
+
+def test_ntfs_native_falls_back_to_snapshot_when_lsblk_unusable(monkeypatch):
+    """原生环境但 lsblk 不可用（极简容器）时，快照仍要能补上。"""
+    snapshot = hostdata.HostData({"steps": {"lsblk": {"data": {
+        "blockdevices": [{"name": "sda2", "fstype": "ntfs", "label": None, "size": "1G",
+                          "mountpoint": None}]}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", snapshot)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+
+    found, source = checks._ntfs_partitions()
+    assert len(found) == 1 and "/dev/sda2" in found[0]
+    assert source == "lsblk（用户提供）"
 
 
 def test_vendor_kw_match_word_boundary():

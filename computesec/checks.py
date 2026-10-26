@@ -1054,13 +1054,18 @@ def _ntfs_from_lsblk_json(j):
 
 
 def _ntfs_partitions():
-    found, source = [], ""
-    # 1) 用户在采集向导中提供的 lsblk -J 输出（Flatpak 内唯一可靠的来源）
+    """返回 (命中的分区行, 数据来源)。
+
+    谁优先取决于环境：Flatpak 沙箱内看不到宿主机的块设备，用户提供的 lsblk -J
+    快照是唯一可靠来源；原生环境里 lsblk 读到的就是此刻的分区表，而快照可能来自
+    几个小时前（它只在同一次开机内有效）。让快照压过实时读数会错两次：刚接上的
+    Windows 磁盘被判成「未发现」，已经拆掉或格式化掉的分区却仍然被报出来——
+    与 checks.get_sysctl_report 里「原生环境以实时 /proc 为准」的取舍同理。
+    """
     supplied = hostdata.CURRENT.lsblk
-    if supplied:
-        found = _ntfs_from_lsblk_json(supplied)
-        source = "lsblk（用户提供）"
-        return found, source
+    if supplied and IN_FLATPAK:
+        return _ntfs_from_lsblk_json(supplied), "lsblk（用户提供）"
+    found, source = [], ""
     rc, out = run(["lsblk", "-J", "-o", "NAME,FSTYPE,LABEL,SIZE,MOUNTPOINT"])
     if out.strip():
         try:
@@ -1068,6 +1073,10 @@ def _ntfs_partitions():
             source = "lsblk"
         except ValueError:
             pass
+    if not source and supplied:
+        # 原生环境里 lsblk 也不可用（极简容器、util-linux 被裁掉）时才退回快照。
+        found = _ntfs_from_lsblk_json(supplied)
+        source = "lsblk（用户提供）"
     if not source:
         has_udev_fs = False
         seen_devices = set()

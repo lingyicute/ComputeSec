@@ -432,7 +432,7 @@ VENDORS = [
          advice="华硕的官方更新渠道曾被用于分发签名后门，意味着“来自厂商的更新”本身都已不再可信，不建议用于高安全性计算。若一定要使用，请完整重装系统，并拒装 Armoury Crate 等华硕厂商软件，只安装 LVFS 提供的固件更新。"),
     dict(match=["msi", "micro-star"], name="微星 MSI", rating="bad",
          incidents=[
-             ("2023 · Boot Guard 私钥泄漏", "MSI 遭 Money Message 勒索组织入侵，泄漏了 Intel Boot Guard 的 OEM 私钥和固件签名密钥，涉及数十款 MSI 主板/笔记本；攻击者可用泄漏密钥签署恶意固件，硬件信任根被永久破坏。"),
+             ("2023 · Boot Guard 私钥泄漏", "MSI 遭 Money Message 勒索组织入侵，泄漏了 Intel Boot Guard 的 OEM 私钥和固件签名密钥，涉及百余款 MSI 主板/笔记本；攻击者可用泄漏密钥签署恶意固件，硬件信任根被永久破坏。"),
              ("2024 · MSI Center 提权", "MSI Center 的「导出系统信息」功能存在不安全权限问题，本地低权限用户可借符号链接以 SYSTEM 权限任意写入或删除文件 (CVE-2024-37726)。"),
          ],
          advice="受影响型号的 Boot Guard 密钥已经泄漏且无法在硬件层面撤销。强烈不建议将 MSI 设备用于高安全性计算。"),
@@ -455,7 +455,7 @@ VENDORS = [
          incidents=[
              ("2017 · Conexant 音频驱动键盘记录器", "预装音频驱动的 MicTray64.exe 将所有按键记录到本地文件。"),
              ("2017 · Touchpoint Analytics", "通过 Windows 更新静默安装遥测软件。"),
-             ("2022 · UEFI 固件漏洞", "Binarly 报告多个 HP UEFI SMM 漏洞，部分型号修复滞后数月。"),
+             ("2022 · UEFI 固件漏洞", "Binarly 报告多个 HP UEFI SMM 漏洞，部分型号修复滞后超过一年。"),
          ],
          advice="HP 有预装软件层面的隐私事故。可谨慎使用；请勿安装厂商附加软件，并保持固件更新。"),
     dict(match=["acer", "predator"], name="宏碁 Acer", rating="caution",

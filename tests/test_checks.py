@@ -5,6 +5,9 @@
 宽松冒烟测试（只断言结构合法，不断言具体数值）。
 """
 
+import json
+import os
+
 import pytest
 
 from computesec import checks, data, hostdata
@@ -247,6 +250,45 @@ def test_ntfs_from_lsblk_json_mountpoints_list():
     assert "挂载: /mnt/win" in found[0]
 
 
+def test_ntfs_from_lsblk_json_recognizes_bitlocker():
+    """BitLocker 卷的 FSTYPE 是 bitlocker，不是 ntfs（Windows 11 默认全盘加密）。"""
+    j = {"blockdevices": [
+        {"name": "nvme0n1p3", "fstype": "BitLocker", "label": "OS", "size": "400G",
+         "mountpoint": None},
+    ]}
+    found = checks._ntfs_from_lsblk_json(j)
+    assert len(found) == 1
+    assert "/dev/nvme0n1p3" in found[0] and "BitLocker" in found[0]
+
+
+def test_ntfs_partitions_detects_bitlocker_from_udev(monkeypatch):
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    monkeypatch.setattr(checks.glob, "glob", lambda _pattern: ["/run/udev/data/b259:3"])
+
+    def fake_read(path, default=""):
+        if path == "/run/udev/data/b259:3":
+            return "E:ID_FS_TYPE=BitLocker\nE:DEVNAME=/dev/nvme0n1p3\nE:ID_FS_LABEL=OS\n"
+        if path == "/proc/mounts":
+            return ""
+        return default
+
+    monkeypatch.setattr(checks, "read", fake_read)
+    found, _source = checks._ntfs_partitions()
+    assert len(found) == 1 and "BitLocker" in found[0]
+
+
+def test_check_ntfs_bitlocker_is_reported_as_windows_partition(monkeypatch):
+    parts = ["/dev/nvme0n1p3  400G  标签: OS  挂载: -  （BitLocker 加密）"]
+    monkeypatch.setattr(checks, "_ntfs_partitions", lambda: (parts, "lsblk"))
+    monkeypatch.setattr(checks, "_windows_installed", lambda: [])
+    res = checks.check_ntfs()
+    assert res.status == "bad"
+    # 数字与量词之间要有空格：不能变成「1 个NTFS / BitLocker 分区」
+    assert "1 个 NTFS / BitLocker 分区" in res.summary
+    assert "BitLocker 加密" in res.details[0]
+
+
 def test_ntfs_partitions_checks_mounts_despite_udev_data(monkeypatch):
     """udev 中有其它文件系统记录时，也不能漏掉只出现在挂载表里的 NTFS。"""
     monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
@@ -265,6 +307,73 @@ def test_ntfs_partitions_checks_mounts_despite_udev_data(monkeypatch):
     assert len(found) == 1
     assert "/dev/sdb1" in found[0] and "/mnt/windows" in found[0]
     assert source == "udev + /proc/mounts"
+
+
+def _lsblk_json(*fstypes):
+    return json.dumps({"blockdevices": [
+        {"name": f"sd{a}", "fstype": t, "label": None, "size": "10G", "mountpoint": None}
+        for a, t in zip("abcdef", fstypes, strict=False)
+    ]})
+
+
+def test_ntfs_native_prefers_live_lsblk_over_snapshot(monkeypatch):
+    """原生环境里快照不得压过实时的 lsblk。
+
+    快照只在同一次开机内有效，用户之后可能刚接上（或刚格式化掉）一块 Windows 磁盘。
+    反过来（快照优先）会让「未发现 NTFS」这句话停留在采快照的那一刻——这正是
+    sysctl 那边已经修过的同一类错误。
+    """
+    snapshot = hostdata.HostData({"steps": {"lsblk": {"data": {
+        "blockdevices": [{"name": "sdz1", "fstype": "ntfs", "label": "旧", "size": "1G",
+                          "mountpoint": None}]}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", snapshot)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks, "run", lambda *_: (0, _lsblk_json("vfat", "ext4")))
+
+    found, source = checks._ntfs_partitions()
+    assert found == []
+    assert source == "lsblk"
+
+
+def test_ntfs_native_sees_disk_missing_from_snapshot(monkeypatch):
+    snapshot = hostdata.HostData({"steps": {"lsblk": {"data": {
+        "blockdevices": [{"name": "sda1", "fstype": "ext4", "label": None, "size": "1G",
+                          "mountpoint": "/"}]}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", snapshot)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks, "run", lambda *_: (0, _lsblk_json("ext4", "ntfs")))
+
+    found, source = checks._ntfs_partitions()
+    assert [f for f in found if "/dev/sdb" in f]
+    assert source == "lsblk"
+
+
+def test_ntfs_flatpak_uses_supplied_snapshot(monkeypatch):
+    """沙箱内的 lsblk 看不到宿主机块设备，快照仍是唯一来源。"""
+    snapshot = hostdata.HostData({"steps": {"lsblk": {"data": {
+        "blockdevices": [{"name": "sda2", "fstype": "ntfs", "label": "Win", "size": "1G",
+                          "mountpoint": None}]}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", snapshot)
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))     # 沙箱里 lsblk 不可用
+
+    found, source = checks._ntfs_partitions()
+    assert len(found) == 1 and "/dev/sda2" in found[0]
+    assert source == "lsblk（用户提供）"
+
+
+def test_ntfs_native_falls_back_to_snapshot_when_lsblk_unusable(monkeypatch):
+    """原生环境但 lsblk 不可用（极简容器）时，快照仍要能补上。"""
+    snapshot = hostdata.HostData({"steps": {"lsblk": {"data": {
+        "blockdevices": [{"name": "sda2", "fstype": "ntfs", "label": None, "size": "1G",
+                          "mountpoint": None}]}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", snapshot)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+
+    found, source = checks._ntfs_partitions()
+    assert len(found) == 1 and "/dev/sda2" in found[0]
+    assert source == "lsblk（用户提供）"
 
 
 def test_vendor_kw_match_word_boundary():
@@ -394,6 +503,42 @@ def test_check_usb_ignores_wired_and_video_devices(monkeypatch):
     monkeypatch.setattr(checks, "_usb_devices", lambda: (devs, "sysfs"))
     res = checks.check_usb()
     assert res.status == "good"
+
+
+def test_flatpak_app_dirs_cover_xdg_and_home(monkeypatch, tmp_path):
+    """三个目录都要扫：系统级、XDG 用户级、以及沙箱里唯一可见的 ~/.local/share。
+
+    Flatpak 沙箱里的 XDG_DATA_HOME 是 ~/.var/app/<id>/data，清单只授予了
+    ~/.local/share/flatpak:ro，所以不能只留 XDG 那一条。
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    dirs = checks._flatpak_app_dirs()
+    assert "/var/lib/flatpak/app" in dirs
+    assert os.path.join(os.environ["XDG_DATA_HOME"], "flatpak", "app") in dirs
+    assert str(tmp_path / ".local" / "share" / "flatpak" / "app") in dirs
+    assert len(dirs) == len(set(dirs))
+
+
+def test_flatpak_apps_finds_home_copy_when_xdg_points_elsewhere(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    legacy = tmp_path / ".local" / "share" / "flatpak" / "app" / "org.example.Legacy"
+    legacy.mkdir(parents=True)
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    apps, _source = checks._flatpak_apps()
+    assert "org.example.Legacy" in apps
+
+
+def test_flatpak_apps_respect_xdg_data_home(monkeypatch):
+    """用户安装的 Flatpak 应用在 $XDG_DATA_HOME/flatpak/app，不是写死的 ~/.local/share。
+
+    conftest.py 已经把 XDG_DATA_HOME 指到临时目录，这里在里面造一个应用目录；
+    按旧实现（expanduser("~/.local/share/...")）它是扫不到的，这一项就会少算。
+    """
+    os.makedirs(os.path.join(os.environ["XDG_DATA_HOME"], "flatpak", "app", "org.example.Tool"))
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))   # 不真的调用 flatpak list
+    apps, source = checks._flatpak_apps()
+    assert "org.example.Tool" in apps
+    assert source == "目录扫描"
 
 
 def test_habits_suspect_counts_as_full_score():
@@ -614,6 +759,14 @@ def test_sysctl_item_actual_text():
                               {"net.ipv4.conf.all.x": "0", "net.ipv4.conf.default.x": "1"},
                               "missing", "").actual_text
     assert "all=0" in multi and "default=1" in multi
+    # 混合了「读不出来」（None）时也要说人话，不能把 Python 的 None 印到界面上
+    mixed = checks.SysctlItem("k", "0", "eq",
+                             {"net.ipv4.conf.eth0.x": None, "net.ipv4.conf.lo.x": "1"},
+                             "missing", "").actual_text
+    assert "eth0=（无法读取）" in mixed and "lo=1" in mixed and "None" not in mixed
+    # 只有一个值、而且是「读不出来」时，同样不能与「内核不支持」混为一谈
+    one = checks.SysctlItem("k", "0", "eq", {"net.ipv6.conf.eth0.x": None}, "missing", "").actual_text
+    assert one == "（无法读取）"
 
 
 def test_sysctl_user_snapshot_does_not_hide_new_native_entries(monkeypatch):

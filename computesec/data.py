@@ -534,6 +534,13 @@ DEFAULT_VENDOR = dict(name="未收录厂商", rating="neutral",
 RATING_ZH = {"good": "信誉良好", "neutral": "无重大记录", "caution": "需谨慎", "bad": "不建议用于高安全计算"}
 RATING_SCORE = {"good": 100, "neutral": 75, "caution": 40, "bad": 10}
 
+# 会被算作「Windows 可访问的分区」的文件系统类型（lsblk / blkid 返回值的小写形式）。
+# BitLocker 是 Windows 11 默认启用的全盘加密，blkid 给出的 TYPE 是 BitLocker 而不是
+# ntfs——漏掉它时，一台开着 BitLocker 的 Windows 机器会被判成「未发现 NTFS 分区」，
+# 这一项反而给出满分。
+WINDOWS_FS_TYPES = ("ntfs", "ntfs3", "exfat-ntfs", "bitlocker")
+BITLOCKER_FS_TYPE = "bitlocker"
+
 # 桌面环境自带 / 运行时相关的 Flatpak 前缀（不计入用户主动安装数）
 FLATPAK_EXCLUDE_PREFIXES = ("org.gnome.", "org.kde.", "org.fedoraproject.", "org.freedesktop.", "io.elementary.", APP_ID)
 

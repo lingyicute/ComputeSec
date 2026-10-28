@@ -69,7 +69,7 @@ Here, security advice is plain-spoken and actionable. ComputeSec will not tell y
   * Recommends my [harden-flatpak](https://github.com/lingyicute/harden-flatpak) project, which denies all Flatpak permissions by default, paired with Flatseal for per-app permission hardening.
 * **Uptime reminder**: when the system `uptime` exceeds one day, it reminds you to update and reboot.
 * **Peripheral security check**: detects 2.4 GHz wireless receivers and warns about potential keystroke sniffing. Confirmed receivers deduct points; devices whose vendor/model strongly suggests a 2.4 GHz dongle but which cannot be confirmed as a keyboard/mouse receiver (for example the product string only says Receiver / Dongle) are reported as **"suspected"** — a reminder only, **no points deducted**, together with steps to verify it yourself. Bluetooth adapters, IR receivers, TV tuners and other radios are not considered.
-* **Environment isolation check**: detects NTFS partitions or a Windows installation (unauditable, and liable to contaminate your Linux environment).
+* **Environment isolation check**: detects NTFS / BitLocker partitions or a Windows installation (unauditable, and liable to contaminate your Linux environment).
 * **Unreadable means unscored**: if a check on this page cannot read what it needs (no flatpak installed, no `/run/udev` access), it shows as **unreadable** and is **not counted towards the score** instead of being scored as a middle value — you cannot improve it, so deducting points would only distort the score.
 
 ## Option 1: Flatpak (recommended ⭐)
@@ -110,7 +110,7 @@ The tool has to read information from the host, so it requests the permissions b
 | `--system-talk-name=org.freedesktop.hostname1` | Read the **host's** distro name, kernel version and machine model over D-Bus (inside the sandbox `/etc/os-release` describes the runtime, not your system) |
 | `--share=network` | Read the current mainline / stable version from kernel.org to tell whether the running kernel is supported; it also makes the sandbox's `/proc/sys/net` the host's network view |
 | `--filesystem=/var/lib/flatpak:ro`, `~/.local/share/flatpak:ro` | Count installed Flatpak apps |
-| `--filesystem=/run/udev:ro`, `/boot:ro`, `/efi:ro` | Detect NTFS partitions and the Windows boot loader (`/boot:ro` covers both `/boot/efi` and `/boot/EFI` ESP layouts) |
+| `--filesystem=/run/udev:ro`, `/boot:ro`, `/efi:ro` | Detect NTFS / BitLocker partitions and the Windows boot loader (`/boot:ro` covers both `/boot/efi` and `/boot/EFI` ESP layouts) |
 
 `/proc/cmdline`, `/proc/sys`, `/sys/class/dmi` and `/sys/bus/usb` are readable inside the sandbox by default and need no extra permissions.
 

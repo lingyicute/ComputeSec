@@ -13,6 +13,7 @@ run.py（源码直接运行；Flatpak 里它就是 /app/bin/computesec）与 pip
 import os
 import shutil
 import sys
+import sysconfig
 
 from . import data, xdg
 
@@ -39,8 +40,26 @@ def _data_home():
     return xdg.data_home()
 
 
+def _share_roots():
+    """data-files 可能被装到的 prefix，按可信顺序排列。
+
+    pip 的安装目标不一定是 sys.prefix：``pip install --user`` 按 PEP 370 装进用户
+    scheme（~/.local），此时 sys.prefix 仍是系统 Python（/usr），照它去找只会拿到
+    两个不存在的路径。这里把 sysconfig 认识的 scheme 一并列上，逐个试。
+    """
+    roots = [sys.prefix]
+    for scheme in ("posix_user", "posix_prefix"):
+        try:
+            root = sysconfig.get_path("data", scheme)
+        except (KeyError, TypeError):          # 非 posix 平台没有这些 scheme
+            continue
+        if root and root not in roots:
+            roots.append(root)
+    return roots
+
+
 def _source_files():
-    """.desktop 与图标的来源。
+    """.desktop 与图标的来源；都找不到时返回 (None, None)。
 
     源码树与 Flatpak（/app/lib/computesec）里，它们在程序包旁边的 data/ 下；
     pip 安装时 data/ 不属于 Python 包，由 data-files 装到了 <prefix>/share 下。
@@ -51,52 +70,93 @@ def _source_files():
     icon = os.path.join(src, "icons", "hicolor", "scalable", "apps", APP_ID + ".svg")
     if os.path.isfile(desktop) and os.path.isfile(icon):
         return desktop, icon
-    share = os.path.join(sys.prefix, "share")
-    return (os.path.join(share, "applications", APP_ID + ".desktop"),
-            os.path.join(share, "icons", "hicolor", "scalable", "apps", APP_ID + ".svg"))
+    for prefix in _share_roots():
+        share = os.path.join(prefix, "share")
+        desktop = os.path.join(share, "applications", APP_ID + ".desktop")
+        icon = os.path.join(share, "icons", "hicolor", "scalable", "apps", APP_ID + ".svg")
+        if os.path.isfile(desktop) and os.path.isfile(icon):
+            return desktop, icon
+    return None, None
 
 
 def install_desktop(uninstall=False, launcher=None):
-    """把 .desktop 与图标装到（或移出）$XDG_DATA_HOME。
+    """把 .desktop 与图标装到（或移出）$XDG_DATA_HOME。返回是否成功。
 
     launcher 是写进 Exec= 的命令行（参数列表）；默认是当前被执行的这个脚本。
+
+    找不到源文件、目标目录不可写这类问题都只打印一句说明并返回 False：这是用户
+    从命令行主动触发的操作，抛 Traceback 既不说明原因也不说明该怎么办。
     """
     data_home = _data_home()
     apps_dir = os.path.join(data_home, "applications")
     icon_dir = os.path.join(data_home, "icons", "hicolor", "scalable", "apps")
     desktop_path = os.path.join(apps_dir, APP_ID + ".desktop")
     icon_path = os.path.join(icon_dir, APP_ID + ".svg")
+    ok = True
     if uninstall:
         for p in (desktop_path, icon_path):
-            if os.path.exists(p):
+            try:
                 os.remove(p)
-                print("已删除", p)
+            except FileNotFoundError:
+                continue
+            except OSError as e:      # 目录占位、权限不足等：说清楚是哪一条，别抛栈
+                sys.stderr.write(f"无法删除 {p}：{e}\n")
+                ok = False
+                continue
+            print("已删除", p)
     else:
         src_desktop, src_icon = _source_files()
+        if src_desktop is None:
+            sys.stderr.write(
+                f"找不到 {APP_ID}.desktop 与图标文件：它们既不在程序包旁的 data/ 目录，"
+                f"也不在以下 prefix 的 share/ 下：\n"
+                + "".join(f"  {p}\n" for p in _share_roots())
+                + "请确认安装完整（pip 会在安装时把这两个文件装进 <prefix>/share），"
+                  "或直接在源码目录里运行 run.py --install。\n")
+            return False
         launcher = launcher or [os.path.abspath(sys.argv[0])]
-        os.makedirs(apps_dir, exist_ok=True)
-        os.makedirs(icon_dir, exist_ok=True)
-        shutil.copy(src_icon, icon_path)
-        with open(src_desktop, encoding="utf-8") as f:
-            content = f.read()
+        try:
+            with open(src_desktop, encoding="utf-8") as f:
+                content = f.read()
+        except OSError as e:
+            sys.stderr.write(f"无法读取 {src_desktop}：{e}\n")
+            return False
+        # Exec= 是这份 .desktop 里唯一需要按当前安装位置改写的一行。找不到它时
+        # 装出去的菜单项会指向一个不存在的命令，宁可直接报错也不要静默装坏。
+        if "Exec=computesec" not in content:
+            sys.stderr.write(f"{src_desktop} 里没有「Exec=computesec」一行，无法写入启动命令。\n")
+            return False
         exec_line = " ".join(_quote_desktop_arg(a) for a in launcher)
         content = content.replace("Exec=computesec", f"Exec={exec_line}")
-        with open(desktop_path, "w", encoding="utf-8") as f:
-            f.write(content)
+        try:
+            os.makedirs(apps_dir, exist_ok=True)
+            os.makedirs(icon_dir, exist_ok=True)
+            shutil.copy(src_icon, icon_path)
+            with open(desktop_path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except OSError as e:
+            sys.stderr.write(f"安装失败：{e}\n")
+            return False
         print("已安装", desktop_path)
         print("已安装", icon_path)
     for cmd in (["update-desktop-database", apps_dir],
                 ["gtk-update-icon-cache", "-f", "-t", os.path.join(data_home, "icons", "hicolor")]):
         if shutil.which(cmd[0]):
-            os.spawnvp(os.P_WAIT, cmd[0], cmd)
-    print("完成。")
+            try:
+                os.spawnvp(os.P_WAIT, cmd[0], cmd)
+            except OSError as e:      # 缓存刷新失败不影响文件已经装好这一事实
+                sys.stderr.write(f"运行 {cmd[0]} 失败：{e}\n")
+    if ok:
+        print("完成。")
+    return ok
 
 
 HELP = """\
 用法: {prog} [选项]
 
   （无选项）      启动图形界面
-  --install       安装 .desktop 与图标到 ~/.local/share，使任务栏/启动器正确显示图标
+  --install       安装 .desktop 与图标到 $XDG_DATA_HOME（默认 ~/.local/share），
+                  使任务栏/启动器正确显示图标
   --uninstall     移除上面安装的文件
   --version, -V   打印版本号
   -h, --help      显示本帮助
@@ -170,11 +230,9 @@ def main(argv=None, prog=None, launcher=None):
         _print_help(prog)
         return 0
     if action == "install":
-        install_desktop(launcher=launcher)
-        return 0
+        return 0 if install_desktop(launcher=launcher) else 1
     if action == "uninstall":
-        install_desktop(uninstall=True)
-        return 0
+        return 0 if install_desktop(uninstall=True) else 1
     try:
         import gi
         gi.require_version("Gtk", "4.0")

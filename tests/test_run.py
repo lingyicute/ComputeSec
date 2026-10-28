@@ -158,6 +158,63 @@ def test_install_desktop_creates_missing_dirs(tmp_path, monkeypatch):
     assert (data_home / "icons" / "hicolor" / "scalable" / "apps").is_dir()
 
 
+def test_share_roots_include_the_user_scheme():
+    """pip install --user 把 data-files 装进用户 scheme，只看 sys.prefix 会找不到。"""
+    import sysconfig
+    assert sysconfig.get_path("data", "posix_user") in cli._share_roots()
+
+
+def test_install_desktop_without_source_files_is_reported(tmp_path, monkeypatch, capsys):
+    """找不到 desktop / 图标时给一句话并返回 1，而不是 FileNotFoundError 的 Traceback。
+
+    pip install --user 的布局下（或只装了包、data-files 缺失时）此前会直接抛栈。
+    """
+    _prepare(tmp_path, monkeypatch)
+    monkeypatch.setattr(cli, "__file__", str(tmp_path / "site-packages" / "computesec" / "cli.py"))
+    monkeypatch.setattr(cli, "_share_roots", lambda: [str(tmp_path / "nowhere")])
+    assert launcher.main(["--install"]) == 1
+    assert "找不到" in capsys.readouterr().err
+
+
+def test_install_desktop_falls_back_to_other_share_roots(tmp_path, monkeypatch):
+    """data-files 装在 sys.prefix 之外的 scheme 里时同样要能找到。"""
+    data_home = _prepare(tmp_path, monkeypatch)
+    user_root = tmp_path / "local"
+    share = user_root / "share"
+    (share / "applications").mkdir(parents=True)
+    (share / "icons" / "hicolor" / "scalable" / "apps").mkdir(parents=True)
+    (share / "applications" / (cli.APP_ID + ".desktop")).write_text(
+        "[Desktop Entry]\nExec=computesec\n", encoding="utf-8")
+    (share / "icons" / "hicolor" / "scalable" / "apps" / (cli.APP_ID + ".svg")).write_text("<svg/>")
+    monkeypatch.setattr(cli, "__file__", str(tmp_path / "site-packages" / "computesec" / "cli.py"))
+    monkeypatch.setattr(cli, "_share_roots", lambda: [str(tmp_path / "nope"), str(user_root)])
+
+    assert cli.install_desktop(launcher=["/opt/computesec"]) is True
+    content = (data_home / "applications" / (cli.APP_ID + ".desktop")).read_text(encoding="utf-8")
+    assert "Exec=/opt/computesec" in content
+
+
+def test_install_desktop_requires_the_exec_line(tmp_path, monkeypatch, capsys):
+    """源文件里没有 Exec= 行时不能装出一个指向不存在命令的菜单项。"""
+    _prepare(tmp_path, monkeypatch)
+    root = tmp_path / "src"
+    (root / "data" / "icons" / "hicolor" / "scalable" / "apps").mkdir(parents=True)
+    (root / "data" / (cli.APP_ID + ".desktop")).write_text("[Desktop Entry]\nName=x\n", encoding="utf-8")
+    (root / "data" / "icons" / "hicolor" / "scalable" / "apps" / (cli.APP_ID + ".svg")).write_text("<svg/>")
+    monkeypatch.setattr(cli, "__file__", str(root / "computesec" / "cli.py"))
+
+    assert cli.install_desktop() is False
+    assert "Exec=computesec" in capsys.readouterr().err
+
+
+def test_uninstall_reports_unremovable_path(tmp_path, monkeypatch, capsys):
+    """目标位置被目录（或不可删的东西）占住时只报一句，不抛异常。"""
+    data_home = _prepare(tmp_path, monkeypatch)
+    (data_home / "applications" / (cli.APP_ID + ".desktop")).mkdir(parents=True)
+    assert cli.install_desktop(uninstall=True) is False
+    assert "无法删除" in capsys.readouterr().err
+
+
 # ---------------------------------------------------------------------------
 # XDG 规则：三处共用一个实现（computesec.xdg）
 # ---------------------------------------------------------------------------

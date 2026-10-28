@@ -10,7 +10,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
-from . import data, hostdata, hostinfo, kernelver
+from . import data, hostdata, hostinfo, kernelver, xdg
 
 IN_FLATPAK = os.path.exists("/.flatpak-info")
 
@@ -558,6 +558,17 @@ def get_cmdline_report() -> CmdlineReport:
 # ---------------------------------------------------------------------------
 # sysctl
 # ---------------------------------------------------------------------------
+def _sysctl_value_text(v):
+    """把一项 sysctl 的读数变成界面上的文字。
+
+    None 表示「文件在、但 read() 失败」（_sysctl_from_proc 的 OSError 分支；内核
+    在 stable_secret 未配置时对 net.ipv6.conf.*.stable_secret 就返回 EIO）。这不是
+    「内核不支持这一项」，写成「（不存在）」会把排查方向带偏，因此与真正读不到的
+    情形分开表述。
+    """
+    return "（无法读取）" if v is None else v
+
+
 @dataclass
 class SysctlItem:
     key: str
@@ -579,9 +590,12 @@ class SysctlItem:
             return "（内核不支持）"
         vals = {v for v in self.actual.values()}
         if len(vals) == 1:
-            v = vals.pop()
-            return v if v is not None else "（不存在）"
-        return ", ".join(f"{k.split('.')[-2]}={v}" for k, v in sorted(self.actual.items()))
+            return _sysctl_value_text(vals.pop())
+        # 多个接口的值不一样时逐个列出。None 必须在这里也翻译成人话：此前只有
+        # 「所有接口同一个值」的分支做了翻译，混合情形下界面上会出现「eth0=None」。
+        return ", ".join(
+            f"{k.split('.')[-2]}={_sysctl_value_text(v)}"
+            for k, v in sorted(self.actual.items()))
 
 
 @dataclass
@@ -846,9 +860,31 @@ class HabitsReport:
         return int(sum(pts[c.status] for c in scored) / len(scored))
 
 
+def _flatpak_app_dirs():
+    """可能存放已安装 Flatpak 应用的目录（去重，按可靠性排序）。
+
+    - ``/var/lib/flatpak/app``：系统级安装（``flatpak install``，默认）；
+    - ``$XDG_DATA_HOME/flatpak/app``：用户级安装。此前这里写死成
+      ``~/.local/share/flatpak/app``，遵守 XDG 规范把 XDG_DATA_HOME 指到别处的
+      机器上，``flatpak install --user`` 装的应用一个都数不到；
+    - ``~/.local/share/flatpak/app``：XDG_DATA_HOME 被指走之后的兜底，也是
+      Flatpak 版的唯一可用路径——沙箱里的 XDG_DATA_HOME 是
+      ``~/.var/app/<id>/data``，而清单只授予了 ``~/.local/share/flatpak:ro``。
+    """
+    dirs = ["/var/lib/flatpak/app",
+            os.path.join(xdg.data_home(), "flatpak", "app"),
+            os.path.join(os.path.expanduser("~"), ".local", "share", "flatpak", "app")]
+    seen, out = set(), []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
 def _flatpak_apps():
     apps, source = set(), ""
-    dirs = ["/var/lib/flatpak/app", os.path.expanduser("~/.local/share/flatpak/app")]
+    dirs = _flatpak_app_dirs()
     for d in dirs:
         try:
             for name in os.listdir(d):
@@ -1041,11 +1077,17 @@ def _ntfs_from_lsblk_json(j):
         for n in nodes:
             if not isinstance(n, dict):
                 continue
-            if (n.get("fstype") or "").lower() in ("ntfs", "ntfs3", "exfat-ntfs"):
+            ftype = (n.get("fstype") or "").lower()
+            if ftype in data.WINDOWS_FS_TYPES:
                 mp = n.get("mountpoint")
                 if not mp and isinstance(n.get("mountpoints"), list):
                     mp = ", ".join(str(x) for x in n["mountpoints"] if x)
-                found.append(f"/dev/{n.get('name')}  {n.get('size', '')}  标签: {n.get('label') or '-'}  挂载: {mp or '-'}")
+                line = (f"/dev/{n.get('name')}  {n.get('size', '')}  标签: {n.get('label') or '-'}"
+                        f"  挂载: {mp or '-'}")
+                if ftype == data.BITLOCKER_FS_TYPE:
+                    # 加密卷看不出里面是 NTFS，界面上要说清楚是被什么加密的。
+                    line += "  （BitLocker 加密）"
+                found.append(line)
             walk(n.get("children", []) or [])
 
     if isinstance(j, dict) and isinstance(j.get("blockdevices"), list):
@@ -1054,13 +1096,18 @@ def _ntfs_from_lsblk_json(j):
 
 
 def _ntfs_partitions():
-    found, source = [], ""
-    # 1) 用户在采集向导中提供的 lsblk -J 输出（Flatpak 内唯一可靠的来源）
+    """返回 (命中的分区行, 数据来源)。
+
+    谁优先取决于环境：Flatpak 沙箱内看不到宿主机的块设备，用户提供的 lsblk -J
+    快照是唯一可靠来源；原生环境里 lsblk 读到的就是此刻的分区表，而快照可能来自
+    几个小时前（它只在同一次开机内有效）。让快照压过实时读数会错两次：刚接上的
+    Windows 磁盘被判成「未发现」，已经拆掉或格式化掉的分区却仍然被报出来——
+    与 checks.get_sysctl_report 里「原生环境以实时 /proc 为准」的取舍同理。
+    """
     supplied = hostdata.CURRENT.lsblk
-    if supplied:
-        found = _ntfs_from_lsblk_json(supplied)
-        source = "lsblk（用户提供）"
-        return found, source
+    if supplied and IN_FLATPAK:
+        return _ntfs_from_lsblk_json(supplied), "lsblk（用户提供）"
+    found, source = [], ""
     rc, out = run(["lsblk", "-J", "-o", "NAME,FSTYPE,LABEL,SIZE,MOUNTPOINT"])
     if out.strip():
         try:
@@ -1068,6 +1115,10 @@ def _ntfs_partitions():
             source = "lsblk"
         except ValueError:
             pass
+    if not source and supplied:
+        # 原生环境里 lsblk 也不可用（极简容器、util-linux 被裁掉）时才退回快照。
+        found = _ntfs_from_lsblk_json(supplied)
+        source = "lsblk（用户提供）"
     if not source:
         has_udev_fs = False
         seen_devices = set()
@@ -1075,7 +1126,9 @@ def _ntfs_partitions():
             content = read(f)
             if "E:ID_FS_TYPE=" in content:
                 has_udev_fs = True
-            if re.search(r"^E:ID_FS_TYPE=(ntfs3?|exfat-ntfs)\s*$", content, re.M | re.I):
+            m_fs = re.search(r"^E:ID_FS_TYPE=(%s)\s*$" % "|".join(data.WINDOWS_FS_TYPES),
+                             content, re.M | re.I)
+            if m_fs:
                 name = re.search(r"^E:DEVNAME=(\S+)", content, re.M)
                 devname = name.group(1) if name else ""
                 if not devname:
@@ -1083,7 +1136,10 @@ def _ntfs_partitions():
                     m_dev = re.search(r"^DEVNAME=(\S+)", uevent, re.M)
                     devname = f"/dev/{m_dev.group(1)}" if m_dev else f
                 label = re.search(r"^E:ID_FS_LABEL=(\S+)", content, re.M)
-                found.append(f"{devname}  标签: {label.group(1) if label else '-'}")
+                line = f"{devname}  标签: {label.group(1) if label else '-'}"
+                if m_fs.group(1).lower() == data.BITLOCKER_FS_TYPE:
+                    line += "  （BitLocker 加密）"
+                found.append(line)
                 seen_devices.add(devname)
                 source = "udev"
         if has_udev_fs and not source:
@@ -1122,17 +1178,18 @@ def check_ntfs() -> HabitCheck:
                           "请从主菜单选择「重新采集系统数据」，按向导执行 lsblk 并粘贴结果，即可完成此项检测。")
     if parts or win:
         details = parts + win
+        label = ("NTFS / BitLocker 分区" if any("BitLocker" in p for p in parts) else "NTFS 分区")
         if win:
-            summary = "检测到 Windows 安装" + (f"及 {len(parts)} 个 NTFS 分区" if parts else "")
+            summary = "检测到 Windows 安装" + (f"及 {len(parts)} 个 {label}" if parts else "")
             advice = ("Windows 是闭源系统，无法审计，存在被植入后门的风险，不应当用于高安全性计算。"
                       "更严重的是：当前设备上安装了 Windows，那么 Windows 中的恶意软件或后门可能已经污染了这套 Linux 环境本身、引导分区甚至固件（例如篡改 EFI 分区、写入 UEFI 变量、乃至利用 SMM 漏洞向固件植入 Rootkit）。"
                       "在完全重装系统（最好同时重新刷写固件并重置 UEFI 密钥）之前，此硬件不应当用于高安全性计算。")
         else:
-            summary = f"检测到 {len(parts)} 个 NTFS 分区"
+            summary = f"检测到 {len(parts)} 个 {label}"
             advice = ("NTFS 分区通常意味着与 Windows 共用数据。Windows 无法审计、存在后门风险，不应用于高安全性计算；"
                       "若该分区曾在 Windows 中使用，其中的文件（尤其是可执行文件、Office 文档、宏）可能已被污染。建议将必要数据迁移到加密的 Linux 文件系统（LUKS + btrfs/ext4）后移除 NTFS 分区。")
         return HabitCheck("ntfs", "NTFS / Windows 检测", "bad", summary, details, advice)
-    return HabitCheck("ntfs", "NTFS / Windows 检测", "good", "未发现 NTFS 分区或 Windows 安装", [f"检测方式：{source or '综合'}"],
+    return HabitCheck("ntfs", "NTFS / Windows 检测", "good", "未发现 NTFS / BitLocker 分区或 Windows 安装", [f"检测方式：{source or '综合'}"],
                       "太棒了！纯 Linux 环境避免了闭源系统带来的不可审计风险，请继续保持。")
 
 

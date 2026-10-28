@@ -73,7 +73,7 @@
   * 推荐使用梨的 [harden-flatpak](https://github.com/lingyicute/harden-flatpak) 项目，默认拒绝所有 Flatpak 权限，并辅以 Flatseal 进行权限加固。
 * **运行时间提醒**：检测到系统 `uptime` 超过一天时，提醒进行更新和重启。
 * **外设安全检测**：检测是否存在 2.4G 无线接收器，提示潜在的按键嗅探风险。能确认为 2.4G 接收器的直接扣分；只有厂商/型号高度重合、但无法确认是键鼠接收器时（例如型号里只写了 Receiver / Dongle）标为「疑似」，**只提醒、不扣分**，并给出自行确认的步骤。蓝牙适配器、红外接收器、电视棒等其它无线设备不参与判定。
-* **环境隔离检测**：检测是否存在 NTFS 分区或 Windows 系统安装（提示不可审计、可能污染 Linux 环境）。
+* **环境隔离检测**：检测是否存在 NTFS / BitLocker 分区或 Windows 系统安装（提示不可审计、可能污染 Linux 环境）。
 * **读不到就不计分**：本页任何一项如果因为权限或环境原因读不到（例如未安装 flatpak、没有 `/run/udev` 权限），会显示为「无法读取」并**不计入评分**，而不是按中间分处理——您无法通过任何操作改善它，扣分只会让总分失真。
 
 ## 方式一：Flatpak（推荐 ⭐）
@@ -112,7 +112,7 @@ flatpak run uk._92li.lingyicute.ComputeSec
 | `--system-talk-name=org.freedesktop.hostname1` | 通过 D-Bus 读取**宿主机**的发行版名称、内核版本与机型（沙箱内 `/etc/os-release` 是 runtime 的字段） |
 | `--share=network` | 向 kernel.org 读取当前 mainline / stable 版本号，判断本机内核是否在受支持的版本线上；同时让沙箱内的 `/proc/sys/net` 就是宿主机的网络视图 |
 | `--filesystem=/var/lib/flatpak:ro`、`~/.local/share/flatpak:ro` | 统计已安装的 Flatpak 应用 |
-| `--filesystem=/run/udev:ro`、`/boot:ro`、`/efi:ro` | 检测 NTFS 分区与 Windows 引导器（`/boot:ro` 覆盖 `/boot/efi` 与 `/boot/EFI` 两种 ESP 挂载方式） |
+| `--filesystem=/run/udev:ro`、`/boot:ro`、`/efi:ro` | 检测 NTFS / BitLocker 分区与 Windows 引导器（`/boot:ro` 覆盖 `/boot/efi` 与 `/boot/EFI` 两种 ESP 挂载方式） |
 
 `/proc/cmdline`、`/proc/sys`、`/sys/class/dmi`、`/sys/bus/usb` 在沙箱内默认可读，无需额外权限。
 

@@ -824,12 +824,38 @@
    *  from a seed hue using OKLCH (perceptual, close to HCT).
    * ===================================================================== */
   const root = document.documentElement;
+  const supportsOklch = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('color', 'oklch(0 0 0)');
+  const supportsMix = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('color', 'color-mix(in oklab, #000 50%, transparent)');
+  const styleEl = !supportsMix && document.querySelector('style');
+  const rawCss = styleEl ? styleEl.textContent : '';
+  const inlineMix = !supportsMix ? Array.from(document.querySelectorAll('[style*="color-mix"]'), el => [el, el.getAttribute('style')]) : [];
+  const labs = {};
 
   // tone (0-100) -> OKLCH lightness
   const toneL = t => 0.06 + (t / 100) * 0.93;
   // reduce chroma near black/white so extreme tones stay clean
   const toneC = (t, c) => c * Math.max(0.18, 1 - Math.abs(t - 55) / 60);
-  const col = (h, c, t) => `oklch(${toneL(t).toFixed(3)} ${toneC(t, c).toFixed(3)} ${h})`;
+  // OKLCH -> OKLab -> sRGB fallback for browsers without CSS Color 4 (Chrome < 111)
+  const toLab = (l, c, h) => [l, c * Math.cos(h * Math.PI / 180), c * Math.sin(h * Math.PI / 180)];
+  const labRgb = ([L, a, b]) => {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+    const ch = x => Math.round(Math.min(255, Math.max(0, (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.max(0, x) ** (1 / 2.4) - 0.055) * 255)));
+    return [
+      ch(+4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      ch(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      ch(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
+    ];
+  };
+  const oklch = (l, c, h) => {
+    const lab = toLab(l, c, h);
+    const out = supportsOklch ? `oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h})` : `rgb(${labRgb(lab).join(', ')})`;
+    labs[out] = lab;
+    return out;
+  };
+  const col = (h, c, t) => oklch(toneL(t), toneC(t, c), h);
+  const mixRe = /color-mix\(in oklab,\s*(?:var\((--[\w-]+)[^)]*\)|currentColor)\s+(\d+)%,\s*(?:var\((--[\w-]+)\)|transparent)\)/g;
 
   function buildScheme(hue, dark) {
     const P = { h: hue, c: 0.14 };                    // primary
@@ -872,8 +898,19 @@
       '--outline-variant': col(NV.h, NV.c, L ? 80 : 30),
     };
     for (const k in v) root.style.setProperty(k, v[k]);
+    if (!supportsMix) {
+      const resolveMix = s => s.replace(mixRe, (_, v1, p, v2) => {
+        const w = p / 100, c1 = labs[v[v1 || '--on-surface']];
+        if (!v2) return `rgba(${labRgb(c1).join(', ')}, ${w})`;
+        const c2 = labs[v[v2]];
+        return `rgb(${labRgb(c1.map((x, i) => x * w + c2[i] * (1 - w))).join(', ')})`;
+      });
+      if (styleEl) styleEl.textContent = resolveMix(rawCss);
+      inlineMix.forEach(([el, css]) => el.setAttribute('style', resolveMix(css)));
+    }
     root.style.colorScheme = dark ? 'dark' : 'light';
-    document.querySelector('meta[name="theme-color"]')?.remove();
+    const prevMeta = document.querySelector('meta[name="theme-color"]');
+    if (prevMeta) prevMeta.remove();
     const m = document.createElement('meta'); m.name = 'theme-color'; m.content = v['--surface']; document.head.appendChild(m);
   }
 
@@ -888,8 +925,9 @@
     { name: '珊瑚', hue: 35 },
   ];
 
+  const savedHue = localStorage.getItem('cs-hue');
   let state = {
-    hue: +(localStorage.getItem('cs-hue') ?? 150),
+    hue: savedHue !== null ? +savedHue : 150,
     dark: localStorage.getItem('cs-dark') !== null
       ? localStorage.getItem('cs-dark') === '1'
       : matchMedia('(prefers-color-scheme: dark)').matches,
@@ -921,7 +959,7 @@
     b.dataset.hue = s.hue;
     b.title = s.name;
     b.setAttribute('aria-label', s.name);
-    b.style.background = `oklch(0.62 0.16 ${s.hue})`;
+    b.style.background = oklch(0.62, 0.16, s.hue);
     b.addEventListener('click', () => {
       state.hue = s.hue;
       localStorage.setItem('cs-hue', s.hue);
@@ -988,7 +1026,7 @@
         setTimeout(() => {
           btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
         }, 1600);
-      } catch { toast('复制失败，请手动选择文本'); }
+      } catch (e) { toast('复制失败，请手动选择文本'); }
     });
   });
 
@@ -1015,7 +1053,8 @@
     document.querySelectorAll('.habit-grid').forEach(g => g.style.gridTemplateColumns = mq.matches ? '1fr' : '1fr 2fr');
     document.querySelectorAll('.habit-items').forEach(g => g.style.gridTemplateColumns = mq.matches ? '1fr' : 'repeat(2, 1fr)');
   };
-  mq.addEventListener('change', fixHabit); fixHabit();
+  if (mq.addEventListener) mq.addEventListener('change', fixHabit); else mq.addListener(fixHabit);
+  fixHabit();
 })();
 </script>
 <script>

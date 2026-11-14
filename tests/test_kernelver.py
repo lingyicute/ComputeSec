@@ -276,6 +276,24 @@ def test_cache_is_not_world_readable(tmp_path):
     assert (os.stat(cache).st_mode & 0o777) == 0o600
 
 
+@pytest.mark.parametrize("literal", ["Infinity", "-Infinity", "1e999", "NaN"])
+def test_cache_with_non_finite_timestamp_is_ignored(tmp_path, literal):
+    """checked_at 是 Infinity 时 int() 抛的是 OverflowError，不在原先捕获的异常之列。
+
+    get_status 承诺永不抛异常：这种缓存只能当作不存在，照常降级成「未能核对」。
+    """
+    cache = tmp_path / "kv.json"
+    cache.write_text('{"release": "7.2.1", "mainline": "7.2", "stable": "7.1.9", "tier": "stable", '
+                     '"checked_at": %s, "error": ""}' % literal)
+    assert kv.load_cache(str(cache)) is None
+    st = kv.get_status(release="7.2.1", now=1000, fetcher=_fetcher_failing(), cache_path=str(cache))
+    assert not st.known and st.error
+    # 联网成功时照常覆盖掉这份坏缓存
+    st = kv.get_status(release="7.2.1", now=1000, fetcher=_fetcher_returning(RELEASES_JSON),
+                       cache_path=str(cache))
+    assert st.known and kv.load_cache(str(cache)).checked_at == 1000
+
+
 def test_load_cache_rejects_garbage(tmp_path):
     cache = tmp_path / "kv.json"
     cache.write_text('{"release": 42}')

@@ -149,3 +149,18 @@ def test_get_identity_caches(monkeypatch):
     assert len(calls) == 1
     hostinfo.get_identity(refresh=True)
     assert len(calls) == 2
+
+
+def test_parse_os_release_unescapes_double_quoted_values():
+    text = 'PRETTY_NAME="Foo \\"Bar\\" \\\\ \\$1"\nSINGLE=\'keep \\"raw\\"\'\n'
+    d = hostinfo.parse_os_release(text)
+    assert d["PRETTY_NAME"] == 'Foo "Bar" \\ $1'
+    assert d["SINGLE"] == 'keep \\"raw\\"'
+
+
+def test_build_identity_preserves_source_when_fallback_os_release_empty(monkeypatch):
+    monkeypatch.setattr(hostinfo, "_dbus_hostname1", lambda: ({"KernelRelease": "7.2.12"}, ""))
+    monkeypatch.setattr(hostinfo, "_host_os_release_text", lambda: ("", ""))
+    monkeypatch.setattr(hostinfo, "_read", lambda path, default="": "")
+    ident = hostinfo._build_identity()
+    assert ident.source == "D-Bus org.freedesktop.hostname1"

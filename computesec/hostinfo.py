@@ -12,6 +12,7 @@ org.freedesktop.hostname1 接口（systemd 提供，权限：--system-talk-name�
 
 import os
 import platform
+import re
 from dataclasses import dataclass, field
 
 IN_FLATPAK = os.path.exists("/.flatpak-info")
@@ -81,7 +82,11 @@ def parse_os_release(text):
         k, v = line.split("=", 1)
         v = v.strip()
         if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+            quote = v[0]
             v = v[1:-1]
+            # os-release(5)：双引号内支持 \" \\ \$ \` 转义，单引号原样保留
+            if quote == '"':
+                v = re.sub(r'\\([\\"$`])', r"\1", v)
         d[k.strip()] = v
     return d
 
@@ -160,9 +165,12 @@ def _build_identity() -> HostIdentity:
 
     # 兜底：runtime 的 /etc/os-release（Flatpak 内不准确，仅在别无选择时使用）
     if not ident.pretty_name and not ident.os_release:
-        ident.os_release = parse_os_release(_read("/etc/os-release"))
-        ident.pretty_name = ident.os_release.get("PRETTY_NAME") or ident.os_release.get("NAME") or ""
-        ident.source = "/etc/os-release（Flatpak 内为 runtime 字段，可能不准确）" if IN_FLATPAK else "/etc/os-release"
+        fallback = parse_os_release(_read("/etc/os-release"))
+        if fallback:
+            ident.os_release = fallback
+            ident.pretty_name = fallback.get("PRETTY_NAME") or fallback.get("NAME") or ""
+            fb_src = "/etc/os-release（Flatpak 内为 runtime 字段，可能不准确）" if IN_FLATPAK else "/etc/os-release"
+            ident.source = f"{ident.source} + {fb_src}" if ident.source else fb_src
 
     if not ident.kernel_release:
         ident.kernel_release = platform.release()

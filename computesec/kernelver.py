@@ -204,7 +204,7 @@ class KernelSupport:
             return None
         try:
             checked_at = int(d.get("checked_at") or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):     # int(Infinity) 抛的是 OverflowError
             return None
         return cls(release=d.get("release", ""), mainline=d.get("mainline", ""),
                    stable=d.get("stable", ""), tier=d.get("tier", "unknown"),

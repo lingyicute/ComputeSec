@@ -86,6 +86,38 @@ def test_classify(release, want):
     assert kv.classify(release, "7.3", "7.2.12") == want
 
 
+def _releases_with_two_stables(previous_is_eol):
+    return json.dumps({"releases": [
+        {"moniker": "mainline", "version": "7.4-rc2", "iseol": False},
+        {"moniker": "stable", "version": "7.3.4", "iseol": False},
+        {"moniker": "stable", "version": "7.2.15", "iseol": previous_is_eol},
+        {"moniker": "longterm", "version": "6.18.63", "iseol": False},
+    ]})
+
+
+def test_previous_stable_stays_supported_until_eol():
+    """新分支出了 .1、上一条还没标 EOL 的两三周里，两条都是上游在维护的 stable。
+
+    只认最新一条时，仍在维护期内的 7.2.x 会被判成「旧分支」并弹出警告。
+    """
+    mainline, stable = kv.parse_releases_json(_releases_with_two_stables(False))
+    assert (mainline, stable) == ("7.4-rc2", "7.2.15")
+    assert kv.classify("7.2.15-200.fc44.x86_64", mainline, stable) == "stable"
+    assert kv.classify("7.3.4", mainline, stable) == "stable"
+    assert kv.classify("6.18.63", mainline, stable) == "older"
+
+    # 标成 EOL 之后门槛才上移到新分支
+    mainline, stable = kv.parse_releases_json(_releases_with_two_stables(True))
+    assert (mainline, stable) == ("7.4-rc2", "7.3.4")
+    assert kv.classify("7.2.15-200.fc44.x86_64", mainline, stable) == "older"
+
+
+def test_parse_releases_json_falls_back_when_every_stable_is_eol():
+    text = json.dumps({"releases": [{"moniker": "stable", "version": "7.3.4", "iseol": True},
+                                    {"moniker": "stable", "version": "7.2.15", "iseol": True}]})
+    assert kv.parse_releases_json(text) == ("", "7.3.4")
+
+
 def test_classify_without_upstream_data():
     assert kv.classify("6.1.158", "", "") == "unknown"
     # 只拿到 stable 也能判断

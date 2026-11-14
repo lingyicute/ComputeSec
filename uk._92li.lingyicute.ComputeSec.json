@@ -51,7 +51,7 @@
                         "build-dir",
                         "repo",
                         "*.flatpak",
-                        "index.html"
+                        "web"
                     ]
                 }
             ]

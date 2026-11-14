@@ -373,6 +373,9 @@ def _norm_key(k):
 # 内核参数别名（如 slub_debug 与 slab_debug 在 mm/slub.c 中同义）
 _CMDLINE_KEY_ALIASES = {
     "slub_debug": "slab_debug",
+    # mm/slab_common.c：__setup_param("slub_nomerge", …, setup_slab_nomerge, 0)，
+    # 旧名与 slab_nomerge 走同一个处理函数，早年的加固指南写的都是旧名。
+    "slub_nomerge": "slab_nomerge",
 }
 # 内核用 kstrtobool 解析的 early_param 型布尔参数，on/1/y 与 off/0/n 等价。
 # 这类参数必须写成 key=value；省略 = 的裸 token 无效（内核保持默认值）。

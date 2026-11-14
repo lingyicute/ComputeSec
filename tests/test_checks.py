@@ -22,6 +22,17 @@ def test_norm_key():
     assert checks._norm_key("kvm-intel.vmentry_l1d_flush") == "kvm_intel.vmentry_l1d_flush"
 
 
+@pytest.mark.parametrize("token", ["slab_nomerge", "slub_nomerge"])
+def test_cmdline_accepts_legacy_slub_nomerge(monkeypatch, token):
+    """slub_nomerge 是 slab_nomerge 的旧名，内核两个都认（mm/slab_common.c）。"""
+    monkeypatch.setattr(checks, "read", lambda path, default="": (
+        f"quiet {token} rw" if path == "/proc/cmdline" else default))
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    item = next(i for i in checks.get_cmdline_report().items if i.key == "slab_nomerge")
+    assert item.status == "ok"
+
+
 def test_sysctl_norm():
     assert checks._sysctl_norm("  1  ") == "1"
     assert checks._sysctl_norm("a   b\tc") == "a b c"

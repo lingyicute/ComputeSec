@@ -705,6 +705,7 @@ def _sysctl_from_proc(key):
             with open(p) as f:
                 actual[k] = f.read().strip()
         except PermissionError:
+            actual[k] = None
             unreadable = True
         except OSError:
             actual[k] = None
@@ -756,14 +757,15 @@ def get_sysctl_report() -> SysctlReport:
                 # 键只能是采集之后消失的接口（VPN 断开、容器退出、拔掉的网卡）：补回来
                 # 就成了用户怎么改都消不掉的「未设置」。
                 gone_only = bool(actual) and not unreadable
-                filled = {} if gone_only else {k: v for k, v in supplied.items() if k not in actual}
+                filled = {} if gone_only else {k: v for k, v in supplied.items() if actual.get(k) is None}
                 if filled:
                     # 这些键在 /proc 里读不到（多半是 EACCES），用快照补上。
                     actual = {**actual, **filled}
                     age = hd.step_age_text("sysctl")
                     source = f"用户提供（{age}）" if age else "用户提供"
                     unreadable = False
-            elif IN_FLATPAK and user_values and not (unreadable and not actual):
+            elif IN_FLATPAK and user_values and not (
+                    unreadable and not any(v is not None for v in actual.values())):
                 # 沙箱内的 /proc/sys 不是宿主机视图（可能被屏蔽、改写或加了命名空间），
                 # 快照没有覆盖这一项时不能拿沙箱读数顶替，否则会把沙箱的值当成
                 # 宿主机结果报出来。明确标成 unverified 并排除出评分。
@@ -774,14 +776,16 @@ def get_sysctl_report() -> SysctlReport:
                 unreadable = False
             if snapshot_gap:
                 status = "unverified"
-            elif unreadable and not actual:
-                status = "unknown"
-            elif not actual or all(v is None for v in actual.values()):
-                status = "na"
-            elif all(_sysctl_value_ok(v, e["value"], cmp) for v in actual.values()):
-                status = "ok"
-            else:
+            elif not actual:
+                status = "unknown" if unreadable else "na"
+            elif any(v is not None and not _sysctl_value_ok(v, e["value"], cmp)
+                     for v in actual.values()):
                 status = "missing"
+            elif unreadable or any(v is None for v in actual.values()):
+                # 部分接口读不到时，不能凭其余接口的正确值宣称整项已加固。
+                status = "unknown"
+            else:
+                status = "ok"
             items.append(SysctlItem(key=key, expected=e["value"], cmp=cmp, actual=actual, status=status,
                                     desc=e["desc"], note=e.get("note", ""), source=source))
         groups.append((title, items))

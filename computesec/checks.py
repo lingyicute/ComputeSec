@@ -398,7 +398,12 @@ _CMDLINE_BOOL_KEYS = {
     "kpti", "random.trust_bootloader", "random.trust_cpu",
     "randomize_kstack_offset", "irqchip.gicv3_pseudo_nmi",
     "ia32_emulation",   # arch/x86/entry/common.c: kstrtobool，off/0/n 等价
+    "systemd.ssh_auto", # systemd parse_boolean：1/y/yes/true/on 与 0/n/no/false/off 等价
 }
+# dracut 的 getargbool 不是 kstrtobool：只有 0 / no / off（区分大小写）为假，其余任何值
+# （包括 false、n、OFF）都算真，所以 rd.shell=false 并没有关掉 initramfs 的 shell。
+_CMDLINE_DRACUT_BOOL_KEYS = {"rd.shell"}
+_DRACUT_FALSE = {"0", "no", "off"}
 # module_param(bool) 型布尔参数：同样经 kstrtobool 解析 on/1/y 与 off/0/n，
 # 但 cmdline 上省略 = 的裸 token 会被内核置为真（param_set_bool(val=NULL) → 1）。
 _CMDLINE_MODULE_BOOL_KEYS = {
@@ -420,6 +425,40 @@ _BOOL_FALSE = {"0", "off", "n", "no", "false"}
 # 对三个值做 strcmp 精确匹配（"nosmt,auto" 等非常规顺序会被整体忽略并保持默认），
 # 因此只能按强度序比较，不能做顺序无关的集合比较。
 _MITIGATIONS_RANK = {"off": 0, "auto": 1, "auto,nosmt": 2}
+# fs/proc/base.c proc_mem.force_override：never 彻底禁止 FOLL_FORCE，严格强于 ptrace。
+_PROC_MEM_RANK = {"always": 0, "ptrace": 1, "never": 2}
+
+
+def _iter_cmdline_tokens(cmdline):
+    """按内核 lib/cmdline.c next_arg() 的规则切分 /proc/cmdline。
+
+    双引号内空白不拆分，遇到 `--` 即停止（其后参数交给 init 而非内核），并剥离外层双引号。
+    """
+    n = len(cmdline)
+    i = 0
+    while i < n:
+        while i < n and cmdline[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        start = i
+        in_quote = False
+        while i < n and (in_quote or not cmdline[i].isspace()):
+            if cmdline[i] == '"':
+                in_quote = not in_quote
+            i += 1
+        tok = cmdline[start:i]
+        if tok == "--":
+            break
+        if len(tok) >= 2 and tok[0] == '"' and tok[-1] == '"':
+            tok = tok[1:-1]
+        if "=" in tok:
+            k, v = tok.split("=", 1)
+            if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
+                v = v[1:-1]
+            yield k, v
+        else:
+            yield tok, None
 
 
 def _cmdline_bool_norm(v):
@@ -492,8 +531,11 @@ def _cmdline_value_ok(key, actual, expected):
     if actual == expected:
         return True
     if nk == "efi":
+        # drivers/firmware/efi/libstub/efi-stub-helper.c：对 efi= 的值先后各做一次
+        # parse_option_str(val, "disable_early_pci_dma") / (val, "no_disable_early_pci_dma")，
+        # 后者命中即置回 false——与二者在逗号列表里的先后无关，no_ 形式总是赢。
         opts = {x.strip() for x in actual.split(",") if x.strip()}
-        return expected in opts
+        return expected in opts and f"no_{expected}" not in opts
     if nk in ("intel_iommu", "amd_iommu", "iommu"):
         return _iommu_opts_ok(nk, [x for x in actual.split(",") if x], expected)
     if nk == "slab_debug":
@@ -511,6 +553,12 @@ def _cmdline_value_ok(key, actual, expected):
         rank_a = _MITIGATIONS_RANK.get(actual)
         rank_e = _MITIGATIONS_RANK.get(expected)
         return rank_a is not None and rank_e is not None and rank_a >= rank_e
+    if nk == "proc_mem.force_override":
+        rank_a = _PROC_MEM_RANK.get(actual)
+        rank_e = _PROC_MEM_RANK.get(expected)
+        return rank_a is not None and rank_e is not None and rank_a >= rank_e
+    if nk in _CMDLINE_DRACUT_BOOL_KEYS:
+        return (actual in _DRACUT_FALSE) == (expected in _DRACUT_FALSE)
     # l1tf= 由内核在固定选项列表（off/flush/flush,nosmt/flush,nowarn/full/full,force）
     # 中做精确匹配，任何改写顺序的值都会被忽略，因此不做集合比较，仅精确匹配。
     if nk in _CMDLINE_BOOL_KEYS or nk in _CMDLINE_MODULE_BOOL_KEYS:
@@ -521,18 +569,14 @@ def _cmdline_value_ok(key, actual, expected):
 def get_cmdline_report() -> CmdlineReport:
     cmdline = read("/proc/cmdline").strip()
     present = {}
-    for tok in cmdline.split():
-        if "=" in tok:
-            k, v = tok.split("=", 1)
-            nk = _norm_key(k)
-            nk = _CMDLINE_KEY_ALIASES.get(nk, nk)
+    for k, v in _iter_cmdline_tokens(cmdline):
+        nk = _CMDLINE_KEY_ALIASES.get(_norm_key(k), _norm_key(k))
+        if v is not None:
             if nk in _CMDLINE_COMMA_KEYS and present.get(nk):
                 present[nk] = f"{present[nk]},{v}"
             else:
                 present[nk] = v
         else:
-            nk = _norm_key(tok)
-            nk = _CMDLINE_KEY_ALIASES.get(nk, nk)
             # 裸 token（无 =）不该抹掉同名的带值 token：内核会把两者分别交给各自的
             # 处理函数——slab_debug 的裸 token 仍会启用 DEBUG_DEFAULT_FLAGS，efi 的
             # 裸 token 被 parse_efi_cmdline(NULL) 拒绝并保持原值——丢掉带值形式只会

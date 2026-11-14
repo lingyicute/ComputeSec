@@ -171,6 +171,29 @@ def test_hsi_attr_tails_have_no_ambiguity():
     ("efi", "disable_early_pci_dma", "disable_early_pci_dma", True),
     ("efi", "noruntime,disable_early_pci_dma", "disable_early_pci_dma", True),
     ("efi", "noruntime", "disable_early_pci_dma", False),
+    # efi-stub-helper.c：no_disable_early_pci_dma 总是赢，与它在列表里的先后无关
+    ("efi", "disable_early_pci_dma,no_disable_early_pci_dma", "disable_early_pci_dma", False),
+    ("efi", "no_disable_early_pci_dma,disable_early_pci_dma", "disable_early_pci_dma", False),
+    ("efi", "no_disable_early_pci_dma", "disable_early_pci_dma", False),
+    # dracut getargbool：只有 0 / no / off 为假，false / n / OFF 都仍然是真
+    ("rd.shell", "0", "0", True),
+    ("rd.shell", "no", "0", True),
+    ("rd.shell", "off", "0", True),
+    ("rd.shell", "false", "0", False),
+    ("rd.shell", "n", "0", False),
+    ("rd.shell", "OFF", "0", False),
+    ("rd.shell", "1", "0", False),
+    ("rd.shell", None, "0", False),          # 裸 rd.shell 等价于真
+    # systemd parse_boolean
+    ("systemd.ssh_auto", "no", "no", True),
+    ("systemd.ssh_auto", "0", "no", True),
+    ("systemd.ssh_auto", "false", "no", True),
+    ("systemd.ssh_auto", "yes", "no", False),
+    # fs/proc/base.c proc_mem.force_override：never 严格强于 ptrace，always 弱于 ptrace
+    ("proc_mem.force_override", "ptrace", "ptrace", True),
+    ("proc_mem.force_override", "never", "ptrace", True),
+    ("proc_mem.force_override", "always", "ptrace", False),
+    ("proc_mem.force_override", "bogus", "ptrace", False),
     ("slab_debug", "FZ", "FZ", True),
     ("slab_debug", "FZP", "FZ", True),
     ("slab_debug", "ZF", "FZ", True),
@@ -1174,3 +1197,36 @@ def test_usb_devices_falls_back_to_plus_usb_udev_file(monkeypatch):
     devs, _ = checks._usb_devices()
     assert devs[0]["vid"] == "25a7"
     assert devs[0]["manufacturer"] == "Compx"
+
+
+def test_cmdline_stops_at_double_dash_and_handles_quotes(monkeypatch):
+    """`--` 之后的参数传给 init，双引号内的空白与参数不得误拆或带引号失配。"""
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    line = (
+        'acpi_osi="Windows 2020" foo="a init_on_free=1 b" '
+        'lockdown="confidentiality" proc_mem.force_override=never '
+        'rd.shell=no systemd.ssh_auto=0 '
+        'efi=disable_early_pci_dma,no_disable_early_pci_dma '
+        '-- init_on_alloc=1'
+    )
+    monkeypatch.setattr(checks, "read", lambda p, default="": line if p == "/proc/cmdline" else default)
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert by_key["lockdown"].status == "ok"
+    assert by_key["proc_mem.force_override"].status == "ok"
+    assert by_key["rd.shell"].status == "ok"
+    assert by_key["systemd.ssh_auto"].status == "ok"
+    assert by_key["efi"].status == "wrong"              # 被 no_disable_early_pci_dma 撤销
+    assert by_key["init_on_alloc"].status == "missing"  # 在 -- 之后，内核不会解析
+    assert by_key["init_on_free"].status == "missing"   # 只是 foo 的引号内值
+
+
+@pytest.mark.parametrize("line,want", [
+    ('a=1 "b=2 c" d', [("a", "1"), ("b", "2 c"), ("d", None)]),
+    ('k="x y" z', [("k", "x y"), ("z", None)]),
+    ("quiet -- init_on_alloc=1", [("quiet", None)]),
+    ("a  \t b=", [("a", None), ("b", "")]),
+    ("", []),
+])
+def test_iter_cmdline_tokens(line, want):
+    assert list(checks._iter_cmdline_tokens(line)) == want

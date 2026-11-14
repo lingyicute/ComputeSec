@@ -11,6 +11,7 @@ run.py（源码直接运行；Flatpak 里它就是 /app/bin/computesec）与 pip
 """
 
 import os
+import re
 import shutil
 import sys
 import sysconfig
@@ -18,6 +19,16 @@ import sysconfig
 from . import data, xdg
 
 APP_ID = data.APP_ID
+# .desktop 里的启动命令行（整行）。
+_EXEC_LINE_RE = re.compile(r"^Exec=.*$", re.M)
+
+
+def _same_file(a, b):
+    """a 与 b 是否是同一个文件；任何一个不存在都算不是。"""
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
 
 
 def _quote_desktop_arg(arg):
@@ -123,15 +134,22 @@ def install_desktop(uninstall=False, launcher=None):
             return False
         # Exec= 是这份 .desktop 里唯一需要按当前安装位置改写的一行。找不到它时
         # 装出去的菜单项会指向一个不存在的命令，宁可直接报错也不要静默装坏。
-        if "Exec=computesec" not in content:
+        # 按整行改写，而不是替换字面的 "Exec=computesec"：pip install --user 时源文件
+        # 就在 $XDG_DATA_HOME 里（见下），第二次 --install 读到的已是改写后的那一行。
+        if not _EXEC_LINE_RE.search(content):
             sys.stderr.write(f"{src_desktop} 里没有「Exec=computesec」一行，无法写入启动命令。\n")
             return False
         exec_line = " ".join(_quote_desktop_arg(a) for a in launcher)
-        content = content.replace("Exec=computesec", f"Exec={exec_line}")
+        # 用函数做替换：exec_line 里的反斜杠不能被 re 当成转义序列再解释一遍。
+        content = _EXEC_LINE_RE.sub(lambda _m: f"Exec={exec_line}", content, count=1)
         try:
             os.makedirs(apps_dir, exist_ok=True)
             os.makedirs(icon_dir, exist_ok=True)
-            shutil.copy(src_icon, icon_path)
+            # pip install --user 把 data-files 装进 ~/.local/share，默认的 XDG_DATA_HOME
+            # 也是它：源与目标是同一个文件，shutil.copy 会抛 SameFileError。图标已经
+            # 在位，跳过即可；.desktop 的内容上面已整份读出，原地改写没有问题。
+            if not _same_file(src_icon, icon_path):
+                shutil.copy(src_icon, icon_path)
             with open(desktop_path, "w", encoding="utf-8") as f:
                 f.write(content)
         except OSError as e:

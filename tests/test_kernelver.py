@@ -285,6 +285,9 @@ class _FakeResponse:
         self.seen_limit = n
         return out
 
+    # _default_fetcher 用的是 read1()（至多一次底层 recv）；替身没有底层 socket，两者行为相同。
+    read1 = read
+
 
 def _patch_urlopen(monkeypatch, resp):
     seen = {}
@@ -320,6 +323,47 @@ def test_default_fetcher_gives_up_after_the_deadline(monkeypatch):
     with pytest.raises(ValueError, match="秒"):
         kv._default_fetcher(kv.RELEASES_URL, 6)
     assert resp.reads <= 1                     # 没有把 4096 字节一点点吃进内存
+
+
+def test_default_fetcher_deadline_holds_against_a_real_dripping_response(monkeypatch):
+    """真实的 HTTPResponse + 逐字节慢发的正文：到了 deadline 就得停，而不是等正文发完。
+
+    HTTPResponse.read(n) 会一直等到凑满 n 字节（或 EOF）才返回，对端每隔一会儿吐一个
+    字节时，一次 read() 就拖到整个正文发完，循环里的 deadline 检查根本轮不到。上面的
+    替身每次 read 只交一块，测不出这一点，所以这里用 socketpair 接一个真的响应对象。
+    """
+    import http.client
+    import socket
+    import threading
+    import time
+
+    body = b"x" * 40
+    client, server = socket.socketpair()
+
+    def drip():
+        try:
+            server.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n" % len(body))
+            for i in range(len(body)):
+                time.sleep(0.05)                    # 整个正文要 2 秒才发完
+                server.sendall(body[i:i + 1])
+        except OSError:
+            pass                                    # 客户端到点放弃、关掉连接是预期行为
+        finally:
+            server.close()
+
+    threading.Thread(target=drip, daemon=True).start()
+    client.settimeout(5)                            # 单次 recv 的超时远大于每个字节的间隔
+    resp = http.client.HTTPResponse(client)
+    resp.begin()
+    resp.url = kv.RELEASES_URL
+    monkeypatch.setattr(kv, "_urlopen", lambda req, timeout=None: resp)
+    started = time.monotonic()
+    try:
+        with pytest.raises(ValueError, match="秒"):
+            kv._default_fetcher(kv.RELEASES_URL, 0.3)
+    finally:
+        client.close()
+    assert time.monotonic() - started < 1.2         # 远早于正文发完的 2 秒
 
 
 def test_default_fetcher_reports_oversized_response(monkeypatch):

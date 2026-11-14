@@ -248,7 +248,10 @@ def _default_fetcher(url, timeout):
         while True:
             if time.monotonic() > deadline:
                 raise ValueError(f"读取 {url} 超过 {timeout:g} 秒，已中止")
-            chunk = resp.read(64 * 1024)
+            # 必须是 read1()：read(n) 会一直等到凑满 n 字节（或 EOF）才返回，对端逐字节
+            # 慢发时一次调用就拖到整个正文发完，上面的 deadline 根本轮不到检查。
+            # read1() 至多做一次底层 recv，收到多少就交回多少。
+            chunk = resp.read1(64 * 1024)
             if not chunk:
                 break
             size += len(chunk)

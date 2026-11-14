@@ -194,6 +194,44 @@ def test_install_desktop_falls_back_to_other_share_roots(tmp_path, monkeypatch):
     assert "Exec=/opt/computesec" in content
 
 
+def test_install_desktop_in_place_for_pip_user_layout(tmp_path, monkeypatch, capsys):
+    """pip install --user：data-files 就装在 $XDG_DATA_HOME 里，源与目标是同一个文件。
+
+    此前 shutil.copy 抛 SameFileError，--install 只报一句「安装失败」。这里要原地把
+    Exec= 改写成真实路径，并且重复执行仍然成功（第二次读到的已是改写后的那一行）。
+    """
+    user_root = tmp_path / "local"
+    share = user_root / "share"
+    monkeypatch.setenv("XDG_DATA_HOME", str(share))
+    monkeypatch.setattr(cli.shutil, "which", lambda name: None)   # 不真的去刷新缓存
+    (share / "applications").mkdir(parents=True)
+    (share / "icons" / "hicolor" / "scalable" / "apps").mkdir(parents=True)
+    desktop = share / "applications" / (cli.APP_ID + ".desktop")
+    icon = share / "icons" / "hicolor" / "scalable" / "apps" / (cli.APP_ID + ".svg")
+    desktop.write_text("[Desktop Entry]\nName=ComputeSec\nExec=computesec\nIcon=x\n", encoding="utf-8")
+    icon.write_text("<svg/>")
+    monkeypatch.setattr(cli, "__file__", str(tmp_path / "site-packages" / "computesec" / "cli.py"))
+    monkeypatch.setattr(cli, "_share_roots", lambda: [str(user_root)])
+
+    for _ in range(2):
+        assert cli.install_desktop(launcher=["/home/u/.local/bin/computesec"]) is True
+        lines = desktop.read_text(encoding="utf-8").splitlines()
+        assert [ln for ln in lines if ln.startswith("Exec=")] == ["Exec=/home/u/.local/bin/computesec"]
+        assert "Name=ComputeSec" in lines and "Icon=x" in lines
+        assert icon.read_text() == "<svg/>"
+    assert "安装失败" not in capsys.readouterr().err
+
+
+def test_install_desktop_keeps_backslashes_in_exec(tmp_path, monkeypatch):
+    """Exec= 按整行用正则改写：启动命令里的反斜杠不能被 re 当成转义序列再解释一遍。"""
+    data_home = _prepare(tmp_path, monkeypatch)
+    weird = "/home/u/a\\b/computesec"
+    assert cli.install_desktop(launcher=[weird]) is True
+    content = (data_home / "applications" / (cli.APP_ID + ".desktop")).read_text(encoding="utf-8")
+    assert f"Exec={cli._quote_desktop_arg(weird)}\n" in content
+    assert content.count("Exec=") == 1
+
+
 def test_install_desktop_requires_the_exec_line(tmp_path, monkeypatch, capsys):
     """源文件里没有 Exec= 行时不能装出一个指向不存在命令的菜单项。"""
     _prepare(tmp_path, monkeypatch)

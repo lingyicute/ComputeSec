@@ -43,6 +43,7 @@ MAX_RESPONSE_BYTES = 1_000_000
 
 # 内核 release 串：6.1.158+ / 7.2.12-200.fc44.x86_64 / 6.18.0-rc3 / 7.3
 _RELEASE_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?")
+_UPSTREAM_RELEASE_RE = re.compile(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-rc[0-9]+)?")
 
 TIER_ZH = {
     "mainline": "mainline（上游主线）",
@@ -67,7 +68,15 @@ def parse_release(text):
     m = _RELEASE_RE.match(text.strip())
     if not m:
         return None
-    return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+    try:
+        return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+    except ValueError:
+        return None
+
+
+def _upstream_version_ok(version):
+    return (isinstance(version, str) and _UPSTREAM_RELEASE_RE.fullmatch(version) is not None
+            and parse_release(version) is not None)
 
 
 def parse_releases_json(text):
@@ -83,14 +92,17 @@ def parse_releases_json(text):
         return "", ""
     if not isinstance(doc, dict):
         return "", ""
+    releases = doc.get("releases")
+    if not isinstance(releases, list):
+        return "", ""
     mainline = newest_stable = ""
     maintained = []
-    for rel in doc.get("releases") or []:
+    for rel in releases:
         if not isinstance(rel, dict):
             continue
         moniker = rel.get("moniker")
         version = rel.get("version")
-        if not isinstance(version, str):
+        if not _upstream_version_ok(version):
             continue
         if moniker == "mainline" and not mainline:
             mainline = version
@@ -149,7 +161,7 @@ class KernelSupport:
     @property
     def have_upstream(self):
         """是否拿到了 kernel.org 的上游版本号。"""
-        return bool(self.mainline or self.stable)
+        return _upstream_version_ok(self.mainline) or _upstream_version_ok(self.stable)
 
     @property
     def parsed(self):
@@ -199,6 +211,9 @@ class KernelSupport:
             return None
         for key in ("release", "mainline", "stable", "error"):
             if not isinstance(d.get(key, ""), str):
+                return None
+        for key in ("mainline", "stable"):
+            if d.get(key) and not _upstream_version_ok(d[key]):
                 return None
         if d.get("tier", "unknown") not in TIER_ZH:
             return None
@@ -300,7 +315,7 @@ def load_cache(path=None, now=None):
             st = KernelSupport.from_dict(json.load(f))
     except (OSError, ValueError, TypeError):
         return None
-    if st is None or not (st.mainline or st.stable):
+    if st is None or not st.have_upstream:
         return None
     if now is not None:
         if st.checked_at <= 0 or not 0 <= now - st.checked_at <= CACHE_TTL:

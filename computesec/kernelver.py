@@ -251,16 +251,15 @@ def _urlopen(req, timeout):
 def _default_fetcher(url, timeout):
     """取回 releases.json 正文。
 
-    timeout 是**整次请求**的截止时间，不只是单次 socket 操作的超时。
+    timeout 用于单次 socket 操作，并在响应体的底层读取之间检查总耗时。
 
-    ``urlopen(timeout=)`` 只约束单次 connect / read，对端每 5 秒吐 1 个字节时，
-    每一次 read() 都在超时之内合法返回，整次请求却可以一直拖下去。后果不是崩溃
-    而是更糟：后台线程一直挂着，检查标志位永不复位，「重试」按钮从此点了没有任何
-    反应（见 main.start_kernel_check）。因此这里按块读取，每块之前核对一次
-    deadline。
+    HTTPResponse.read(n) 会反复读 socket，直到凑齐 n 字节或 EOF。对端持续
+    滴流时，外层的 deadline 检查根本没有机会运行。read1(n) 最多进行一次
+    底层读取，才能把控制权及时交回 deadline 检查；最后一次读取后也必须检查，
+    不能因为已经读到 EOF 就接受超时的响应。
 
-    MAX_RESPONSE_BYTES 仍然保留：它防的是"一次给你一大坨"，deadline 防的是
-    "一点一点喂给你"，两者互不替代。
+    MAX_RESPONSE_BYTES 防止过大响应，deadline 防止持续滴流；二者互不替代。
+    DNS、重定向及响应头解析仍受 urllib 的行为约束，不宣称严格的全链路截止时间。
     """
     req = urllib.request.Request(url, headers={"User-Agent": "ComputeSec"})
     deadline = time.monotonic() + timeout
@@ -277,6 +276,8 @@ def _default_fetcher(url, timeout):
             # 慢发时一次调用就拖到整个正文发完，上面的 deadline 根本轮不到检查。
             # read1() 至多做一次底层 recv，收到多少就交回多少。
             chunk = resp.read1(64 * 1024)
+            if time.monotonic() > deadline:
+                raise ValueError(f"读取 {url} 超过 {timeout:g} 秒，已中止")
             if not chunk:
                 break
             size += len(chunk)

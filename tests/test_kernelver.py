@@ -310,7 +310,7 @@ def test_load_cache_rejects_garbage(tmp_path):
 class _FakeResponse:
     """够 _default_fetcher 用的最小替身。
 
-    read() 必须像真实的 HTTPResponse 那样"读一点少一点、读完返回 b''"：
+    read1() 必须像真实的 HTTPResponse 那样"读一点少一点、读完返回 b''"：
     _default_fetcher 现在是按块循环读的，一次性返回全部正文的替身会让它死循环。
     """
 
@@ -328,15 +328,12 @@ class _FakeResponse:
     def geturl(self):
         return self._url
 
-    def read(self, n=-1):
+    def read1(self, n=-1):
         self.reads += 1
         step = len(self._left) if n is None or n < 0 else n
         out, self._left = self._left[:step], self._left[step:]
         self.seen_limit = n
         return out
-
-    # _default_fetcher 用的是 read1()（至多一次底层 recv）；替身没有底层 socket，两者行为相同。
-    read1 = read
 
 
 def _patch_urlopen(monkeypatch, resp):

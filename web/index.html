@@ -899,15 +899,18 @@
     };
     for (const k in v) root.style.setProperty(k, v[k]);
     if (!supportsMix) {
-      const resolveMix = s => s.replace(mixRe, (_, v1, p, v2) => {
+      const resolveMix = s => s.replace(mixRe, (m, v1, p, v2) => {
         const w = p / 100, c1 = labs[v[v1 || '--on-surface']];
+        if (!c1) return m;
         if (!v2) return `rgba(${labRgb(c1).join(', ')}, ${w})`;
         const c2 = labs[v[v2]];
+        if (!c2) return m;
         return `rgb(${labRgb(c1.map((x, i) => x * w + c2[i] * (1 - w))).join(', ')})`;
       });
       if (styleEl) styleEl.textContent = resolveMix(rawCss);
       inlineMix.forEach(([el, css]) => el.setAttribute('style', resolveMix(css)));
     }
+    for (const k in labs) delete labs[k];
     root.style.colorScheme = dark ? 'dark' : 'light';
     const prevMeta = document.querySelector('meta[name="theme-color"]');
     if (prevMeta) prevMeta.remove();
@@ -925,11 +928,15 @@
     { name: '珊瑚', hue: 35 },
   ];
 
-  const savedHue = localStorage.getItem('cs-hue');
+  const storageGet = k => { try { return localStorage.getItem(k); } catch (_) { return null; } };
+  const storageSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+  const savedHue = storageGet('cs-hue');
+  const parsedHue = savedHue !== null && savedHue.trim() !== '' ? Number(savedHue) : NaN;
+  const savedDark = storageGet('cs-dark');
   let state = {
-    hue: savedHue !== null ? +savedHue : 150,
-    dark: localStorage.getItem('cs-dark') !== null
-      ? localStorage.getItem('cs-dark') === '1'
+    hue: Number.isFinite(parsedHue) ? ((parsedHue % 360) + 360) % 360 : 150,
+    dark: savedDark !== null
+      ? savedDark === '1'
       : matchMedia('(prefers-color-scheme: dark)').matches,
   };
 
@@ -946,7 +953,7 @@
   const themeIcon = document.getElementById('themeIcon');
   themeBtn.addEventListener('click', () => {
     state.dark = !state.dark;
-    localStorage.setItem('cs-dark', state.dark ? '1' : '0');
+    storageSet('cs-dark', state.dark ? '1' : '0');
     apply();
   });
 
@@ -962,7 +969,7 @@
     b.style.background = oklch(0.62, 0.16, s.hue);
     b.addEventListener('click', () => {
       state.hue = s.hue;
-      localStorage.setItem('cs-hue', s.hue);
+      storageSet('cs-hue', s.hue);
       apply();
     });
     pop.appendChild(b);
@@ -1014,6 +1021,7 @@
     snackTimer = setTimeout(() => snack.classList.remove('show'), 2200);
   }
   document.querySelectorAll('.copy').forEach(btn => {
+    let resetTimer;
     btn.addEventListener('click', async () => {
       const pre = btn.closest('.code').cloneNode(true);
       pre.querySelector('.copy').remove();
@@ -1023,7 +1031,8 @@
         await navigator.clipboard.writeText(text);
         toast('已复制到剪贴板');
         btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
-        setTimeout(() => {
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(() => {
           btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
         }, 1600);
       } catch (e) { toast('复制失败，请手动选择文本'); }
@@ -1036,16 +1045,20 @@
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
   /* ---------- Scroll reveal ---------- */
-  const io = new IntersectionObserver(entries => {
-    entries.forEach((en, i) => {
-      if (en.isIntersecting) {
-        en.target.style.transitionDelay = Math.min(i * 60, 240) + 'ms';
-        en.target.classList.add('in');
-        io.unobserve(en.target);
-      }
-    });
-  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach((en, i) => {
+        if (en.isIntersecting) {
+          en.target.style.transitionDelay = Math.min(i * 60, 240) + 'ms';
+          en.target.classList.add('in');
+          io.unobserve(en.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  } else {
+    document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+  }
 
   /* ---------- Responsive tweak for habit card ---------- */
   const mq = matchMedia('(max-width: 760px)');

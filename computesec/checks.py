@@ -735,7 +735,12 @@ def get_sysctl_report() -> SysctlReport:
                 # 判成"已加固"——后者是本程序最不该犯的错。快照的存活期是整次开机
                 # （hostdata.fresh 只比对 boot_id），而本程序自己就在提醒用户
                 # "长时间不重启"，两者叠在一起，快照可能已经过了一整天。
-                filled = {k: v for k, v in supplied.items() if k not in actual}
+                # 只在「这一项完全没读到」或「确有文件因权限读不到」时才补。通配符条目
+                # （net.ipv4.conf.*.…）读到了一部分、又没有权限错误时，快照里多出来的
+                # 键只能是采集之后消失的接口（VPN 断开、容器退出、拔掉的网卡）：补回来
+                # 就成了用户怎么改都消不掉的「未设置」。
+                gone_only = bool(actual) and not unreadable
+                filled = {} if gone_only else {k: v for k, v in supplied.items() if k not in actual}
                 if filled:
                     # 这些键在 /proc 里读不到（多半是 EACCES），用快照补上。
                     actual = {**actual, **filled}

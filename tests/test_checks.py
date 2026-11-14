@@ -1120,3 +1120,21 @@ def test_get_sysctl_report_smoke():
     assert [t for t, _ in r.groups] == [t for t, _ in data.SYSCTL_GROUPS]
     assert r.score is None or 0 <= r.score <= 100
     assert all(i.status in ("ok", "missing", "na", "unknown", "unverified") for i in r.all_items)
+
+
+def test_hsi_level_summary_excludes_undetermined_items():
+    """各等级分组的「x / y 项通过」与总览同一口径：无法判定的项目不进分母。"""
+    def item(level, flags):
+        return checks.HsiItem(id="x", name="n", summary="", level=level, result="unknown", flags=set(flags),
+                              uri="", info={}, passed="success" in flags, obsoleted="obsoleted" in flags)
+
+    rep = checks.HsiReport(ok=True, items=[
+        item(1, {"success"}), item(1, set()), item(1, {"missing-data"}),
+        item(1, {"success", "obsoleted"}),          # 已废弃的不显示，也不计数
+        item(2, {"success"}),
+    ])
+    assert rep.level_summary(1) == "1 / 2 项通过，另有 1 项无法判定"
+    assert rep.level_summary(2) == "1 / 1 项通过"
+    assert rep.level_summary(3) == "0 / 0 项通过"
+    # 各等级的分母加起来就是总览里的可评估项数
+    assert len(rep.scored) == 3

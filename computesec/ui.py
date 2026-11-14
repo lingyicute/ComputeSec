@@ -499,7 +499,7 @@ def build_hsi(report, win):
         items = [i for i in h.active if i.level == lvl]
         if not items:
             continue
-        g = group(title, f"{sum(1 for i in items if i.passed)} / {len(items)} 项通过")
+        g = group(title, h.level_summary(lvl))
         for it in items:
             g.add(_hsi_item_row(it))
         level_groups.append(g)

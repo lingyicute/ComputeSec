@@ -183,6 +183,19 @@ class HsiReport:
             return None
         return int(100 * sum(1 for i in act if i.passed) / len(act))
 
+    def level_summary(self, level):
+        """某一等级分组的「x / y 项通过」。
+
+        y 与 score 是同一口径：不含无法判定（missing-data）的项目。此前界面把它们
+        也数进了分母，各等级的 y 加起来比总览里的可评估项数多，而总览明说这些项目
+        「不计入通过率」。
+        """
+        items = [i for i in self.active if i.level == level]
+        scored = [i for i in items if not i.undetermined]
+        text = f"{sum(1 for i in scored if i.passed)} / {len(scored)} 项通过"
+        skipped = len(items) - len(scored)
+        return text + (f"，另有 {skipped} 项无法判定" if skipped else "")
+
 
 def _flags_to_set(v):
     s = set()

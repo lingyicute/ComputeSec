@@ -988,6 +988,22 @@ def test_sysctl_native_snapshot_still_fills_denied_wildcard_entries(monkeypatch)
     assert item.source.startswith("用户提供")
 
 
+def test_sysctl_native_snapshot_age_comes_from_the_sysctl_step(monkeypatch):
+    """快照补上的条目要标注 sysctl 这一步的采集时刻，而不是向导最近一次结束的时刻。"""
+    import time
+
+    key = "vm.mmap_rnd_bits"
+    now = int(time.time())
+    hd = hostdata.HostData({"collected_at": now, "steps": {
+        "sysctl": {"data": {"values": {key: "32"}}, "at": now - 3 * 3600}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [("t", [dict(key=key, value="32", desc="d")])])
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _k: ({}, True))
+
+    assert checks.get_sysctl_report().all_items[0].source == "用户提供（3 小时前）"
+
+
 def test_habits_report_score():
     def check(status):
         return checks.HabitCheck("k", "t", status, "s", [], "")

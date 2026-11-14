@@ -1138,3 +1138,39 @@ def test_hsi_level_summary_excludes_undetermined_items():
     assert rep.level_summary(3) == "0 / 0 项通过"
     # 各等级的分母加起来就是总览里的可评估项数
     assert len(rep.scored) == 3
+
+
+def test_usb_devices_reads_udev_char_devnum_file(monkeypatch):
+    """USB 设备带有字符设备号，udev 数据库文件为 c<major>:<minor> 而非 +usb:<dev>。"""
+    monkeypatch.setattr(checks.glob, "glob", lambda _p: ["/sys/bus/usb/devices/1-2"])
+    files = {
+        "/sys/bus/usb/devices/1-2/idVendor": "25a7\n",
+        "/sys/bus/usb/devices/1-2/idProduct": "FA67\n",
+        "/sys/bus/usb/devices/1-2/dev": "189:5\n",
+        "/sys/bus/usb/devices/1-2/bDeviceClass": "00\n",
+        "/run/udev/data/c189:5": (
+            "E:ID_VENDOR_FROM_DATABASE=Compx\n"
+            "E:ID_MODEL_FROM_DATABASE=2.4G Wireless Receiver\n"
+        ),
+    }
+    monkeypatch.setattr(checks, "read", lambda p, default="": files.get(p, default))
+    devs, source = checks._usb_devices()
+    assert source == "sysfs"
+    assert len(devs) == 1
+    assert devs[0]["manufacturer"] == "Compx"
+    assert devs[0]["product"] == "2.4G Wireless Receiver"
+    assert devs[0]["pid"] == "fa67"
+
+
+def test_usb_devices_falls_back_to_plus_usb_udev_file(monkeypatch):
+    """没有设备号（或 c<maj>:<min> 文件不存在）时仍退回旧的 +usb:<sysname> 路径。"""
+    monkeypatch.setattr(checks.glob, "glob", lambda _p: ["/sys/bus/usb/devices/1-2"])
+    files = {
+        "/sys/bus/usb/devices/1-2/idVendor": "25A7\n",
+        "/sys/bus/usb/devices/1-2/idProduct": "FA67\n",
+        "/run/udev/data/+usb:1-2": "E:ID_VENDOR_FROM_DATABASE=Compx\nE:ID_MODEL_FROM_DATABASE=Receiver\n",
+    }
+    monkeypatch.setattr(checks, "read", lambda p, default="": files.get(p, default))
+    devs, _ = checks._usb_devices()
+    assert devs[0]["vid"] == "25a7"
+    assert devs[0]["manufacturer"] == "Compx"

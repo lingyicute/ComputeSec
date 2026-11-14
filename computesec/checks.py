@@ -963,16 +963,21 @@ def check_uptime() -> HabitCheck:
 
 def _usb_devices():
     devs = []
-    for d in glob.glob("/sys/bus/usb/devices/*"):
+    for d in sorted(glob.glob("/sys/bus/usb/devices/*")):
         vid = read(os.path.join(d, "idVendor")).strip()
         if not vid:
             continue
         pid = read(os.path.join(d, "idProduct")).strip().lower()
         product = read(os.path.join(d, "product")).strip()
         manufacturer = read(os.path.join(d, "manufacturer")).strip()
-        # 若 sysfs 字符串为空，尝试从 /run/udev/data/+usb:<dev> 补全 hwdb 名称
+        # 若 sysfs 字符串为空，从 udev 数据库补全 hwdb 名称：
+        # USB 设备带有字符设备号（189:<minor>），udev 数据库文件名是 c<major>:<minor>，
+        # 而非 +usb:<sysname>（后者仅用于无设备号的接口）；保留 +usb: 作为兜底。
         if not product or not manufacturer:
-            udev_txt = read(f"/run/udev/data/+usb:{os.path.basename(d)}")
+            devnum = read(os.path.join(d, "dev")).strip()
+            udev_txt = read(f"/run/udev/data/c{devnum}") if devnum else ""
+            if not udev_txt:
+                udev_txt = read(f"/run/udev/data/+usb:{os.path.basename(d)}")
             if udev_txt:
                 if not manufacturer:
                     m_v = re.search(r"^E:ID_VENDOR_FROM_DATABASE=(.+)$", udev_txt, re.M)
@@ -983,14 +988,15 @@ def _usb_devices():
                     if m_p:
                         product = m_p.group(1).strip()
         devs.append(dict(vid=vid.lower(), pid=pid, product=product, manufacturer=manufacturer,
-                         cls=read(os.path.join(d, "bDeviceClass")).strip()))
+                         cls=read(os.path.join(d, "bDeviceClass")).strip().lower()))
     if devs:
         return devs, "sysfs"
     rc, out = run(["lsusb"])
     for line in out.splitlines():
-        m = re.match(r"Bus \d+ Device \d+: ID ([0-9a-f]{4}):([0-9a-f]{4})\s*(.*)", line)
+        m = re.match(r"Bus \d+ Device \d+: ID ([0-9a-f]{4}):([0-9a-f]{4})\s*(.*)", line, re.I)
         if m:
-            devs.append(dict(vid=m.group(1), pid=m.group(2), product=m.group(3), manufacturer="", cls=""))
+            devs.append(dict(vid=m.group(1).lower(), pid=m.group(2).lower(),
+                             product=m.group(3), manufacturer="", cls=""))
     return devs, ("lsusb" if devs else "")
 
 

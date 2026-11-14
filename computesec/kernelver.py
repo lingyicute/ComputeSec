@@ -266,7 +266,7 @@ def _default_fetcher(url, timeout):
     with _urlopen(req, timeout) as resp:
         # 重定向已逐跳校验，这里再核一次最终地址，防止将来有人换掉 opener 而不自知。
         final = resp.geturl() or url
-        if not final.startswith("https://"):
+        if not final.lower().startswith("https://"):   # 与逐跳重定向校验一致：scheme 不区分大小写
             raise ValueError(f"请求被重定向到了非 https 地址：{final}")
         chunks, size = [], 0
         while True:

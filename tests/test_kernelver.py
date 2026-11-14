@@ -460,6 +460,13 @@ def test_default_fetcher_accepts_https_redirect(monkeypatch):
     assert kv._default_fetcher(kv.RELEASES_URL, 5) == "ok"
 
 
+def test_default_fetcher_accepts_uppercase_https_scheme(monkeypatch):
+    """重定向校验按 .lower() 放行 HTTPS://，最终地址的核对也必须一致。"""
+    resp = _FakeResponse(b"ok", url="HTTPS://mirrors.example/releases.json")
+    _patch_urlopen(monkeypatch, resp)
+    assert kv._default_fetcher(kv.RELEASES_URL, 5) == "ok"
+
+
 # ---------------------------------------------------------------------------
 # 文案
 # ---------------------------------------------------------------------------

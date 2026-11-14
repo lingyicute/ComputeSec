@@ -950,6 +950,44 @@ def test_sysctl_native_snapshot_fills_unreadable_keys(monkeypatch):
     assert item.source.startswith("用户提供")
 
 
+def test_sysctl_native_snapshot_does_not_resurrect_removed_interfaces(monkeypatch):
+    """采集快照之后消失的接口（VPN 断开、容器退出）不能被快照补回结果里。
+
+    通配符条目在 /proc 里读到了实时值、又没有权限错误时，实时读数就是完整的；
+    快照里多出来的 tun0 已经不存在，补回来会得到一条用户怎么改都消不掉的「未设置」。
+    """
+    key = "net.ipv4.conf.*.accept_redirects"
+    live = {"net.ipv4.conf.all.accept_redirects": "0", "net.ipv4.conf.eth0.accept_redirects": "0"}
+    snapshot = dict(live, **{"net.ipv4.conf.tun0.accept_redirects": "1"})
+    hd = hostdata.HostData({"collected_at": 1, "steps": {"sysctl": {"data": {"values": snapshot}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [("t", [dict(key=key, value="0", desc="d")])])
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _k: (dict(live), False))
+
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.actual == live
+    assert item.status == "ok"
+    assert item.source == "proc"
+
+
+def test_sysctl_native_snapshot_still_fills_denied_wildcard_entries(monkeypatch):
+    """通配符条目里确有文件因权限读不到时，仍然用快照补上。"""
+    key = "net.ipv4.conf.*.accept_redirects"
+    live = {"net.ipv4.conf.all.accept_redirects": "0"}
+    snapshot = dict(live, **{"net.ipv4.conf.eth0.accept_redirects": "0"})
+    hd = hostdata.HostData({"collected_at": 1, "steps": {"sysctl": {"data": {"values": snapshot}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [("t", [dict(key=key, value="0", desc="d")])])
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _k: (dict(live), True))
+
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.actual == snapshot
+    assert item.status == "ok"
+    assert item.source.startswith("用户提供")
+
+
 def test_habits_report_score():
     def check(status):
         return checks.HabitCheck("k", "t", status, "s", [], "")

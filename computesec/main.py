@@ -12,7 +12,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import checks, data, hostdata, kernelver, ui, wizard, xdg  # noqa: E402
+from . import checks, cli, data, hostdata, kernelver, ui, wizard, xdg  # noqa: E402
 
 PAGES = [
     ("dashboard", "仪表盘", "go-home-symbolic"),
@@ -38,7 +38,9 @@ class MainWindow(Adw.ApplicationWindow):
         self.report = None
         self.bins = {}
         self.built = set()          # 已构建的页面
+        self._closed = False        # 窗口已关闭后屏蔽延迟到达的后台回调
         self._idle_build_id = 0     # 空闲增量构建的 source id
+        self._wizard_idle_id = 0    # 启动时延迟打开采集向导的 source id
         self._refreshing = False    # 是否有检测线程正在运行（防止菜单/快捷键重入）
         self._refresh_pending = False  # 检测进行中时又收到了刷新请求，结束后补跑一次
         self._wizard = None         # 当前打开的数据采集向导窗口（防止重复弹出）
@@ -121,7 +123,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.refresh()
         else:
             hostdata.set_current(hostdata.HostData())
-            GLib.idle_add(self.open_wizard)
+            self._wizard_idle_id = GLib.idle_add(self.open_wizard)
         # 与首次检测并行：联网核对内核版本线（不阻塞界面；失败不弹窗，内核页会显示「未能核对」）
         self.start_kernel_check()
 
@@ -172,6 +174,8 @@ class MainWindow(Adw.ApplicationWindow):
         return KERNEL_CHECK_STARTED
 
     def on_kernel_status(self, st, manual=False, gen=None):
+        if self._closed:
+            return False
         # 代际比当前小的结果已经过期（用户在它返回之前又发起了一次检查），
         # 直接丢弃：既不能复位新一代的标志位，也不能把旧结果写进 report。
         if gen is not None and gen != self._kernel_check_gen:
@@ -200,7 +204,7 @@ class MainWindow(Adw.ApplicationWindow):
         只补一次：用户连点十下和点一下想知道的是同一件事，没必要发起十次请求。
         补跑时一律 force=True——用户既然手动点过，就说明他要的是最新结果而不是缓存。
         """
-        if not self._kernel_pending:
+        if not self._kernel_pending or self._closed:
             return
         self._kernel_pending = 0
         self.start_kernel_check(force=True)
@@ -211,7 +215,7 @@ class MainWindow(Adw.ApplicationWindow):
         首次运行时采集向导是模态窗口，若此时再叠一个同样以主窗口为父的模态对话框，
         两者会互相抢焦点、甚至被向导挡在后面。因此向导开着就先记下来，等它关闭后再弹。
         """
-        if self._pending_kernel_warning is None or self._wizard is not None:
+        if self._closed or self._pending_kernel_warning is None or self._wizard is not None:
             return False
         st, self._pending_kernel_warning = self._pending_kernel_warning, None
         dlg = ui.kernel_warning_dialog(st)
@@ -228,6 +232,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def open_wizard(self, *_):
         """打开数据采集向导。向导保证 on_finish 恰好回调一次（完成或被关闭）。"""
+        self._wizard_idle_id = 0
+        if self._closed:
+            return False
         if self._wizard is not None:
             self._wizard.present()
             return False
@@ -240,6 +247,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     def on_wizard_finish(self, _hd):
         self._wizard = None
+        if self._closed:
+            return
         self.refresh()
         self.show_kernel_warning()
 
@@ -285,6 +294,8 @@ class MainWindow(Adw.ApplicationWindow):
         # 刷新按钮在检测期间会被禁用，但菜单项 / 快捷键 / 向导回调仍可重入。
         # 用标志位串行化：若已有检测在跑，只记一个 pending，等它结束后再跑一次，
         # 这样向导采集到新数据后一定能反映到结果里。
+        if self._closed:
+            return
         if self._refreshing:
             self._refresh_pending = True
             return
@@ -306,9 +317,13 @@ class MainWindow(Adw.ApplicationWindow):
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_close(self, *_):
+        self._closed = True
         if self._idle_build_id:
             GLib.source_remove(self._idle_build_id)
             self._idle_build_id = 0
+        if self._wizard_idle_id:
+            GLib.source_remove(self._wizard_idle_id)
+            self._wizard_idle_id = 0
         return False
 
     def build_page(self, key):
@@ -333,6 +348,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _build_pending(self):
         """空闲时逐页构建剩余页面：每次只做一页，让主循环有机会处理输入与绘制。"""
+        if self._closed:
+            self._idle_build_id = 0
+            return False
         for key, _, _ in PAGES:
             if key not in self.built:
                 self.build_page(key)
@@ -343,6 +361,11 @@ class MainWindow(Adw.ApplicationWindow):
     def render(self, report):
         # 第一时间复位标志：即使下面的渲染代码中途抛异常，也不会锁死后续刷新
         self._refreshing = False
+        if self._closed:
+            return False
+        # 同步主线程上已完成的内核版本线状态，避免 collect() 线程捕获旧值后覆盖新结果
+        if kernelver.CURRENT is not None:
+            report.kernel_support = kernelver.CURRENT
         self.report = report
         # 只构建当前可见的页面，其余留到空闲时增量构建。
         # 一次性构建全部五页会在一个主循环回调里创建数千个控件，
@@ -375,6 +398,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     def render_error(self, error):
         self._refreshing = False
+        if self._closed:
+            return False
         if self._idle_build_id:
             GLib.source_remove(self._idle_build_id)
             self._idle_build_id = 0
@@ -391,7 +416,7 @@ class MainWindow(Adw.ApplicationWindow):
         return False
 
     def _run_pending_refresh(self):
-        if self._refresh_pending:
+        if self._refresh_pending and not self._closed:
             self._refresh_pending = False
             self.refresh()
 
@@ -408,12 +433,15 @@ class Application(Adw.Application):
             theme = Gtk.IconTheme.get_for_display(display)
             theme.add_search_path(os.path.join(PROJECT_ROOT, "data", "icons"))
             # --install 写的就是 $XDG_DATA_HOME/icons（见 cli.install_desktop），
-            # 这里必须用同一条规则去找，否则设了 XDG_DATA_HOME 的机器装上菜单项后
-            # 仍然找不到图标。
-            for p in (os.path.join(xdg.data_home(), "icons"),
-                      os.path.join(sys.prefix, "share", "icons"),   # pip install .
-                      "/app/share/icons"):                          # Flatpak
-                if os.path.isdir(p):
+            # 同时覆盖 pip install / pip install --user 落入的各 share/icons 根目录。
+            icon_dirs = [os.path.join(xdg.data_home(), "icons")]
+            for root in cli._share_roots():
+                icon_dirs.append(os.path.join(root, "share", "icons"))
+            icon_dirs.append("/app/share/icons")                    # Flatpak
+            seen = set()
+            for p in icon_dirs:
+                if p not in seen and os.path.isdir(p):
+                    seen.add(p)
                     theme.add_search_path(p)
         Gtk.Window.set_default_icon_name(data.APP_ID)
         for name, cb, accel in (("about", self.on_about, None), ("quit", lambda *_: self.quit(), "<Primary>q"),

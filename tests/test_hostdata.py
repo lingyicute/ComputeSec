@@ -270,6 +270,31 @@ def test_step_age_text_falls_back_to_collected_at():
     assert hostdata.HostData({"steps": {"sysctl": {"at": "bad"}}}).step_age_text("sysctl") == ""
 
 
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity", "1e999"])
+def test_load_rejects_non_finite_timestamp(tmp_path, monkeypatch, literal):
+    """json.load 认 NaN / Infinity 字面量（1e999 也会被读成 inf），但它们不是时间戳。"""
+    import os
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    path = os.path.join(hostdata._data_dir(), hostdata.CACHE_NAME)
+    with open(path, "w") as f:
+        f.write('{"collected_at": %s, "boot_id": "b", "steps": {}}' % literal)
+    assert hostdata.HostData.load().payload == {}
+
+
+@pytest.mark.parametrize("ts", [float("nan"), float("inf"), float("-inf"), 10 ** 400],
+                         ids=["nan", "inf", "-inf", "huge-int"])
+def test_age_text_survives_absurd_timestamps(ts):
+    """手工构造的 payload 绕过了 load() 的校验：算年龄时同样不能抛异常。
+
+    此前 int(time.time() - inf) 抛 OverflowError，被 checks.collect() 的兜底吞掉后
+    表现为整个 sysctl 板块凭空消失。
+    """
+    hd = hostdata.HostData({"collected_at": ts, "steps": {"sysctl": {"data": {"values": {}}, "at": ts}}})
+    assert hd.age_text == ""
+    assert hd.step_age_text("sysctl") == ""
+
+
 def test_mark_done_records_boot_id(monkeypatch):
     monkeypatch.setattr(hostdata, "boot_id", lambda: "boot-9")
     hd = hostdata.HostData()

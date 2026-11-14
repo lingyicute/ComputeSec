@@ -155,7 +155,11 @@ def _payload_ok(payload):
 
 def _is_number(v):
     # bool 是 int 的子类，但 True 当时间戳显然是坏数据。
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    # json.load 认 NaN / Infinity 这两个字面量，但它们同样不是时间戳：拿去做减法、
+    # 取整会抛 ValueError / OverflowError。
+    return v == v and abs(v) != float("inf")
 
 
 def _sysctl_data_ok(d):
@@ -290,7 +294,10 @@ class HostData:
     def _age(ts):
         if not ts:
             return ""
-        secs = max(0, int(time.time() - ts))
+        try:
+            secs = max(0, int(time.time() - ts))
+        except (OverflowError, ValueError):     # 超出 float 范围的整数、NaN / Infinity
+            return ""
         if secs < 60:
             return "刚刚"
         if secs < 3600:

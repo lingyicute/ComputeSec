@@ -174,9 +174,9 @@ def text_row(title, body, selectable=False):
 
 
 def group(title, description=None):
-    g = Adw.PreferencesGroup(title=title)
+    g = Adw.PreferencesGroup(title=esc(title))
     if description:
-        g.set_description(description)
+        g.set_description(esc(description))
     return g
 
 
@@ -211,6 +211,7 @@ def praise_row(text):
     row.add_css_class("success")
     return row
 
+
 def hero(icon_name, title, description=None, css=None, desc_css=None):
     """页面顶部的大图标 + 标题 + 副标题。
     不使用 Adw.StatusPage：它内部自带 Clamp(400px) 与 ScrolledWindow，嵌套在可滚动页面里会被压窄而显示不全。"""
@@ -233,6 +234,7 @@ def hero(icon_name, title, description=None, css=None, desc_css=None):
             d.add_css_class(desc_css)
         box.append(d)
     return box
+
 
 def kernel_warning_dialog(st):
     """构造"内核不在受支持版本线上"的提示对话框（不显示，由调用方 present）。"""
@@ -262,7 +264,7 @@ def build_dashboard(report, win, navigate):
     head.append(icon)
     head.append(score_label(overall, big=True))
     if overall is None:
-        grade = "无法评估：没有可用的检测项，请检查上面的提示"
+        grade = "无法评估：没有可用的检测项，请检查下方的提示"
     else:
         grade = "安全状况良好，请继续保持！" if overall >= 90 else ("还有一些可以改进的地方" if overall >= 70 else "存在多项需要处理的风险")
     head.append(wrapped_label(grade, css=("title-4",)))
@@ -475,7 +477,14 @@ def build_hsi(report, win):
     fix = group("您可以修复", "以下未通过的项目可以由您自行操作修复。按修复途径分组，展开查看具体步骤。")
     fixable = h.fixable
     if not fixable:
-        fix.add(praise_row("所有可由用户修复的项目均已通过，做得非常好！" if h.failed else "所有检测项全部通过，这是非常罕见的优秀配置！"))
+        if not scored:
+            fix.add(text_row("暂无可评估的检测项", "所有检测项均因缺少数据而无法判定。"))
+        elif h.failed:
+            fix.add(praise_row("所有可由用户修复的项目均已通过，做得非常好！"))
+        elif h.undetermined:
+            fix.add(praise_row("所有可判定的检测项均已通过，做得非常好！"))
+        else:
+            fix.add(praise_row("所有检测项全部通过，这是非常罕见的优秀配置！"))
     for kind in ("os", "bios"):
         for it in [i for i in fixable if i.info.get("kind") == kind]:
             row = Adw.ExpanderRow(title=esc(it.name), subtitle=esc(data.HSI_KIND_ZH[kind]))
@@ -553,8 +562,8 @@ def _kernel_support_block(report, win=None):
     if not st.known:
         g = group("内核版本线", kernelver.SUPPORT_CHECK_NOTE)
         row = Adw.ActionRow(title="未能核对内核版本线",
-                            subtitle=kernelver.fetch_failed_text(st)
-                                     + "这不代表内核有问题，只是本次没有结论。")
+                            subtitle=esc(kernelver.fetch_failed_text(st)
+                                         + "这不代表内核有问题，只是本次没有结论。"))
         row.add_prefix(status_icon("unknown"))
         if st.error:
             row.set_tooltip_text(st.error)
@@ -573,8 +582,8 @@ def _kernel_support_block(report, win=None):
     if st.stale:
         age = st.age_text() or "较早"
         old = Adw.ActionRow(title="版本号来自旧缓存",
-                            subtitle=f"这些版本号是 {age}取得的，本次没能连上 kernel.org，"
-                                     "因此上面的判断可能已经过时。")
+                            subtitle=esc(f"这些版本号是 {age}取得的，本次没能连上 kernel.org，"
+                                         "因此上面的判断可能已经过时。"))
         old.add_prefix(status_icon("unknown"))
         if st.error:
             old.set_tooltip_text(st.error)
@@ -603,7 +612,8 @@ def build_kernel(report, win):
         parts = []
         if s.user_supplied:
             title = "数据来源：您提供的 sysctl -a"
-            parts.append(f"已使用您提供的 sysctl 输出（{report.hostdata.step_age_text('sysctl') if report.hostdata else ''}采集）。")
+            age = report.hostdata.step_age_text("sysctl") if report.hostdata else ""
+            parts.append(f"已使用您提供的 sysctl 输出（{age}采集）。" if age else "已使用您提供的 sysctl 输出。")
             if n:
                 parts.append(f"仍有 {n} 项无法判定，可能是您执行命令时没有加 sudo。")
             if m:
@@ -634,7 +644,8 @@ def build_kernel(report, win):
         if it.note:
             sub += f"  ⚠ {it.note}"
         if it.status == "wrong":
-            sub += f"  （当前值：{it.actual if it.actual is not None else '无参数值'}）"
+            val_txt = "无参数值" if it.actual is None else (it.actual or "空值")
+            sub += f"  （当前值：{val_txt}）"
         if it.status == "na":
             # cpu 为 None 时说明这个 na 不是"平台不适用"造成的（例如将来新增的
             # 版本门控）。UI 抛异常会被 build_page 捕获成"页面渲染失败"，宁可降级成通用文案。
@@ -662,15 +673,21 @@ def build_kernel(report, win):
         notes = [i for i in c.missing if i.note]
         if notes:
             g_fix.add(text_row("⚠ 副作用提醒", "\n".join(f"{i.token}：{i.note}" for i in notes)))
-    else:
+    elif c.applicable:
         g_fix = group("内核参数")
         g_fix.add(praise_row("推荐的内核启动参数全部已设置，非常出色，请继续保持！"))
+    else:
+        g_fix = group("内核参数")
+        g_fix.add(text_row("暂无可评估项", "当前架构暂无内置的推荐内核启动参数。"))
 
     # ---- sysctl ----
     sys_groups = []
     order = {"missing": 0, "unknown": 1, "unverified": 1, "ok": 2, "na": 3}
     for title, items in s.groups:
-        g = group(f"sysctl · {title}", f"{sum(1 for i in items if i.status == 'ok')} / {sum(1 for i in items if i.status not in ('na', 'unknown', 'unverified'))} 项已设置")
+        ok_cnt = sum(1 for i in items if i.status == "ok")
+        scored_cnt = sum(1 for i in items if i.status not in ("na", "unknown", "unverified"))
+        g_desc = f"{ok_cnt} / {scored_cnt} 项已设置" if scored_cnt else "暂无可评估项"
+        g = group(f"sysctl · {title}", g_desc)
         for it in sorted(items, key=lambda i: (order.get(i.status, 9), i.key)):
             row = Adw.ActionRow(title=f"<tt>{esc(it.key)}</tt> = <tt>{esc(it.expected)}</tt>" + (" <small>(≥)</small>" if it.cmp == "ge" else ""))
             sub = it.desc + (f"  ⚠ {it.note}" if it.note else "")
@@ -712,9 +729,15 @@ def build_kernel(report, win):
         if notes:
             g_sfix.add(text_row("⚠ 副作用提醒", "\n".join(f"{i.key}：{i.note}" for i in notes)))
         g_sfix.add(text_row("提示", "kernel.kexec_load_disabled 一旦设为 1 直到重启前都无法改回；kernel.io_uring_disabled、kernel.oops_limit/warn_limit 需要较新内核；显示“内核不支持”的项目可以从配置中删掉。"))
+    elif s.scored:
+        g_sfix = group("sysctl")
+        g_sfix.add(praise_row(
+            "所有可评估的 sysctl 均已设置，做得很好！"
+            if (s.unknown or s.unverified) else
+            "推荐的 sysctl 全部已设置，非常出色，请继续保持！"))
     else:
         g_sfix = group("sysctl")
-        g_sfix.add(praise_row("推荐的 sysctl 全部已设置，非常出色，请继续保持！"))
+        g_sfix.add(text_row("暂无可评估项", "当前没有可参与评分的 sysctl 检测项。"))
 
     g_arm = None
     if s.arch == "aarch64":
@@ -733,11 +756,13 @@ def build_hardware(report, win):
     sp = hero(icon, v["name"], data.RATING_ZH[v["rating"]], css, desc_css=css)
 
     info = group("检测到的硬件信息")
+    has_hw_info = False
     for label, val in (("系统厂商", hw.sys_vendor), ("产品名称", hw.product), ("主板厂商", hw.board_vendor),
                        ("固件厂商", hw.bios_vendor), ("固件版本", hw.bios_version), ("设备树型号", hw.model), ("匹配依据", hw.matched_on)):
         if val:
             info.add(text_row(label, val, selectable=True))
-    if not (hw.sys_vendor or hw.product or hw.model):
+            has_hw_info = True
+    if not has_hw_info:
         info.add(text_row("提示", "无法读取 DMI/设备树信息。"))
 
     ident = report.identity
@@ -781,7 +806,7 @@ def build_hardware(report, win):
 # ---------------------------------------------------------------------------
 def build_habits(report, win):
     hb = report.habits
-    all_good = all(c.status == "good" for c in hb.checks)
+    all_good = bool(hb.checks) and all(c.status == "good" for c in hb.checks)
     suspects = [c for c in hb.checks if c.status == "suspect"]
     problems = [c for c in hb.checks if c.status in ("bad", "warn")]
     if all_good:

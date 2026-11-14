@@ -113,15 +113,16 @@ def parse_lsblk(text):
                 if isinstance(cand, dict):
                     j = cand
                     # 提示符或先前命令可能也包含 JSON；跳过非 lsblk 对象继续找。
-                    if isinstance(cand.get("blockdevices"), list):
+                    if _lsblk_data_ok(cand):
                         break
             except ValueError:
                 pass
             pos = text.find("{", pos + 1)
     if j is None:
         return None, f"JSON 解析失败：{last_err}。请重新复制完整输出（不要漏掉开头的 {{ 或结尾的 }}）。"
-    if not isinstance(j, dict) or not isinstance(j.get("blockdevices"), list):
-        return None, "JSON 中没有有效的 blockdevices 列表字段，这似乎不是 lsblk -J 的输出。"
+    if not _lsblk_data_ok(j):
+        return None, ("JSON 中的 blockdevices 列表或设备字段无效。"
+                      "请执行向导给出的完整命令，确保每个设备包含 NAME 与 FSTYPE。")
     return j, ""
 
 
@@ -169,7 +170,29 @@ def _sysctl_data_ok(d):
 
 
 def _lsblk_data_ok(d):
-    return isinstance(d, dict) and isinstance(d.get("blockdevices"), list)
+    """校验整个设备树，避免缺少 FSTYPE 被误当作「没有 Windows 分区」。"""
+    if not isinstance(d, dict) or not isinstance(d.get("blockdevices"), list):
+        return False
+    pending = list(d["blockdevices"])
+    while pending:
+        node = pending.pop()
+        if not isinstance(node, dict) or not isinstance(node.get("name"), str) or not node["name"]:
+            return False
+        if "fstype" not in node or (node["fstype"] is not None and not isinstance(node["fstype"], str)):
+            return False
+        for key in ("label", "mountpoint"):
+            if node.get(key) is not None and not isinstance(node[key], str):
+                return False
+        children = node.get("children")
+        if children is not None:
+            if not isinstance(children, list):
+                return False
+            pending.extend(children)
+        mounts = node.get("mountpoints")
+        if mounts is not None and (not isinstance(mounts, list) or any(
+                mount is not None and not isinstance(mount, str) for mount in mounts)):
+            return False
+    return True
 
 
 # 各步骤 data 的形状必须与对应解析器（parse_sysctl / parse_lsblk）的产出一致。
@@ -247,7 +270,7 @@ class HostData:
     @property
     def lsblk(self):
         d = self.get("lsblk")
-        return d if isinstance(d, dict) else None
+        return d if _lsblk_data_ok(d) else None
 
     @property
     def collected_at(self):

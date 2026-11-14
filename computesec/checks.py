@@ -1096,6 +1096,8 @@ def check_usb() -> HabitCheck:
 
 
 def _ntfs_from_lsblk_json(j):
+    if not hostdata._lsblk_data_ok(j):
+        return []
     found = []
 
     def walk(nodes):
@@ -1134,10 +1136,12 @@ def _ntfs_partitions():
         return _ntfs_from_lsblk_json(supplied), "lsblk（用户提供）"
     found, source = [], ""
     rc, out = run(["lsblk", "-J", "-o", "NAME,FSTYPE,LABEL,SIZE,MOUNTPOINT"])
-    if out.strip():
+    if rc == 0 and out.strip():
         try:
-            found = _ntfs_from_lsblk_json(json.loads(out))
-            source = "lsblk"
+            payload = json.loads(out)
+            if hostdata._lsblk_data_ok(payload):
+                found = _ntfs_from_lsblk_json(payload)
+                source = "lsblk"
         except ValueError:
             pass
     if not source and supplied:
@@ -1197,9 +1201,12 @@ def _windows_installed():
 def check_ntfs() -> HabitCheck:
     parts, source = _ntfs_partitions()
     win = _windows_installed()
-    if not parts and not win and IN_FLATPAK and not hostdata.CURRENT.has("lsblk"):
+    if not parts and not win and (not source or source == "/proc/mounts" or (
+            IN_FLATPAK and hostdata.CURRENT.lsblk is None)):
+        detail = ("Flatpak 沙箱内看不到宿主机的块设备信息。" if IN_FLATPAK else
+                  "未能取得完整的块设备信息；挂载表无法排除未挂载的 Windows 分区。")
         return HabitCheck("ntfs", "NTFS / Windows 检测", "unknown", "未能完整枚举磁盘分区",
-                          ["Flatpak 沙箱内看不到宿主机的块设备信息。"],
+                          [detail],
                           "请从主菜单选择「重新采集系统数据」，按向导执行 lsblk 并粘贴结果，即可完成此项检测。")
     if parts or win:
         details = parts + win

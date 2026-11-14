@@ -603,7 +603,7 @@ def build_kernel(report, win):
         parts = []
         if s.user_supplied:
             title = "数据来源：您提供的 sysctl -a"
-            parts.append(f"已使用您提供的 sysctl 输出（{report.hostdata.age_text if report.hostdata else ''}采集）。")
+            parts.append(f"已使用您提供的 sysctl 输出（{report.hostdata.step_age_text('sysctl') if report.hostdata else ''}采集）。")
             if n:
                 parts.append(f"仍有 {n} 项无法判定，可能是您执行命令时没有加 sudo。")
             if m:

@@ -246,6 +246,30 @@ def test_age_text_empty():
     assert hostdata.HostData().age_text == ""
 
 
+def test_step_age_text_uses_the_step_timestamp():
+    """sysctl 快照的年龄以它自己的采集时刻为准，不随向导再次结束而归零。"""
+    now = int(time.time())
+    hd = hostdata.HostData({"collected_at": now - 36000, "boot_id": "b", "steps": {
+        "sysctl": {"data": {"values": {"a.b": "1"}, "meta": {}}, "at": now - 36000}}})
+    hd.mark_done()                              # 又打开了一次向导，什么都没粘贴就关掉
+    assert hd.age_text == "刚刚"                 # 整体时间戳被刷新成现在
+    assert hd.step_age_text("sysctl") == "10 小时前"
+    hd.set("lsblk", {"blockdevices": []})       # 只重新采集了另一步
+    assert hd.step_age_text("sysctl") == "10 小时前"
+    assert hd.step_age_text("lsblk") == "刚刚"
+
+
+def test_step_age_text_falls_back_to_collected_at():
+    """旧缓存与手工构造的 payload 没有每步的 at：退回整体时间戳，形状不对也不抛异常。"""
+    now = int(time.time())
+    hd = hostdata.HostData({"collected_at": now - 7200, "steps": {"sysctl": {"data": {"values": {}}}}})
+    assert hd.step_age_text("sysctl") == "2 小时前"
+    assert hd.step_age_text("lsblk") == "2 小时前"
+    assert hostdata.HostData().step_age_text("sysctl") == ""
+    assert hostdata.HostData({"steps": ["oops"]}).step_age_text("sysctl") == ""
+    assert hostdata.HostData({"steps": {"sysctl": {"at": "bad"}}}).step_age_text("sysctl") == ""
+
+
 def test_mark_done_records_boot_id(monkeypatch):
     monkeypatch.setattr(hostdata, "boot_id", lambda: "boot-9")
     hd = hostdata.HostData()

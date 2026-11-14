@@ -271,9 +271,26 @@ class HostData:
 
     @property
     def age_text(self):
-        if not self.collected_at:
+        return self._age(self.collected_at)
+
+    def step_age_text(self, key):
+        """某一步的数据是多久以前采集的。
+
+        collected_at 记的是「向导最近一次结束」的时刻：重新打开向导只更新了另一步、
+        甚至什么都没粘贴就关掉，它都会被刷新成现在。拿它给 sysctl 快照标年龄，十小时
+        前的快照会被说成「刚刚」。每一步自己的 at 才是那份数据的采集时刻；旧缓存或
+        手工构造的 payload 没有它时退回 collected_at。
+        """
+        steps = self.payload.get("steps")
+        entry = steps.get(key) if isinstance(steps, dict) else None
+        at = entry.get("at") if isinstance(entry, dict) else None
+        return self._age(at if _is_number(at) and at > 0 else self.collected_at)
+
+    @staticmethod
+    def _age(ts):
+        if not ts:
             return ""
-        secs = max(0, int(time.time() - self.collected_at))
+        secs = max(0, int(time.time() - ts))
         if secs < 60:
             return "刚刚"
         if secs < 3600:

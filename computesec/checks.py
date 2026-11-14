@@ -744,7 +744,7 @@ def get_sysctl_report() -> SysctlReport:
                 if filled:
                     # 这些键在 /proc 里读不到（多半是 EACCES），用快照补上。
                     actual = {**actual, **filled}
-                    age = hd.age_text
+                    age = hd.step_age_text("sysctl")
                     source = f"用户提供（{age}）" if age else "用户提供"
                     unreadable = False
             elif IN_FLATPAK and user_values and not (unreadable and not actual):

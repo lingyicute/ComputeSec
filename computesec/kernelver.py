@@ -202,6 +202,8 @@ class KernelSupport:
                 return None
         if d.get("tier", "unknown") not in TIER_ZH:
             return None
+        if isinstance(d.get("checked_at"), bool):
+            return None
         try:
             checked_at = int(d.get("checked_at") or 0)
         except (TypeError, ValueError, OverflowError):     # int(Infinity) 抛的是 OverflowError

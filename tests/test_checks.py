@@ -1230,3 +1230,11 @@ def test_cmdline_stops_at_double_dash_and_handles_quotes(monkeypatch):
 ])
 def test_iter_cmdline_tokens(line, want):
     assert list(checks._iter_cmdline_tokens(line)) == want
+
+
+def test_sysctl_item_actual_text_distinguishes_sandbox_netns():
+    item = checks.SysctlItem("net.ipv4.tcp_syncookies", "1", "eq", {}, "unverified", "", source="沙箱网络隔离")
+    assert "沙箱网络隔离" in item.actual_text
+    assert "快照" not in item.actual_text
+    gap = checks.SysctlItem("k", "1", "eq", {}, "unverified", "", source="快照缺失")
+    assert gap.actual_text == "（您提供的快照中没有这一项）"

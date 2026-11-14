@@ -643,7 +643,8 @@ class SysctlItem:
     @property
     def actual_text(self):
         if self.status == "unverified":
-            return "（您提供的快照中没有这一项）"
+            # 沙箱网络隔离时用户可能根本没提供过快照，不能说「您提供的快照中没有」。
+            return "（沙箱网络隔离，无法验证）" if self.source == "沙箱网络隔离" else "（您提供的快照中没有这一项）"
         if self.status == "unknown":
             return "（无法读取，需要 root 权限）"
         if not self.actual:

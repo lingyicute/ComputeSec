@@ -9,7 +9,9 @@
 处理与安装的入口直接使用。
 """
 
+import json
 import os
+import tempfile
 
 
 def data_home():
@@ -51,3 +53,24 @@ def display_dir(name="computesec"):
     if home and home != os.sep and (d == home or d.startswith(home + os.sep)):
         return "~" + d[len(home):]
     return d
+
+
+def atomic_write_json(path, payload):
+    """以 0600 独占创建同目录临时文件，写完后原子替换；失败不影响旧缓存。"""
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=os.path.dirname(os.path.abspath(path)),
+                prefix=f".{os.path.basename(path)}.", suffix=".tmp", delete=False) as stream:
+            tmp = stream.name
+            json.dump(payload, stream)
+        os.replace(tmp, path)
+        tmp = None      # 已被替换成正式文件，不再有临时文件需要清理
+    except OSError:
+        pass
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass

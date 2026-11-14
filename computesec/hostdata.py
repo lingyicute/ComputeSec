@@ -364,18 +364,7 @@ class HostData:
 
     def save(self):
         path = os.path.join(_data_dir(), CACHE_NAME)
-        tmp = path + ".tmp"
-        try:
-            # 缓存里是用户粘贴的完整 sudo sysctl -a 输出（含内核地址、主机名等），
-            # 只给当前用户读写：os.open 建文件时直接带 0600，不受 umask 影响。
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            # 上次写到一半留下的同名 .tmp 不会因 O_CREAT 的 mode 而改权限，这里显式收紧。
-            os.fchmod(fd, 0o600)
-            with os.fdopen(fd, "w") as f:
-                json.dump(self.payload, f)
-            os.replace(tmp, path)
-        except OSError:
-            pass
+        xdg.atomic_write_json(path, self.payload)
 
     @staticmethod
     def clear():

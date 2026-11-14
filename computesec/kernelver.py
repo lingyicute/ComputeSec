@@ -308,15 +308,7 @@ def load_cache(path=None, now=None):
 
 def save_cache(st, path=None):
     path = path or os.path.join(_data_dir(), CACHE_NAME)
-    tmp = path + ".tmp"
-    try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        os.fchmod(fd, 0o600)      # 已存在的同名 .tmp 不受 O_CREAT 的 mode 影响
-        with os.fdopen(fd, "w") as f:
-            json.dump(st.to_dict(), f)
-        os.replace(tmp, path)
-    except OSError:
-        pass
+    xdg.atomic_write_json(path, st.to_dict())
 
 
 def get_status(release=None, now=None, fetcher=None, cache_path=None, force=False):

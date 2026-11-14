@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """run.py / computesec.cli：命令行参数、desktop entry 编码与安装。"""
 
+import os
+
 import pytest
 
 import run as launcher
@@ -280,3 +282,42 @@ def test_data_dir_is_private(monkeypatch, tmp_path):
     os.chmod(d, 0o755)                       # 模拟旧版本留下的目录
     xdg.data_dir()
     assert stat.S_IMODE(os.stat(d).st_mode) == 0o700
+
+
+def _readonly_source_tree(tmp_path):
+    root = tmp_path / "src"
+    icon_dir = root / "data" / "icons" / "hicolor" / "scalable" / "apps"
+    icon_dir.mkdir(parents=True)
+    (root / "data" / (cli.APP_ID + ".desktop")).write_text(
+        "[Desktop Entry]\nExec=computesec\n", encoding="utf-8")
+    src_icon = icon_dir / (cli.APP_ID + ".svg")
+    src_icon.write_text("<svg/>", encoding="utf-8")
+    os.chmod(src_icon, 0o444)           # 系统目录 / Nix store 里的文件就是只读的
+    return root, src_icon
+
+
+def test_install_desktop_does_not_copy_readonly_mode(tmp_path, monkeypatch):
+    """只读源图标装出去后目标应保持可写，重复 --install 不能失败。"""
+    data_home = _prepare(tmp_path, monkeypatch)
+    root, _src_icon = _readonly_source_tree(tmp_path)
+    monkeypatch.setattr(cli, "__file__", str(root / "computesec" / "cli.py"))
+
+    assert cli.install_desktop(launcher=["/opt/computesec"]) is True
+    icon = data_home / "icons" / "hicolor" / "scalable" / "apps" / (cli.APP_ID + ".svg")
+    assert os.stat(icon).st_mode & 0o200
+    assert cli.install_desktop(launcher=["/opt/computesec"]) is True
+
+
+def test_install_desktop_replaces_readonly_icon_left_by_older_version(tmp_path, monkeypatch):
+    """旧版本（shutil.copy）留下的只读目标图标，新版本应能直接覆盖。"""
+    data_home = _prepare(tmp_path, monkeypatch)
+    root, _src_icon = _readonly_source_tree(tmp_path)
+    monkeypatch.setattr(cli, "__file__", str(root / "computesec" / "cli.py"))
+    icon_dir = data_home / "icons" / "hicolor" / "scalable" / "apps"
+    icon_dir.mkdir(parents=True)
+    old = icon_dir / (cli.APP_ID + ".svg")
+    old.write_text("<svg old/>", encoding="utf-8")
+    os.chmod(old, 0o444)
+
+    assert cli.install_desktop(launcher=["/opt/computesec"]) is True
+    assert old.read_text(encoding="utf-8") == "<svg/>"

@@ -31,6 +31,21 @@ def _same_file(a, b):
         return False
 
 
+def _copy_icon(src, dst):
+    """复制图标，但不带上源文件的权限位。
+
+    shutil.copy 会连 mode 一起复制：源在系统目录 / Nix store 里是只读（0444）时，
+    目标也成了只读，之后再跑一次 --install 就在 open(dst, "wb") 上 PermissionError，
+    只报一句「安装失败」。copyfile 只复制内容，新建的目标按 umask 取默认权限。
+    旧版本已经装出一份只读目标时，同样先删掉再写，用户不必手动清理。
+    """
+    try:
+        shutil.copyfile(src, dst)
+    except PermissionError:
+        os.remove(dst)
+        shutil.copyfile(src, dst)
+
+
 def _quote_desktop_arg(arg):
     """按 Desktop Entry 规范编码 Exec 中的单个参数（不是 shell 引号）。"""
     reserved = ' \t\n\r"\'\\><~|&;$*?#()`'
@@ -149,7 +164,7 @@ def install_desktop(uninstall=False, launcher=None):
             # 也是它：源与目标是同一个文件，shutil.copy 会抛 SameFileError。图标已经
             # 在位，跳过即可；.desktop 的内容上面已整份读出，原地改写没有问题。
             if not _same_file(src_icon, icon_path):
-                shutil.copy(src_icon, icon_path)
+                _copy_icon(src_icon, icon_path)
             with open(desktop_path, "w", encoding="utf-8") as f:
                 f.write(content)
         except OSError as e:

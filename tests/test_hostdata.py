@@ -505,3 +505,9 @@ def test_hostdata_rejects_bool_index_negative_ts_and_bad_meta_or_size():
     assert hostdata._lsblk_data_ok({"blockdevices": [{"name": "sda", "fstype": None, "size": {"bad": 1}}]}) is False
     assert hostdata._lsblk_data_ok({"blockdevices": [{"name": "sda", "fstype": None, "size": 1024}]}) is True
     assert hostdata.HostData({"collected_at": -10}).age_text == ""
+
+
+def test_hostdata_set_recovers_from_non_dict_steps():
+    hd = hostdata.HostData({"steps": ["corrupt"]})
+    hd.set("sysctl", {"values": {"kernel.ostype": "Linux"}})
+    assert hd.sysctl_values == {"kernel.ostype": "Linux"}

@@ -359,7 +359,9 @@ class HostData:
     # -- 修改 ------------------------------------------------------------
     def set(self, key, data):
         now = int(time.time())
-        self.payload.setdefault("steps", {})[key] = {"data": data, "at": now}
+        if not isinstance(self.payload.get("steps"), dict):
+            self.payload["steps"] = {}
+        self.payload["steps"][key] = {"data": data, "at": now}
         self.payload["collected_at"] = now
         self.payload["boot_id"] = boot_id()
         self.payload["skipped"] = False

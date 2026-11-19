@@ -7,24 +7,28 @@ on:
       - "web/index.html"
       - "web/fonts/**"
       - "scripts/subset_font.py"
+      - "scripts/.font-subset-cache.json"
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   subset-fonts:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install maintenance dependencies
         run: python -m pip install fonttools brotli

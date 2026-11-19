@@ -175,6 +175,10 @@ def test_hsi_attr_tails_have_no_ambiguity():
     ("efi", "disable_early_pci_dma,no_disable_early_pci_dma", "disable_early_pci_dma", False),
     ("efi", "no_disable_early_pci_dma,disable_early_pci_dma", "disable_early_pci_dma", False),
     ("efi", "no_disable_early_pci_dma", "disable_early_pci_dma", False),
+    ("efi", "nochunk, disable_early_pci_dma", "disable_early_pci_dma", False),
+    ("efi", ["no_disable_early_pci_dma", "disable_early_pci_dma"], "disable_early_pci_dma", True),
+    ("efi", ["disable_early_pci_dma", "no_disable_early_pci_dma"], "disable_early_pci_dma", False),
+    ("efi", ["disable_early_pci_dma", "noruntime"], "disable_early_pci_dma", True),
     # dracut getargbool：只有 0 / no / off 为假，false / n / OFF 都仍然是真
     ("rd.shell", "0", "0", True),
     ("rd.shell", "no", "0", True),
@@ -1243,3 +1247,13 @@ def test_sysctl_item_actual_text_distinguishes_sandbox_netns():
     assert "快照" not in item.actual_text
     gap = checks.SysctlItem("k", "1", "eq", {}, "unverified", "", source="快照缺失")
     assert gap.actual_text == "（您提供的快照中没有这一项）"
+
+
+def test_cmdline_later_efi_token_overrides_earlier_no_disable(monkeypatch):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, default="": (
+        "efi=no_disable_early_pci_dma efi=disable_early_pci_dma" if p == "/proc/cmdline" else default
+    ))
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert by_key["efi"].status == "ok"

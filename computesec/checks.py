@@ -417,7 +417,7 @@ _CMDLINE_MODULE_BOOL_KEYS = {
 # intel_iommu_setup、parse_amd_iommu_options、x86 iommu_setup 都是
 # `while (*str) { strncmp…; str += strcspn(str, ","); }`）。同名 token 出现多次时
 # 要按顺序拼起来，只保留最后一个会丢掉前面已经生效的选项。
-_CMDLINE_COMMA_KEYS = {"efi", "intel_iommu", "amd_iommu", "iommu"}
+_CMDLINE_COMMA_KEYS = {"intel_iommu", "amd_iommu", "iommu"}
 _BOOL_TRUE = {"1", "on", "y", "yes", "true"}
 _BOOL_FALSE = {"0", "off", "n", "no", "false"}
 
@@ -545,11 +545,18 @@ def _cmdline_value_ok(key, actual, expected):
     if actual == expected:
         return True
     if nk == "efi":
-        # drivers/firmware/efi/libstub/efi-stub-helper.c：对 efi= 的值先后各做一次
-        # parse_option_str(val, "disable_early_pci_dma") / (val, "no_disable_early_pci_dma")，
-        # 后者命中即置回 false——与二者在逗号列表里的先后无关，no_ 形式总是赢。
-        opts = {x.strip() for x in actual.split(",") if x.strip()}
-        return expected in opts and f"no_{expected}" not in opts
+        # drivers/firmware/efi/libstub/efi-stub-helper.c：每遇到一个 efi= token 就依次检查
+        # parse_option_str(val, "disable_early_pci_dma") 与 "no_disable_early_pci_dma"；
+        # 同一 token 内 no_ 总是赢，跨多个 efi= token 时后出现的覆盖先前状态，且子选项不裁空白。
+        tokens = actual if isinstance(actual, (list, tuple)) else (actual,)
+        enabled = False
+        for tok in tokens:
+            opts = set(tok.split(","))
+            if expected in opts:
+                enabled = True
+            if f"no_{expected}" in opts:
+                enabled = False
+        return enabled
     if nk in ("intel_iommu", "amd_iommu", "iommu"):
         return _iommu_opts_ok(nk, [x for x in actual.split(",") if x], expected)
     if nk == "slab_debug":
@@ -583,10 +590,14 @@ def _cmdline_value_ok(key, actual, expected):
 def get_cmdline_report() -> CmdlineReport:
     cmdline = read("/proc/cmdline").strip()
     present = {}
+    efi_tokens = []
     for k, v in _iter_cmdline_tokens(cmdline):
         nk = _CMDLINE_KEY_ALIASES.get(_norm_key(k), _norm_key(k))
         if v is not None:
-            if nk in _CMDLINE_COMMA_KEYS and present.get(nk):
+            if nk == "efi":
+                efi_tokens.append(v)
+                present[nk] = ",".join(efi_tokens)
+            elif nk in _CMDLINE_COMMA_KEYS and present.get(nk):
                 present[nk] = f"{present[nk]},{v}"
             else:
                 present[nk] = v
@@ -620,7 +631,7 @@ def get_cmdline_report() -> CmdlineReport:
             status = "na"
         elif actual is MISSING:
             status = "missing"
-        elif _cmdline_value_ok(p["key"], actual, exp):
+        elif _cmdline_value_ok(p["key"], efi_tokens if nk == "efi" and efi_tokens else actual, exp):
             status = "ok"
         else:
             status = "wrong"

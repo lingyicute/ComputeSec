@@ -1049,7 +1049,7 @@ def _flatpak_apps():
             pass
     if not apps:
         rc, out = run(["flatpak", "list", "--app", "--columns=application"])
-        if out:
+        if rc == 0 and out:
             apps.update(name.strip() for name in out.splitlines() if name.strip() and "." in name)
             source = "flatpak list"
         elif rc == 0 and not source:
@@ -1123,11 +1123,12 @@ def _usb_devices():
     if devs:
         return devs, "sysfs"
     rc, out = run(["lsusb"])
-    for line in out.splitlines():
-        m = re.match(r"Bus \d+ Device \d+: ID ([0-9a-f]{4}):([0-9a-f]{4})\s*(.*)", line, re.I)
-        if m:
-            devs.append(dict(vid=m.group(1).lower(), pid=m.group(2).lower(),
-                             product=m.group(3), manufacturer="", cls=""))
+    if rc == 0:
+        for line in out.splitlines():
+            m = re.match(r"Bus \d+ Device \d+: ID ([0-9a-f]{4}):([0-9a-f]{4})\s*(.*)", line, re.I)
+            if m:
+                devs.append(dict(vid=m.group(1).lower(), pid=m.group(2).lower(),
+                                 product=m.group(3).strip(), manufacturer="", cls=""))
     return devs, ("lsusb" if devs else "")
 
 

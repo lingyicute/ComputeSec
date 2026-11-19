@@ -1426,3 +1426,15 @@ def test_ntfs_partitions_ignores_fuseblk_confirmed_non_windows_by_udev(monkeypat
 def test_check_uptime_rejects_non_finite_or_negative(monkeypatch, raw):
     monkeypatch.setattr(checks, "read", lambda p, default="": raw if p == "/proc/uptime" else default)
     assert checks.check_uptime().status == "unknown"
+
+
+def test_flatpak_and_lsusb_ignore_failed_command_output(monkeypatch, tmp_path):
+    monkeypatch.setattr(checks, "_flatpak_app_dirs", lambda: [str(tmp_path / "missing")])
+    monkeypatch.setattr(checks, "run", lambda cmd, **_: (1, "error: org.freedesktop.Portal failed\n"))
+    apps, src = checks._flatpak_apps()
+    assert apps == set() and src == ""
+
+    monkeypatch.setattr(checks.glob, "glob", lambda _: [])
+    monkeypatch.setattr(checks, "run", lambda cmd, **_: (1, "Bus 001 Device 001: ID 046d:c52b Logitech\n"))
+    devs, usrc = checks._usb_devices()
+    assert devs == [] and usrc == ""

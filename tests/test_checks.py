@@ -1349,3 +1349,16 @@ def test_sysctl_native_denied_wildcard_does_not_resurrect_gone_iface(monkeypatch
     item = {i.key: i for i in checks.get_sysctl_report().all_items}[key]
     assert item.status == "ok"
     assert "net.ipv4.conf.tun0.accept_redirects" not in item.actual
+
+
+def test_sysctl_io_error_is_not_labelled_root_only(monkeypatch):
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(
+        checks, "_sysctl_from_proc",
+        lambda k: ({k: None}, False) if k == "kernel.kptr_restrict" else ({}, False),
+    )
+    item = {i.key: i for i in checks.get_sysctl_report().all_items}["kernel.kptr_restrict"]
+    assert item.status == "unknown"
+    assert item.source == "读取失败"
+    assert "root" not in item.actual_text

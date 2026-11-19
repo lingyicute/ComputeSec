@@ -1379,3 +1379,20 @@ def test_hsi_rejects_bool_flags_and_malformed_json(monkeypatch):
     monkeypatch.setattr(checks, "run", lambda cmd, **_: (0, "[]"))
     rep = checks.get_hsi()
     assert rep.ok is False
+
+
+@pytest.mark.parametrize("kw,text,want", [
+    ("timi", "optimized server board", False),
+    ("timi", "timi tm1701", True),
+    ("omen", "momentum workstation", False),
+    ("omen", "omen by hp laptop 16", True),
+    ("asus", "pegasus motherboard", False),
+    ("asus", "asus_x570", True),
+    ("acer", "tracer mini pc", False),
+    ("intel", "intellistation m pro", False),
+    ("hp", "hp_probook_450", True),
+    ("redmibook", "redmibook pro 15", True),
+    ("imac", "imac21,1", True),
+])
+def test_vendor_kw_match_letter_boundary(kw, text, want):
+    assert checks._vendor_kw_match(kw, text) is want

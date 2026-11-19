@@ -939,9 +939,11 @@ class HardwareReport:
 
 
 def _vendor_kw_match(kw, text):
-    # 短缩写（如 "hp"、"msi"）按单词边界匹配，避免把 "touchpad" 等含 "hp" 的普通单词误判为 HP
-    if len(kw) <= 3 and kw.isalnum():
-        return bool(re.search(rf"\b{re.escape(kw)}\b", text))
+    # 短词（如 hp、msi、asus、acer、omen、timi、intel）按字母边界匹配，
+    # 避免 optimized->timi、momentum->omen、pegasus->asus、touchpad->hp 等子串误判，
+    # 同时不把下划线当字母（hp_laptop、asus_x570 仍能命中）。
+    if len(kw) <= 5 and kw.isalnum():
+        return bool(re.search(rf"(?<![a-z]){re.escape(kw)}(?![a-z])", text))
     return kw in text
 
 

@@ -694,8 +694,7 @@
 <span class="k">python3</span> run.py</pre>
           </div>
           <p class="req" style="margin-top:1rem;">想让它出现在应用菜单里、并让任务栏 / Dock 正确显示图标（Wayland 下需要 <code>.desktop</code> 文件与 App ID 匹配）：</p>
-          <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">python3</span> run.py --install     <span class="c"># 安装 .desktop 与 SVG 图标到 ~/.local/share</span>
-<span class="k">python3</span> run.py --uninstall   <span class="c"># 移除</span></pre>
+          <pre class="code"><button class="copy" aria-label="复制"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button><span class="k">python3</span> run.py --install     <span class="c"># 安装 .desktop 与 SVG 图标（移除用 --uninstall）</span></pre>
         </article>
       </div>
     </div>
@@ -714,20 +713,27 @@
             <tbody>
               <tr><td>--system-talk-name=org.freedesktop.fwupd</td><td>通过 D-Bus 读取 HSI 结果</td></tr>
               <tr><td>--system-talk-name=org.freedesktop.hostname1</td><td>读取宿主机的发行版名称、内核版本与机型（沙箱内 /etc/os-release 是 runtime 的字段）</td></tr>
+              <tr><td>--share=network</td><td>读取 kernel.org 的 mainline / stable 版本号，并共享宿主机 /proc/sys/net 视图</td></tr>
               <tr><td>--filesystem=/var/lib/flatpak:ro<br>--filesystem=~/.local/share/flatpak:ro</td><td>统计已安装的 Flatpak 应用</td></tr>
-              <tr><td>--filesystem=/run/udev:ro<br>--filesystem=/boot/efi:ro<br>--filesystem=/efi:ro</td><td>检测 NTFS 分区与 Windows 引导器</td></tr>
+              <tr><td>--filesystem=/run/udev:ro<br>--filesystem=/boot:ro<br>--filesystem=/efi:ro</td><td>检测 NTFS / BitLocker 分区与 Windows 引导器</td></tr>
             </tbody>
           </table>
         </div>
         <div class="reveal">
           <span class="label kicker">项目结构</span>
           <h2 class="headline" style="margin:.6rem 0 .75rem;">小而清晰的代码组织</h2>
-          <p class="body" style="margin-bottom:1.25rem;">四个 Python 模块各司其职：窗口与导航、页面构建、数据采集比对、知识库。</p>
+          <p class="body" style="margin-bottom:1.25rem;">模块职责清晰：命令行入口、窗口与向导、数据采集比对、版本线核对与知识库。</p>
 <pre class="tree"><span class="d">run.py</span>                  <span class="c">启动器（克隆运行 / Flatpak 内为 /app/bin/computesec）</span>
 <span class="d">computesec/</span>
+  ├── cli.py            <span class="c">命令行参数与桌面集成</span>
   ├── main.py           <span class="c">应用与窗口、导航、后台检测线程</span>
   ├── ui.py             <span class="c">五个页面的构建</span>
+  ├── wizard.py         <span class="c">分步数据采集向导</span>
   ├── checks.py         <span class="c">数据采集与比对（fwupd、cmdline、sysctl、DMI、Flatpak、uptime、USB、NTFS）</span>
+  ├── hostdata.py       <span class="c">宿主机快照解析、校验与缓存</span>
+  ├── kernelver.py      <span class="c">内核版本线检查（kernel.org mainline / stable）</span>
+  ├── hostinfo.py       <span class="c">宿主机身份信息（hostname1 / os-release）</span>
+  ├── xdg.py            <span class="c">XDG 数据目录与原子缓存写入</span>
   └── data.py           <span class="c">知识库：HSI 说明、内核参数、sysctl、厂商信誉</span>
 <span class="d">data/</span>
   └── <span class="c">图标和构建信息</span>

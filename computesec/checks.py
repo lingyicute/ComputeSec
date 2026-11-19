@@ -1437,7 +1437,7 @@ def _safe(fn, fallback):
 
 
 def collect() -> Report:
-    ident = _safe(hostinfo.get_identity, lambda e: hostinfo.HostIdentity(dbus_error=str(e)))
+    ident = _safe(lambda: hostinfo.get_identity(refresh=True), lambda e: hostinfo.HostIdentity(dbus_error=str(e)))
     return Report(
         hsi=_safe(get_hsi, lambda e: HsiReport(ok=False, error=f"检测时出错：{e}")),
         cmdline=_safe(get_cmdline_report, lambda e: CmdlineReport(arch=arch(), cpu=cpu_vendor(), cmdline=f"读取失败：{e}", items=[])),

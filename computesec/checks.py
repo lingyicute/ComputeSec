@@ -389,6 +389,8 @@ _CMDLINE_KEY_ALIASES = {
     # mm/slab_common.c：__setup_param("slub_nomerge", …, setup_slab_nomerge, 0)，
     # 旧名与 slab_nomerge 走同一个处理函数，早年的加固指南写的都是旧名。
     "slub_nomerge": "slab_nomerge",
+    # dracut 99base：getargbool 0 rd.shell -d -y rdshell，旧名同样控制紧急 shell。
+    "rdshell": "rd.shell",
 }
 # 内核用 kstrtobool 解析的 early_param 型布尔参数，on/1/y 与 off/0/n 等价。
 # 这类参数必须写成 key=value；省略 = 的裸 token 无效（内核保持默认值）。
@@ -398,7 +400,6 @@ _CMDLINE_BOOL_KEYS = {
     "kpti", "random.trust_bootloader", "random.trust_cpu",
     "randomize_kstack_offset", "irqchip.gicv3_pseudo_nmi",
     "ia32_emulation",   # arch/x86/entry/common.c: kstrtobool，off/0/n 等价
-    "systemd.ssh_auto", # systemd parse_boolean：1/y/yes/true/on 与 0/n/no/false/off 等价
 }
 # dracut 的 getargbool 不是 kstrtobool：只有 0 / no / off（区分大小写）为假，其余任何值
 # （包括 false、n、OFF）都算真，所以 rd.shell=false 并没有关掉 initramfs 的 shell。
@@ -412,14 +413,16 @@ _CMDLINE_MODULE_BOOL_KEYS = {
     # mm/shuffle.c 用 module_param_cb 注册、底层走 param_set_bool（FL_NOARG），
     # 因此裸 token 同样等价于真，归类应与上面的 module_param(bool) 一致。
     "page_alloc.shuffle",
+    # systemd ssh-generator.c：value ? parse_boolean(value) : 1，裸 token 会重新置真。
+    "systemd.ssh_auto",
 }
 # 处理函数按逗号逐个解析子选项、且多次出现时依次累加的参数（efi_parse_options、
 # intel_iommu_setup、parse_amd_iommu_options、x86 iommu_setup 都是
 # `while (*str) { strncmp…; str += strcspn(str, ","); }`）。同名 token 出现多次时
 # 要按顺序拼起来，只保留最后一个会丢掉前面已经生效的选项。
 _CMDLINE_COMMA_KEYS = {"intel_iommu", "amd_iommu", "iommu"}
-_BOOL_TRUE = {"1", "on", "y", "yes", "true"}
-_BOOL_FALSE = {"0", "off", "n", "no", "false"}
+_BOOL_TRUE = {"1", "on", "y", "yes", "true", "t"}
+_BOOL_FALSE = {"0", "off", "n", "no", "false", "f"}
 
 # mitigations= 的合法取值及缓解强度。kernel/cpu.c 的 mitigations_parse_cmdline()
 # 对三个值做 strcmp 精确匹配（"nosmt,auto" 等非常规顺序会被整体忽略并保持默认），
@@ -476,12 +479,13 @@ def _iter_cmdline_tokens(cmdline):
 
 
 def _cmdline_bool_norm(v):
-    low = v.strip().lower()
+    # kstrtobool() 与 systemd parse_boolean() 都不跳过首尾空白（如 " 1" 返回 -EINVAL）。
+    low = v.lower()
     if low in _BOOL_TRUE:
         return "1"
     if low in _BOOL_FALSE:
         return "0"
-    return v.strip()
+    return v
 
 
 def _iommu_opts_ok(nk, opts, expected):
@@ -607,7 +611,9 @@ def get_cmdline_report() -> CmdlineReport:
             # 裸 token 被 parse_efi_cmdline(NULL) 拒绝并保持原值——丢掉带值形式只会
             # 让已知信息消失。module_param(bool) 例外：内核按最后一次出现生效，
             # 裸 token 等价于真，必须照旧覆盖才能与内核结论一致。
-            if present.get(nk) is not None and nk not in _CMDLINE_MODULE_BOOL_KEYS:
+            if (present.get(nk) is not None
+                    and nk not in _CMDLINE_MODULE_BOOL_KEYS
+                    and nk not in _CMDLINE_DRACUT_BOOL_KEYS):
                 continue
             present[nk] = None
     ar, cv = arch(), cpu_vendor()

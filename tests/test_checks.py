@@ -1257,3 +1257,18 @@ def test_cmdline_later_efi_token_overrides_earlier_no_disable(monkeypatch):
     ))
     by_key = {i.key: i for i in checks.get_cmdline_report().items}
     assert by_key["efi"].status == "ok"
+
+
+def test_cmdline_bare_rdshell_and_ssh_auto_override_disabled(monkeypatch):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    for line in ("rd.shell=0 rd.shell systemd.ssh_auto=no systemd.ssh_auto",
+                 "rd.shell=0 rdshell systemd.ssh_auto=f"):
+        monkeypatch.setattr(checks, "read", lambda p, default="", ln=line: ln if p == "/proc/cmdline" else default)
+        by_key = {i.key: i for i in checks.get_cmdline_report().items}
+        assert by_key["rd.shell"].status == "wrong"
+        want_ssh = "ok" if line.endswith("=f") else "wrong"
+        assert by_key["systemd.ssh_auto"].status == want_ssh
+    assert checks._cmdline_value_ok("init_on_alloc", "t", "1") is True
+    assert checks._cmdline_value_ok("ia32_emulation", "f", "0") is True
+    assert checks._cmdline_value_ok("init_on_alloc", " 1", "1") is False

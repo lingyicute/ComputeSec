@@ -164,3 +164,19 @@ def test_build_identity_preserves_source_when_fallback_os_release_empty(monkeypa
     monkeypatch.setattr(hostinfo, "_read", lambda path, default="": "")
     ident = hostinfo._build_identity()
     assert ident.source == "D-Bus org.freedesktop.hostname1"
+
+
+def test_hostinfo_skips_comment_only_file_unescapes_unquoted_and_fills_cpe(monkeypatch):
+    assert hostinfo.parse_os_release(r"PRETTY_NAME=Arch\ Linux" + "\n=bad\n") == {"PRETTY_NAME": "Arch Linux"}
+
+    monkeypatch.setattr(hostinfo, "IN_FLATPAK", False)
+    files = {
+        "/etc/os-release": "# comment only\n\n",
+        "/usr/lib/os-release": 'PRETTY_NAME="Fedora 44"\nCPE_NAME="cpe:/o:fedoraproject:fedora:44"\n',
+    }
+    monkeypatch.setattr(hostinfo, "_read", lambda p, default="": files.get(p, default))
+    monkeypatch.setattr(hostinfo, "_dbus_hostname1", lambda: ({"IconName": "computer"}, ""))
+    ident = hostinfo._build_identity()
+    assert ident.source == "/usr/lib/os-release"
+    assert ident.pretty_name == "Fedora 44"
+    assert ident.cpe_name == "cpe:/o:fedoraproject:fedora:44"

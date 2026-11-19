@@ -87,7 +87,12 @@ def parse_os_release(text):
             # os-release(5)：双引号内支持 \" \\ \$ \` 转义，单引号原样保留
             if quote == '"':
                 v = re.sub(r'\\([\\"$`])', r"\1", v)
-        d[k.strip()] = v
+        else:
+            # os-release(5)：无引号值同样支持 shell 反斜杠转义（如 Arch\ Linux）。
+            v = re.sub(r"\\(.)", r"\1", v)
+        key = k.strip()
+        if key:
+            d[key] = v
     return d
 
 
@@ -111,16 +116,12 @@ def _dbus_hostname1():
 
 def _host_os_release_text():
     """宿主机 os-release 文本（非 D-Bus 途径）。返回 (text, source)。"""
-    if IN_FLATPAK:
-        # Flatpak 默认把宿主机 os-release 挂到 /run/host/os-release
-        for p in ("/run/host/os-release", "/run/host/etc/os-release", "/run/host/usr/lib/os-release"):
-            t = _read(p)
-            if t.strip():
-                return t, p
-        return "", ""
-    for p in ("/etc/os-release", "/usr/lib/os-release"):
+    paths = (("/run/host/os-release", "/run/host/etc/os-release", "/run/host/usr/lib/os-release")
+             if IN_FLATPAK else ("/etc/os-release", "/usr/lib/os-release"))
+    for p in paths:
         t = _read(p)
-        if t.strip():
+        # 仅含注释或空行的文件不算有效来源，继续尝试后续路径。
+        if parse_os_release(t):
             return t, p
     return "", ""
 
@@ -144,17 +145,21 @@ def _build_identity() -> HostIdentity:
 
     props, err = _dbus_hostname1()
     if props:
+        populated = False
         for prop, attr in _HOSTNAME1_FIELDS:
             val = props.get(prop, "")
             if val:
                 setattr(ident, attr, val)
-        ident.source = "D-Bus org.freedesktop.hostname1"
+                populated = True
+        if populated:
+            ident.source = "D-Bus org.freedesktop.hostname1"
     else:
         ident.dbus_error = err
 
     text, src = _host_os_release_text()
-    if text:
-        ident.os_release = parse_os_release(text)
+    parsed = parse_os_release(text) if text else {}
+    if parsed:
+        ident.os_release = parsed
         if not ident.source:
             ident.source = src
         elif not ident.pretty_name:
@@ -162,6 +167,8 @@ def _build_identity() -> HostIdentity:
 
     if not ident.pretty_name:
         ident.pretty_name = ident.os_release.get("PRETTY_NAME") or ident.os_release.get("NAME") or ""
+    if not ident.cpe_name:
+        ident.cpe_name = ident.os_release.get("CPE_NAME") or ""
 
     # 兜底：runtime 的 /etc/os-release（Flatpak 内不准确，仅在别无选择时使用）
     if not ident.pretty_name and not ident.os_release:

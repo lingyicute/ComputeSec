@@ -491,3 +491,17 @@ def test_sysctl_lookup_wildcard_matches_single_nonempty_segment():
     }}}}})
     got = hd.sysctl_lookup("net.ipv4.conf.*.rp_filter")
     assert set(got) == {"net.ipv4.conf.eth0.rp_filter", "net.ipv4.conf.eth0/100.rp_filter"}
+
+
+def test_hostdata_rejects_bool_index_negative_ts_and_bad_meta_or_size():
+    assert hostdata.valid_step_index(True) is False
+    assert hostdata.valid_step_index(False) is False
+    assert hostdata.valid_step_index(0) is True
+    assert hostdata._payload_ok({"collected_at": -1}) is False
+    assert hostdata._payload_ok({"steps": {"sysctl": {"at": -5, "data": {"values": {}}}}}) is False
+    assert hostdata._payload_ok({"steps": {"sysctl": {"at": True, "data": {"values": {}}}}}) is False
+    assert hostdata._payload_ok({"steps": {"sysctl": {"data": {"values": {}, "meta": []}}}}) is False
+    assert hostdata._payload_ok({"steps": {"sysctl": {"data": {"values": {}, "meta": {"denied": True}}}}}) is False
+    assert hostdata._lsblk_data_ok({"blockdevices": [{"name": "sda", "fstype": None, "size": {"bad": 1}}]}) is False
+    assert hostdata._lsblk_data_ok({"blockdevices": [{"name": "sda", "fstype": None, "size": 1024}]}) is True
+    assert hostdata.HostData({"collected_at": -10}).age_text == ""

@@ -136,7 +136,7 @@ def _payload_ok(payload):
     """
     if not isinstance(payload, dict):
         return False
-    if not _is_number(payload.get("collected_at", 0)):
+    if not _is_timestamp(payload.get("collected_at", 0)):
         return False
     if not isinstance(payload.get("boot_id", ""), str):
         return False
@@ -145,6 +145,8 @@ def _payload_ok(payload):
         return False
     for key, entry in steps.items():
         if not isinstance(entry, dict):
+            return False
+        if "at" in entry and not _is_timestamp(entry["at"]):
             return False
         # 只校验认识的步骤；data 缺失表示这一步没有数据，是合法的。
         check = _STEP_DATA_OK.get(key)
@@ -162,8 +164,18 @@ def _is_number(v):
     return v == v and abs(v) != float("inf")
 
 
+def _is_timestamp(v):
+    return _is_number(v) and v >= 0
+
+
 def _sysctl_data_ok(d):
     if not isinstance(d, dict) or not isinstance(d.get("values"), dict):
+        return False
+    meta = d.get("meta", {})
+    if not isinstance(meta, dict):
+        return False
+    denied = meta.get("denied", 0)
+    if isinstance(denied, bool) or not isinstance(denied, int) or denied < 0:
         return False
     return all(isinstance(k, str) and isinstance(v, str) for k, v in d["values"].items())
 
@@ -182,6 +194,9 @@ def _lsblk_data_ok(d):
         for key in ("label", "mountpoint"):
             if node.get(key) is not None and not isinstance(node[key], str):
                 return False
+        size = node.get("size")
+        if size is not None and (isinstance(size, bool) or not isinstance(size, (str, int))):
+            return False
         children = node.get("children")
         if children is not None:
             if not isinstance(children, list):
@@ -200,7 +215,7 @@ _STEP_DATA_OK = {"sysctl": _sysctl_data_ok, "lsblk": _lsblk_data_ok}
 
 def valid_step_index(index):
     """向导步骤索引是否指向 STEPS 中的某一步（-1 = 介绍页，len = 完成页都不算）。"""
-    return isinstance(index, int) and 0 <= index < len(STEPS)
+    return not isinstance(index, bool) and isinstance(index, int) and 0 <= index < len(STEPS)
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +289,7 @@ class HostData:
     @property
     def collected_at(self):
         v = self.payload.get("collected_at", 0)
-        return v if _is_number(v) else 0
+        return v if _is_timestamp(v) else 0
 
     @property
     def collected_boot_id(self):
@@ -314,7 +329,7 @@ class HostData:
 
     @staticmethod
     def _age(ts):
-        if not ts:
+        if not _is_timestamp(ts) or ts == 0:
             return ""
         try:
             secs = max(0, int(time.time() - ts))

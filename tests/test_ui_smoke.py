@@ -49,7 +49,7 @@ def app():
 
 
 def _item(key, status, actual=None, source="proc"):
-    return checks.SysctlItem(key, "1", "eq", actual or {key: "0"}, status, "", source=source)
+    return checks.SysctlItem(key, "1", "eq", {key: "0"} if actual is None else actual, status, "", source=source)
 
 
 def _report(ks=None, hsi_undetermined=False, empty_scores=False):
@@ -145,7 +145,7 @@ def test_main_window_constructs(app, monkeypatch):
     win = app_main.MainWindow(app)
     win.present()
     assert win.listbox.get_row_at_index(0) is not None
-    win.destroy()
+    win.close()
 
 def test_kernel_check_is_never_silently_dropped(app, monkeypatch):
     """连点「重试」必须有反馈，过期结果也不能复位新一代的标志位。
@@ -159,6 +159,7 @@ def test_kernel_check_is_never_silently_dropped(app, monkeypatch):
                         lambda force=False: kernelver.KernelSupport(
                             release="7.2.12", mainline="7.3", stable="7.2.12", tier="stable"))
     monkeypatch.setattr(checks, "collect", lambda: _report())
+    monkeypatch.setattr(kernelver, "CURRENT", None)
     win = app_main.MainWindow(app)
 
     # 模拟"检查正在进行"：非 force 被忽略，force 排队并给出反馈。
@@ -180,4 +181,4 @@ def test_kernel_check_is_never_silently_dropped(app, monkeypatch):
     win.on_kernel_status(old, False, gen=5)
     assert win._kernel_checking is False
     assert reruns == [True]
-    win.destroy()
+    win.close()

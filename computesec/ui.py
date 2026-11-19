@@ -714,7 +714,7 @@ def build_kernel(report, win):
         g_desc = f"{ok_cnt} / {scored_cnt} 项已设置" if scored_cnt else "暂无可评估项"
         g = group(f"sysctl · {title}", g_desc)
         for it in sorted(items, key=lambda i: (order.get(i.status, 9), i.key)):
-            row = Adw.ActionRow(title=f"<tt>{esc(it.key)}</tt> = <tt>{esc(it.expected)}</tt>" + (" <small>(≥)</small>" if it.cmp == "ge" else ""))
+            row = Adw.ActionRow(title=f"<tt>{esc(it.key)}</tt> = <tt>{esc(it.expected)}</tt>" + {"ge": " <small>(≥)</small>", "le": " <small>(≤)</small>"}.get(it.cmp, ""))
             sub = it.desc + (f"  ⚠ {it.note}" if it.note else "")
             if it.status == "missing":
                 sub += f"  （当前：{it.actual_text}）"

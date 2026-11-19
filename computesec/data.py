@@ -340,7 +340,7 @@ KERNEL_MACHINE_SPECIFIC_NOTE = ("Tips：root、rootflags、rw、rhgb、quiet、v
 
 # ---------------------------------------------------------------------------
 # 推荐 sysctl
-# cmp: "eq" 精确匹配（默认）； "ge" 实际值 >= 期望值即可
+# cmp: "eq" 精确匹配（默认）； "ge" 实际值 >= 期望值即可； "le" 0 < 实际值 <= 期望值即可（0 表示关闭）
 # ---------------------------------------------------------------------------
 SYSCTL_GROUPS = [
     ("网络安全加固", [
@@ -375,8 +375,8 @@ SYSCTL_GROUPS = [
         dict(key="kernel.perf_event_paranoid", value="3", cmp="ge", desc="禁止非特权用户使用 perf（侧信道与信息泄漏）。"),
         dict(key="kernel.kptr_restrict", value="2", desc="对所有用户隐藏内核指针。"),
         dict(key="kernel.dmesg_restrict", value="1", desc="只允许 root 读取内核日志。"),
-        dict(key="kernel.oops_limit", value="100", desc="oops 超过 100 次即 panic，阻止靠反复 oops 进行的利用（内核 ≥ 6.2）。"),
-        dict(key="kernel.warn_limit", value="100", desc="WARN 超过 100 次即 panic（内核 ≥ 6.2）。"),
+        dict(key="kernel.oops_limit", value="100", cmp="le", desc="oops 超过 100 次即 panic，阻止靠反复 oops 进行的利用（内核 ≥ 6.2）。"),
+        dict(key="kernel.warn_limit", value="100", cmp="le", desc="WARN 超过 100 次即 panic（内核 ≥ 6.2）。"),
         dict(key="kernel.panic", value="-1", desc="panic 后立即重启。"),
         dict(key="kernel.printk", value="3 3 3 3", desc="限制控制台日志级别，减少信息泄漏。"),
         dict(key="kernel.kexec_load_disabled", value="1", desc="禁止 kexec 加载新内核（一旦设为 1 不可撤销）。"),

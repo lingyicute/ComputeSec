@@ -808,6 +808,13 @@ def _sysctl_value_ok(actual, expected, cmp):
             return int(a) >= int(e)
         except ValueError:
             return a == e
+    if cmp == "le":
+        # 上限型阈值（kernel.oops_limit / warn_limit）：越小越早 panic、越严格；
+        # 但 0 表示关闭计数，不是"最严格"，必须单独排除。
+        try:
+            return 0 < int(a) <= int(e)
+        except ValueError:
+            return a == e
     return a == e
 
 

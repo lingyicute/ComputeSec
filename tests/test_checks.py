@@ -64,6 +64,10 @@ def test_sysctl_norm():
     ("32", "32", "ge", True),
     ("on", "on", "ge", True),        # 非数字回退到字符串比较
     ("on", "off", "ge", False),
+    ("50", "100", "le", True),       # 上限型：更小更严格
+    ("100", "100", "le", True),
+    ("200", "100", "le", False),
+    ("0", "100", "le", False),       # 0 = 关闭计数，不是"最严格"
 ])
 def test_sysctl_value_ok(actual, expected, cmp, want):
     assert checks._sysctl_value_ok(actual, expected, cmp) is want

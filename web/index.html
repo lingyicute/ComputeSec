@@ -25,6 +25,26 @@
     --elev-1: 0 1px 2px rgba(0,0,0,.14), 0 1px 3px 1px rgba(0,0,0,.08);
     --elev-2: 0 1px 2px rgba(0,0,0,.14), 0 2px 6px 2px rgba(0,0,0,.10);
     --elev-3: 0 4px 8px 3px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.20);
+
+    /* 禁用 JavaScript（如 Tor Browser 高安全模式）时的静态配色兜底 */
+    --primary: #1b6d3c; --on-primary: #ffffff; --primary-container: #a5f5b9; --on-primary-container: #00210b; --inverse-primary: #89d89f;
+    --secondary: #4f6353; --secondary-container: #d2e8d4; --on-secondary-container: #0d1f13;
+    --tertiary: #3a646f; --tertiary-container: #beeaf6; --on-tertiary-container: #001f26;
+    --error-container: #ffdad6; --on-error-container: #410002;
+    --surface: #f6fbf3; --surface-container-lowest: #ffffff; --surface-container-low: #f0f5ee; --surface-container: #ebefe8; --surface-container-high: #e5eae2; --surface-container-highest: #dfe4dd;
+    --on-surface: #181d18; --on-surface-variant: #414941; --inverse-surface: #2c322d; --inverse-on-surface: #edf2ea;
+    --outline: #717971; --outline-variant: #c1c9bf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --primary: #89d89f; --on-primary: #003919; --primary-container: #005228; --on-primary-container: #a5f5b9; --inverse-primary: #1b6d3c;
+      --secondary: #b6ccb8; --secondary-container: #384b3c; --on-secondary-container: #d2e8d4;
+      --tertiary: #a2ceda; --tertiary-container: #204c57; --on-tertiary-container: #beeaf6;
+      --error-container: #93000a; --on-error-container: #ffdad6;
+      --surface: #101510; --surface-container-lowest: #0b0f0b; --surface-container-low: #181d18; --surface-container: #1c211c; --surface-container-high: #262b26; --surface-container-highest: #313631;
+      --on-surface: #dfe4dd; --on-surface-variant: #c1c9bf; --inverse-surface: #dfe4dd; --inverse-on-surface: #2c322d;
+      --outline: #8b938a; --outline-variant: #414941;
+    }
   }
 
   * { box-sizing: border-box; }
@@ -389,6 +409,7 @@
     font-family: "Nebulove", system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   }
 </style>
+<noscript><style>.page-loader,.fab,.palette-pop,.copy{display:none!important}.reveal{opacity:1!important;transform:none!important}.pane{display:block!important;margin-bottom:.75rem}</style></noscript>
 </head>
 <body>
 

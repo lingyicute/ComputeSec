@@ -45,6 +45,7 @@ Here, security advice is plain-spoken and actionable. ComputeSec will not tell y
 * **Reading and comparing state**:
   * Reads `/proc/cmdline` and `/proc/sys` (the equivalent of `sysctl -a`).
   * Root-only entries (such as `vm.mmap_rnd_bits`) are filled in from the `sudo sysctl -a` output you paste via the data collection wizard; without it they are reported as "cannot read" and are **excluded from scoring**.
+  * Outside Flatpak, **live `/proc/sys` values win**: your snapshot only fills in entries that cannot be read (and labels each filled entry with the snapshot's age), so changes you make after collecting a snapshot take effect immediately.
   * Compares them against the built-in recommended kargs list and sysctl hardening list for your architecture (amd64 / aarch64).
 * **Version line check**: at startup the app asks kernel.org for the current mainline / stable version. If your kernel belongs to neither (for example any LTS branch), it states plainly that LTS branches do **not** carry all upstream security fixes and hardening improvements, so the recommended sysctls and boot parameters are **not guaranteed** to deliver the intended hardening on those kernels (some parameters do not exist on older kernels, others are silently ignored by the kernel even when present on the command line, and some are then wrongly counted as hardened because they appear in `/proc/cmdline`). Conclusions drawn on such a branch **must not be used as a basis for hardening**; switching to a mainline or stable kernel is recommended. If the check fails (offline, blocked by a firewall, or the Flatpak network permission revoked) you are not bothered — the Kernel page shows a **not verified** row with a retry button, and the main menu can re-run it too. If the fetch fails while an expired cache exists, the app still reports a conclusion but states how old those version numbers are.
 * **Three cases that are excluded from scoring** (they never lower the score, and they do not mean "passed"):
@@ -75,7 +76,7 @@ Here, security advice is plain-spoken and actionable. ComputeSec will not tell y
 ## Option 1: Flatpak (recommended ⭐)
 
 > [!TIP]
-> **Why Flatpak is the recommended way to run ComputeSec？**
+> **Why Flatpak is the recommended way to run ComputeSec?**
 > 
 > ComputeSec is software too, and it may contain vulnerabilities. State-sponsored targeted
 > attackers may attack this software in order to execute code on your computer. Running
@@ -121,7 +122,7 @@ The tool has to read information from the host, so it requests the permissions b
 > those readings are no longer trusted — they show up as "unverified" and are excluded from scoring.
 > Everything else keeps working.
 
-> **This tool does not request `--talk-name=org.freedesktop.Flatpak`from version 1.0.3.**
+> **This tool does not request `--talk-name=org.freedesktop.Flatpak` since version 1.0.3.**
 > That permission allows running arbitrary commands on the host as you via `flatpak-spawn --host`,
 > which is equivalent to a sandbox escape and far too invasive for a read-only auditing tool.
 > Anything that needs higher privileges is instead gathered through the data collection wizard.
@@ -139,7 +140,7 @@ So ComputeSec shows a step-by-step wizard at startup:
 3. Copy the output, come back and press "**I've copied the result**" — the app reads the
    clipboard directly and parses it. No ugly paste box.
 
-Results are stored only in `~/.local/share/computesec/hostdata.json` together with the current
+Results are stored only in `$XDG_DATA_HOME/computesec/hostdata.json` (by default `~/.local/share/computesec/hostdata.json`) together with the current
 `boot_id`, so they **expire automatically on reboot** (sysctl values may have changed) and you are
 not asked again during the same boot. Every step can be skipped; skipped checks are shown as
 "cannot read" and are **excluded from scoring** (inside the Flatpak sandbox there is also an
@@ -227,7 +228,7 @@ uk._92li.lingyicute.ComputeSec.json      Flatpak manifest
 - Some hardening parameters have minor side effects (for example `module.sig_enforce=1` blocks the proprietary NVIDIA driver from loading, `ia32_emulation=0` breaks Steam/Wine, and `mitigations=auto,nosmt` disables hyper-threading). Each of those is flagged with a ⚠ in the UI. It is a good idea to test them once by pressing `e` in the GRUB menu and adding them temporarily.
 
 > [!IMPORTANT]
-> For security reasons, I recommends against using the closed-source NVIDIA driver and closed-source kernel modules, and against running Windows programs of unknown origin under Wine.
+> For security reasons, I recommend against using the closed-source NVIDIA driver and closed-source kernel modules, and against running Windows programs of unknown origin under Wine.
 
 - Vendor reputation information is drawn from public reporting and CVE records, and is provided for reference only.
 

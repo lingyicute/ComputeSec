@@ -587,6 +587,9 @@ def _cmdline_value_ok(key, actual, expected):
         rank_a = _PROC_MEM_RANK.get(actual)
         rank_e = _PROC_MEM_RANK.get(expected)
         return rank_a is not None and rank_e is not None and rank_a >= rank_e
+    if nk == "rodata" and expected == "on":
+        # 6.18+ ARM64 走 init/main.c set_debug_rodata() -> kstrtobool()；6.17 及更早期望 full，仅精确匹配。
+        return _cmdline_bool_norm(actual) == "1"
     if nk in _CMDLINE_DRACUT_BOOL_KEYS:
         return (actual in _DRACUT_FALSE) == (expected in _DRACUT_FALSE)
     # l1tf= 由内核在固定选项列表（off/flush/flush,nosmt/flush,nowarn/full/full,force）

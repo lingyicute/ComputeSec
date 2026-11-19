@@ -668,6 +668,8 @@ def test_cmdline_params_are_arch_scoped(monkeypatch):
     ("6.17.9", "", "full", "missing"),
     # 6.18 起：on 即完整保护，full 不再识别（被忽略并打印警告）
     ("6.18.0-rc3", "rodata=on", "on", "ok"),
+    ("6.18.0", "rodata=1", "on", "ok"),
+    ("6.17.9", "rodata=1", "full", "wrong"),
     ("6.18.2-200.fc43.aarch64", "rodata=full", "on", "wrong"),
     ("7.3.1", "rodata=on", "on", "ok"),
     # 解析不出版本时退回 full：它在任何内核上都不会降低保护

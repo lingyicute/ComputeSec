@@ -261,6 +261,8 @@ def _default_fetcher(url, timeout):
     MAX_RESPONSE_BYTES 防止过大响应，deadline 防止持续滴流；二者互不替代。
     DNS、重定向及响应头解析仍受 urllib 的行为约束，不宣称严格的全链路截止时间。
     """
+    if not isinstance(url, str) or not url.lower().startswith("https://"):
+        raise ValueError(f"拒绝请求非 https 地址：{url}")
     req = urllib.request.Request(url, headers={"User-Agent": "ComputeSec"})
     deadline = time.monotonic() + timeout
     with _urlopen(req, timeout) as resp:
@@ -286,7 +288,7 @@ def _default_fetcher(url, timeout):
             if size > MAX_RESPONSE_BYTES:
                 raise ValueError(f"响应超过 {MAX_RESPONSE_BYTES} 字节，不像是 releases.json")
             chunks.append(chunk)
-        return b"".join(chunks).decode("utf-8", "replace")
+        return b"".join(chunks).decode("utf-8-sig", "replace")
 
 
 def fetch_versions(fetcher=None, timeout=FETCH_TIMEOUT, url=RELEASES_URL):

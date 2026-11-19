@@ -138,7 +138,7 @@ jobs:
 
   release:
     name: 发布 Nightly
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     # 必须等所有检查通过：此前只依赖 flatpak，lint 失败时照样覆盖发布了 nightly
     # （Run 40087019083）。
     needs: [lint, smoke, flatpak]
@@ -155,8 +155,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          shopt -s globstar nullglob
+          bundles=(artifacts/**/*.flatpak)
+          if (( ${#bundles[@]} == 0 )); then
+            echo "未找到任何 .flatpak 构建产物，中止发布以保留现有 nightly。" >&2
+            exit 1
+          fi
           gh release delete nightly --yes --cleanup-tag || true
-          gh release create nightly artifacts/**/*.flatpak \
+          gh release create nightly "${bundles[@]}" \
             --target "${{ github.sha }}" \
             --title "Nightly Build" \
             --prerelease \

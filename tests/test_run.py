@@ -321,3 +321,29 @@ def test_install_desktop_replaces_readonly_icon_left_by_older_version(tmp_path, 
 
     assert cli.install_desktop(launcher=["/opt/computesec"]) is True
     assert old.read_text(encoding="utf-8") == "<svg/>"
+
+
+def test_xdg_display_dir_trailing_slash_symlink_and_nan(monkeypatch, tmp_path):
+    import stat
+    from computesec import xdg
+
+    monkeypatch.setenv("HOME", str(tmp_path) + "/")
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert xdg.display_dir() == "~/.local/share/computesec"
+
+    # 不跟随符号链接 chmod 目标目录
+    target = tmp_path / "real"
+    target.mkdir(mode=0o755)
+    target.chmod(0o755)
+    xdg_root = tmp_path / "xdg"
+    xdg_root.mkdir()
+    (xdg_root / "computesec").symlink_to(target)
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_root))
+    xdg.data_dir()
+    assert stat.S_IMODE(target.stat().st_mode) == 0o755
+
+    # NaN 不写入缓存且不破坏旧文件
+    cache = tmp_path / "c.json"
+    xdg.atomic_write_json(str(cache), {"ok": 1})
+    xdg.atomic_write_json(str(cache), {"bad": float("nan")})
+    assert cache.read_text(encoding="utf-8") == '{"ok": 1}'

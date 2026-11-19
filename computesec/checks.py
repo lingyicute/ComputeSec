@@ -204,6 +204,8 @@ class HsiReport:
 
 def _flags_to_set(v):
     s = set()
+    if isinstance(v, bool):
+        return s
     if isinstance(v, int):
         for bit, name in data.HSI_FLAG_BITS.items():
             if v & bit:
@@ -216,6 +218,8 @@ def _flags_to_set(v):
 
 
 def _result_to_str(v):
+    if isinstance(v, bool):
+        return "unknown"
     if isinstance(v, int):
         return data.HSI_RESULT_ENUM.get(v, "unknown")
     return str(v or "unknown")
@@ -272,13 +276,21 @@ def _lookup_hsi_info(aid):
 def _normalize_attrs(raw):
     items = []
     for a in raw:
-        aid = a.get("AppstreamId", "")
+        if not isinstance(a, dict):
+            continue
+        aid = str(a.get("AppstreamId") or "")
         flags = _flags_to_set(a.get("Flags", 0))
         result = _result_to_str(a.get("HsiResult", 0))
         info = _lookup_hsi_info(aid)
+        raw_lvl = a.get("HsiLevel", 0)
+        try:
+            level = 0 if isinstance(raw_lvl, bool) else int(raw_lvl or 0)
+        except (TypeError, ValueError):
+            level = 0
         items.append(HsiItem(
-            id=aid, name=info.get("name") or a.get("Name", aid), summary=a.get("Summary") or a.get("Description", ""),
-            level=int(a.get("HsiLevel", 0) or 0), result=result, flags=flags, uri=a.get("Uri", ""), info=info,
+            id=aid, name=str(info.get("name") or a.get("Name") or aid),
+            summary=str(a.get("Summary") or a.get("Description") or ""),
+            level=level, result=result, flags=flags, uri=str(a.get("Uri") or ""), info=info,
             passed="success" in flags, obsoleted="obsoleted" in flags))
     items.sort(key=lambda i: (i.passed, i.level, i.name))
     return items
@@ -306,8 +318,9 @@ def get_hsi() -> HsiReport:
                 host_id = pres.unpack()[0] or ""
             except Exception:
                 pass
-        if raw:
-            return HsiReport(ok=True, source="fwupd D-Bus", host_id=host_id, items=_normalize_attrs(raw))
+        items = _normalize_attrs(raw) if raw else []
+        if items:
+            return HsiReport(ok=True, source="fwupd D-Bus", host_id=str(host_id or ""), items=items)
     except Exception:
         pass
     # 2) fwupdmgr CLI
@@ -315,6 +328,8 @@ def get_hsi() -> HsiReport:
     if out.strip():
         try:
             j = json.loads(out)
+            if not isinstance(j, dict):
+                j = {}
             raw = None
             for key in ("SecurityAttributes", "HostSecurityAttributes", "Attributes"):
                 if isinstance(j.get(key), list):
@@ -325,13 +340,15 @@ def get_hsi() -> HsiReport:
                     if isinstance(v, list) and v and isinstance(v[0], dict) and "AppstreamId" in v[0]:
                         raw = v
                         break
-            if raw:
-                host_id = j.get("HostSecurityId", "")
+            items = _normalize_attrs(raw) if raw else []
+            if items:
+                raw_hid = j.get("HostSecurityId")
+                host_id = raw_hid if isinstance(raw_hid, str) else ""
                 if not host_id:
                     _, txt = run(["fwupdmgr", "security"])
                     m = re.search(r"HSI:\S+(?:\s*\([^)]*\))?", txt or "")
                     host_id = m.group(0) if m else ""
-                return HsiReport(ok=True, source="fwupdmgr", host_id=host_id, items=_normalize_attrs(raw))
+                return HsiReport(ok=True, source="fwupdmgr", host_id=host_id, items=items)
         except ValueError:
             pass
     err = "无法获取 HSI 数据。请确认已安装并启动 fwupd（sudo systemctl start fwupd）。"

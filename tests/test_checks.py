@@ -1362,3 +1362,20 @@ def test_sysctl_io_error_is_not_labelled_root_only(monkeypatch):
     assert item.status == "unknown"
     assert item.source == "读取失败"
     assert "root" not in item.actual_text
+
+
+def test_hsi_rejects_bool_flags_and_malformed_json(monkeypatch):
+    assert checks._flags_to_set(True) == set()
+    assert checks._result_to_str(True) == "unknown"
+    items = checks._normalize_attrs([
+        "not-a-dict",
+        {"AppstreamId": "org.fwupd.hsi.Iommu", "Flags": True, "HsiResult": True, "HsiLevel": "bad"},
+    ])
+    assert len(items) == 1
+    assert items[0].passed is False
+    assert items[0].result == "unknown"
+    assert items[0].level == 0
+
+    monkeypatch.setattr(checks, "run", lambda cmd, **_: (0, "[]"))
+    rep = checks.get_hsi()
+    assert rep.ok is False

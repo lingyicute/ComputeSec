@@ -6,7 +6,7 @@
   <img src="data/icons/hicolor/scalable/apps/uk._92li.lingyicute.ComputeSec.svg" width="128" alt="ComputeSec 图标">
 </p>
 
-**一个基于 **GTK4 / libadwaita / Python** 的 Linux 桌面安全评估工具。它会读取你的系统状态，与安全基线对比，用通俗的语言解释每一项检查的意义与缺失的危害，并给出可以直接复制粘贴的修复方法。做得好的地方会用绿色告诉你：继续保持！🤗**
+**一个基于 GTK4 / libadwaita / Python 的 Linux 桌面安全评估工具。它会读取你的系统状态，与安全基线对比，用通俗的语言解释每一项检查的意义与缺失的危害，并给出可以直接复制粘贴的修复方法。做得好的地方会用绿色告诉你：继续保持！🤗**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](./LICENSE)
 
@@ -136,7 +136,7 @@ flatpak run uk._92li.lingyicute.ComputeSec
 2. 您在自己的终端里执行并确认输出；
 3. 复制输出后回到窗口点击「**我已复制结果**」——程序直接从剪贴板读取并解析，无需粘贴框。
 
-采集结果只保存在 `~/.local/share/computesec/hostdata.json`，并记录 `boot_id`：
+采集结果只保存在 `$XDG_DATA_HOME/computesec/hostdata.json`（默认 `~/.local/share/computesec/hostdata.json`），并记录 `boot_id`：
 **重启后自动失效**（因为 sysctl 可能已改变），同一次开机内不会重复打扰您。
 任何一步都可以跳过，跳过的项目会显示为「无法读取」且不计入评分（Flatpak 沙箱内另有
 「未验证」状态：读数来自沙箱而非宿主机，同样不计入评分）；

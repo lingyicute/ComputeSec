@@ -25,10 +25,15 @@ def _flatpak_shared_subsystems():
     text = read("/.flatpak-info")
     if not text:
         return set()
-    m = re.search(r"^shared=(.*)$", text, re.M)
-    if not m:
-        return set()
-    return {x.strip() for x in m.group(1).split(";") if x.strip()}
+    in_context = False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("[") and line.endswith("]"):
+            in_context = line == "[Context]"
+            continue
+        if in_context and line.startswith("shared="):
+            return {x.strip() for x in line.split("=", 1)[1].split(";") if x.strip()}
+    return set()
 
 
 def _flatpak_shares_network():

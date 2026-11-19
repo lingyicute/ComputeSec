@@ -1306,3 +1306,10 @@ def test_cmdline_bare_slab_debug_overrides_earlier_disabled(monkeypatch):
     monkeypatch.setattr(checks, "read", lambda p, default="": "slab_debug=- slab_debug" if p == "/proc/cmdline" else default)
     by_key = {i.key: i for i in checks.get_cmdline_report().items}
     assert by_key["slab_debug"].status == "ok"
+
+
+def test_flatpak_shared_subsystems_ignores_other_sections(monkeypatch):
+    info = "[Application]\nname=x\n[Environment]\nshared=network;\n[Context]\nshared=ipc;\n"
+    monkeypatch.setattr(checks, "read", lambda p, default="": info if p == "/.flatpak-info" else default)
+    assert checks._flatpak_shared_subsystems() == {"ipc"}
+    assert checks._flatpak_shares_network() is False

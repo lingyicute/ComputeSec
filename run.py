@@ -15,7 +15,8 @@ Flatpak 打包时本文件被安装为 /app/bin/computesec，程序包位于 /ap
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+_SCRIPT = os.path.realpath(__file__)
+HERE = os.path.dirname(_SCRIPT)
 
 # 定位程序包：源码目录 或 /app/lib/computesec
 for cand in (HERE, os.path.join(HERE, "..", "lib", "computesec")):
@@ -30,7 +31,7 @@ else:
 from computesec import cli  # noqa: E402
 
 # 从源码目录安装 .desktop 时，Exec= 写成「当前解释器 + 本文件」。
-_LAUNCHER = [sys.executable, os.path.abspath(__file__)]
+_LAUNCHER = [sys.executable, _SCRIPT]
 
 
 def install_desktop(uninstall=False):

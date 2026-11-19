@@ -597,6 +597,9 @@ def get_cmdline_report() -> CmdlineReport:
     efi_tokens = []
     for k, v in _iter_cmdline_tokens(cmdline):
         nk = _CMDLINE_KEY_ALIASES.get(_norm_key(k), _norm_key(k))
+        # lib/vsprintf.c：no_hash_pointers 等价于 hash_pointers=never，后出现会覆盖 always。
+        if nk == "no_hash_pointers":
+            nk, v = "hash_pointers", "never"
         if v is not None:
             if nk == "efi":
                 efi_tokens.append(v)
@@ -611,9 +614,11 @@ def get_cmdline_report() -> CmdlineReport:
             # 裸 token 被 parse_efi_cmdline(NULL) 拒绝并保持原值——丢掉带值形式只会
             # 让已知信息消失。module_param(bool) 例外：内核按最后一次出现生效，
             # 裸 token 等价于真，必须照旧覆盖才能与内核结论一致。
+            # hash_pointers 裸 token 在 hash_pointers_mode_parse(NULL) 中退回 auto，会覆盖 always。
             if (present.get(nk) is not None
                     and nk not in _CMDLINE_MODULE_BOOL_KEYS
-                    and nk not in _CMDLINE_DRACUT_BOOL_KEYS):
+                    and nk not in _CMDLINE_DRACUT_BOOL_KEYS
+                    and nk != "hash_pointers"):
                 continue
             present[nk] = None
     ar, cv = arch(), cpu_vendor()

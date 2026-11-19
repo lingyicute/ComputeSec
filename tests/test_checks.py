@@ -1272,3 +1272,17 @@ def test_cmdline_bare_rdshell_and_ssh_auto_override_disabled(monkeypatch):
     assert checks._cmdline_value_ok("init_on_alloc", "t", "1") is True
     assert checks._cmdline_value_ok("ia32_emulation", "f", "0") is True
     assert checks._cmdline_value_ok("init_on_alloc", " 1", "1") is False
+
+
+@pytest.mark.parametrize("line,want", [
+    ("hash_pointers=always no_hash_pointers", "wrong"),
+    ("no_hash_pointers hash_pointers=always", "ok"),
+    ("hash_pointers=always hash_pointers", "wrong"),
+    ("no_hash_pointers", "wrong"),
+])
+def test_cmdline_no_hash_pointers_interaction(monkeypatch, line, want):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, default="": line if p == "/proc/cmdline" else default)
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert by_key["hash_pointers"].status == want

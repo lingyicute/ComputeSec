@@ -1313,3 +1313,17 @@ def test_flatpak_shared_subsystems_ignores_other_sections(monkeypatch):
     monkeypatch.setattr(checks, "read", lambda p, default="": info if p == "/.flatpak-info" else default)
     assert checks._flatpak_shared_subsystems() == {"ipc"}
     assert checks._flatpak_shares_network() is False
+
+
+def test_sysctl_flatpak_net_missing_from_user_snapshot_is_snapshot_gap(monkeypatch):
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {"kernel.kptr_restrict": "2"}}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks, "_flatpak_shares_network", lambda: False)
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda k: ({k: "0"}, False))
+    rep = checks.get_sysctl_report()
+    by_key = {i.key: i for i in rep.all_items}
+    item = by_key["net.ipv4.tcp_syncookies"]
+    assert item.status == "unverified"
+    assert item.source == "快照缺失"
+    assert item.actual_text == "（您提供的快照中没有这一项）"

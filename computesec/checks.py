@@ -839,9 +839,10 @@ def get_sysctl_report() -> SysctlReport:
                 actual = dict(supplied)
                 source = "用户提供"
                 unreadable = False
-            elif net_isolated:
-                # Flatpak 没有共享宿主网络：沙箱内的 net.* 属于独立的网络命名空间，
-                # 数值来自新 netns 的默认值，与宿主机的加固状态无关。
+            elif net_isolated and not user_values:
+                # Flatpak 没有共享宿主网络且用户尚未提供快照：沙箱内的 net.* 属于独立的
+                # 网络命名空间，数值来自新 netns 的默认值，与宿主机的加固状态无关。
+                # 若用户已提供快照而仍缺此项，则交由下方「快照缺失」分支统一说明。
                 actual, source, snapshot_gap = {}, "沙箱网络隔离", "沙箱网络隔离"
                 unreadable = False
             elif supplied:

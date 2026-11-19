@@ -54,12 +54,33 @@ class VisibleText(HTMLParser):
             self.chars.update(text)
 
 
+def _unescape_css_string(text):
+    def repl(m):
+        cp = int(m.group(1), 16)
+        return chr(cp) if 0 < cp <= 0x10FFFF and not (0xD800 <= cp <= 0xDFFF) else ""
+
+    return re.sub(r"\\([0-9a-fA-F]{1,6})\s?", repl, text)
+
+
 def css_content_values(html):
     values = set()
-    for style in re.findall(r"<style[^>]*>(.*?)</style>", html, flags=re.S):
+    for style in re.findall(r"<style[^>]*>(.*?)</style>", html, flags=re.S | re.I):
         css = re.sub(r"/\*.*?\*/", "", style, flags=re.S)
-        values.update(v for v in re.findall(r"content:\s*['\"]([^'\"]*)['\"]", css) if v)
+        for v in re.findall(r"content:\s*['\"]([^'\"]*)['\"]", css):
+            if v:
+                values.add(_unescape_css_string(v))
     return values
+
+
+def script_ui_chars(html):
+    """提取 <script> 中动态写入界面的非 ASCII 文案（如 toast('复制失败…')、色板名）。"""
+    chars = set()
+    for script in re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.S | re.I):
+        code = re.sub(r"/\*.*?\*/", "", script, flags=re.S)
+        code = re.sub(r"(?m)//.*$", "", code)
+        for lit in re.findall(r"['\"]([^'\"\r\n]*[^\x00-\x7f][^'\"\r\n]*)['\"]", code):
+            chars.update(lit)
+    return chars
 
 
 def collect_chars():
@@ -68,7 +89,8 @@ def collect_chars():
     parser.feed(html)
     chars = parser.chars
     # Avoid subsetting CSS comments as visible text; only real content: glyphs matter.
-    chars.update(css_content_values(html))
+    chars.update(ch for v in css_content_values(html) for ch in v)
+    chars.update(script_ui_chars(html))
     chars.update(chr(c) for c in range(32, 127))  # Includes dynamic counts / English UI.
     chars.update("：，。！？；“”‘’（）【】—…·《》×＝÷＋－")
     return chars
@@ -145,18 +167,29 @@ def is_current():
     css = HTML_PATH.read_text(encoding="utf-8")
     if cached.get("fingerprint") != fingerprint():
         return False, "字体子集已过期：web/index.html 或本脚本有改动"
+    outputs = cached.get("outputs")
+    if not isinstance(outputs, dict):
+        return False, "scripts/.font-subset-cache.json 中的 outputs 字段无效"
     for path in OUTPUTS.values():
         if not path.exists():
             return False, f"缺少 {path.relative_to(ROOT)}"
         if path.name not in css:
             return False, f"web/index.html 没有引用 {path.name}"
-        if cached.get("outputs", {}).get(path.name) != digest(path):
+        if outputs.get(path.name) != digest(path):
             return False, f"{path.relative_to(ROOT)} 与缓存记录的哈希不一致"
     return True, "WOFF2 子集与页面一致"
 
 
-def main():
-    if "--check" in sys.argv:
+def main(argv=None):
+    args = sys.argv[1:] if argv is None else list(argv)
+    unknown = [a for a in args if a not in ("--check", "--force")]
+    if unknown:
+        sys.stderr.write(f"未知参数：{' '.join(unknown)}\n用法：subset_font.py [--check | --force]\n")
+        return 2
+    if "--check" in args and "--force" in args:
+        sys.stderr.write("--check 与 --force 不能同时使用。\n")
+        return 2
+    if "--check" in args:
         ok, reason = is_current()
         print(("OK: " if ok else "STALE: ") + reason)
         if not ok:
@@ -169,11 +202,12 @@ def main():
     local_font = os.environ.get("NEBULOVE_FONT")
     fp = fingerprint(chars)
     css = HTML_PATH.read_text(encoding="utf-8")
-    cached = None if "--force" in sys.argv else _load_cache()
-    if cached is not None:
+    cached = None if "--force" in args else _load_cache()
+    outputs = cached.get("outputs") if isinstance(cached, dict) else None
+    if cached is not None and isinstance(outputs, dict):
         if cached.get("fingerprint") == fp and all(
             path.exists() and path.name in css
-            and cached.get("outputs", {}).get(path.name) == digest(path)
+            and outputs.get(path.name) == digest(path)
             for path in OUTPUTS.values()
         ):
             print("Visible charset unchanged; WOFF2 subset is current.")

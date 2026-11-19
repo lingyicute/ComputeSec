@@ -33,6 +33,17 @@ def test_cmdline_accepts_legacy_slub_nomerge(monkeypatch, token):
     assert item.status == "ok"
 
 
+@pytest.mark.parametrize("value, status", [("halt", "ok"), ("poweroff", "ok"), ("reboot", "wrong"), ("", "wrong")])
+def test_cmdline_rd_emergency_accepts_poweroff(monkeypatch, value, status):
+    """dracut 的 rd.emergency=halt 与 poweroff 都是关机不进紧急 shell，不能把 poweroff 判成错误。"""
+    monkeypatch.setattr(checks, "read", lambda path, default="": (
+        f"quiet rd.emergency={value} rw" if path == "/proc/cmdline" else default))
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    item = next(i for i in checks.get_cmdline_report().items if i.key == "rd.emergency")
+    assert item.status == status
+
+
 def test_sysctl_norm():
     assert checks._sysctl_norm("  1  ") == "1"
     assert checks._sysctl_norm("a   b\tc") == "a b c"

@@ -427,6 +427,9 @@ _CMDLINE_BOOL_KEYS = {
 # （包括 false、n、OFF）都算真，所以 rd.shell=false 并没有关掉 initramfs 的 shell。
 _CMDLINE_DRACUT_BOOL_KEYS = {"rd.shell"}
 _DRACUT_FALSE = {"0", "no", "off"}
+# dracut-lib.sh emergency_shell()：rd.emergency 的 case 分支里 halt 与 poweroff 都是
+# 关机不进 shell，只差后者额外断电；推荐 halt 时用户写 poweroff 不能判成"错误"。
+_RD_EMERGENCY_NO_SHELL = {"halt", "poweroff"}
 # module_param(bool) 型布尔参数：同样经 kstrtobool 解析 on/1/y 与 off/0/n，
 # 但 cmdline 上省略 = 的裸 token 会被内核置为真（param_set_bool(val=NULL) → 1）。
 _CMDLINE_MODULE_BOOL_KEYS = {
@@ -614,6 +617,8 @@ def _cmdline_value_ok(key, actual, expected):
         return _cmdline_bool_norm(actual) == "1"
     if nk in _CMDLINE_DRACUT_BOOL_KEYS:
         return (actual in _DRACUT_FALSE) == (expected in _DRACUT_FALSE)
+    if nk == "rd.emergency" and expected in _RD_EMERGENCY_NO_SHELL:
+        return actual in _RD_EMERGENCY_NO_SHELL
     # l1tf= 由内核在固定选项列表（off/flush/flush,nosmt/flush,nowarn/full/full,force）
     # 中做精确匹配，任何改写顺序的值都会被忽略，因此不做集合比较，仅精确匹配。
     if nk in _CMDLINE_BOOL_KEYS or nk in _CMDLINE_MODULE_BOOL_KEYS:

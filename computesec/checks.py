@@ -953,25 +953,41 @@ def get_hardware() -> HardwareReport:
     sv, pn, bv, biosv, biosver = dmi("sys_vendor"), dmi("product_name"), dmi("board_vendor"), dmi("bios_vendor"), dmi("bios_version")
     model = read("/proc/device-tree/model").strip("\x00\n ")
     # D-Bus hostname1 也提供厂商/型号/固件版本（宿主机视角），用于补全沙箱内读不到的字段
+    chassis = ""
     try:
         ident = hostinfo.get_identity()
         sv = sv or ident.hw_vendor
         pn = pn or ident.hw_model
         biosver = biosver or ident.firmware_version
+        chassis = ident.chassis
     except Exception:
         pass
     candidates = [("系统厂商", sv), ("产品名称", pn), ("主板厂商", bv), ("设备型号", model)]
     vendor, matched = data.DEFAULT_VENDOR, ""
-    for label, text in candidates:
-        t = (text or "").lower()
-        if not t:
-            continue
-        for v in data.VENDORS:
-            if any(_vendor_kw_match(m, t) for m in v["match"]):
-                vendor, matched = v, f"{label}: {text}"
+    # 先判断是不是虚拟机，再按厂商匹配。Hyper-V 的 sys_vendor 是 "Microsoft Corporation"、
+    # product_name 才是 "Virtual Machine"；VMware / Parallels 的 Mac 虚拟机 product_name 里
+    # 也可能带 "Apple"。按字段顺序逐个匹配会先命中 Surface / Apple 条目，把虚拟机当成
+    # 真机评估并给出"可以使用"的建议。hostname1 的 Chassis=vm 来自 systemd 的
+    # detect_virt()，比 DMI 字符串更可靠，命中即视为虚拟机。
+    if chassis == "vm":
+        vendor, matched = data.VM_VENDOR, "机箱类型: vm"
+    else:
+        for label, text in candidates:
+            t = (text or "").lower()
+            if t and any(_vendor_kw_match(m, t) for m in data.VM_VENDOR["match"]):
+                vendor, matched = data.VM_VENDOR, f"{label}: {text}"
                 break
-        if matched:
-            break
+    if not matched:
+        for label, text in candidates:
+            t = (text or "").lower()
+            if not t:
+                continue
+            for v in data.VENDORS:
+                if any(_vendor_kw_match(m, t) for m in v["match"]):
+                    vendor, matched = v, f"{label}: {text}"
+                    break
+            if matched:
+                break
     return HardwareReport(sys_vendor=sv, product=pn, board_vendor=bv, bios_vendor=biosv, bios_version=biosver,
                           model=model, vendor=vendor, matched_on=matched)
 

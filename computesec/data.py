@@ -521,12 +521,15 @@ VENDORS = [
          incidents=[("说明", "VideoCore GPU 的启动固件闭源，且缺少安全启动/TPM 等硬件安全特性（Pi 4/5 可选安全启动）。")],
          advice="适合学习与低敏感场景；不建议用于高安全性计算。"),
     dict(match=["qemu", "kvm", "vmware", "virtualbox", "innotek", "hyper-v", "virtual machine", "parallels", "bochs", "xen"], name="虚拟机", rating="neutral",
+         virtual=True,
          incidents=[("说明", "您正在虚拟机中运行。虚拟机的安全性完全取决于宿主机与虚拟化平台。")],
          advice="请在宿主机上运行本工具，对真实硬件进行安全评估。"),
     dict(match=["intel"], name="Intel (NUC / 参考设计)", rating="neutral",
          incidents=[("说明", "Intel 平台存在 ME 等闭源子系统，历史上多次曝出 ME 漏洞 (CVE-2017-5689 等)，但更新较为及时。")],
          advice="可以使用，请继续保持固件更新。"),
 ]
+# 虚拟机条目单独拿出来：checks.get_hardware 要在按厂商匹配之前先判断是否在虚拟机里。
+VM_VENDOR = next(v for v in VENDORS if v.get("virtual"))
 DEFAULT_VENDOR = dict(name="未收录厂商", rating="neutral",
                       incidents=[("说明", "本工具的知识库中没有该厂商的重大安全/隐私事故记录。这绝不代表安全，仅表示梨没有对该品牌进行研究。")],
                       advice="请自行检索该厂商的固件更新政策与安全公告，并保持固件更新。")

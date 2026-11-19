@@ -1327,3 +1327,25 @@ def test_sysctl_flatpak_net_missing_from_user_snapshot_is_snapshot_gap(monkeypat
     assert item.status == "unverified"
     assert item.source == "快照缺失"
     assert item.actual_text == "（您提供的快照中没有这一项）"
+
+
+def test_sysctl_native_denied_wildcard_does_not_resurrect_gone_iface(monkeypatch):
+    key = "net.ipv4.conf.*.accept_redirects"
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {
+        "net.ipv4.conf.eth0.accept_redirects": "0",
+        "net.ipv4.conf.eth1.accept_redirects": "0",
+        "net.ipv4.conf.tun0.accept_redirects": "1",  # 快照后已拆除的旧接口
+    }}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+
+    def fake_proc(k):
+        if k == key:
+            return ({"net.ipv4.conf.eth0.accept_redirects": "0",
+                     "net.ipv4.conf.eth1.accept_redirects": None}, True)
+        return ({}, False)
+
+    monkeypatch.setattr(checks, "_sysctl_from_proc", fake_proc)
+    item = {i.key: i for i in checks.get_sysctl_report().all_items}[key]
+    assert item.status == "ok"
+    assert "net.ipv4.conf.tun0.accept_redirects" not in item.actual

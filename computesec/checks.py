@@ -709,7 +709,7 @@ class SysctlItem:
         # 多个接口的值不一样时逐个列出。None 必须在这里也翻译成人话：此前只有
         # 「所有接口同一个值」的分支做了翻译，混合情形下界面上会出现「eth0=None」。
         return ", ".join(
-            f"{k.split('.')[-2]}={_sysctl_value_text(v)}"
+            f"{(k.split('.')[-2] if '.' in k else k)}={_sysctl_value_text(v)}"
             for k, v in sorted(self.actual.items()))
 
 
@@ -806,7 +806,7 @@ def _sysctl_from_proc(key):
         except PermissionError:
             actual[k] = None
             unreadable = True
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             actual[k] = None
     return actual, unreadable
 
@@ -856,14 +856,21 @@ def get_sysctl_report() -> SysctlReport:
                 # （net.ipv4.conf.*.…）读到了一部分、又没有权限错误时，快照里多出来的
                 # 键只能是采集之后消失的接口（VPN 断开、容器退出、拔掉的网卡）：补回来
                 # 就成了用户怎么改都消不掉的「未设置」。
-                gone_only = bool(actual) and not unreadable
-                filled = {} if gone_only else {k: v for k, v in supplied.items() if actual.get(k) is None}
+                if not actual:
+                    filled = dict(supplied)
+                elif unreadable and any(v is None for v in actual.values()):
+                    # 仅补 /proc 中确实存在但因权限读不到的键，不把快照里已消失的旧接口带回来。
+                    filled = {k: v for k, v in supplied.items() if k in actual and actual[k] is None}
+                elif unreadable:
+                    filled = {k: v for k, v in supplied.items() if actual.get(k) is None}
+                else:
+                    filled = {}
                 if filled:
                     # 这些键在 /proc 里读不到（多半是 EACCES），用快照补上。
                     actual = {**actual, **filled}
                     age = hd.step_age_text("sysctl")
                     source = f"用户提供（{age}）" if age else "用户提供"
-                    unreadable = False
+                    unreadable = any(v is None for v in actual.values())
             elif IN_FLATPAK and user_values and not (
                     unreadable and not any(v is not None for v in actual.values())):
                 # 沙箱内的 /proc/sys 不是宿主机视图（可能被屏蔽、改写或加了命名空间），

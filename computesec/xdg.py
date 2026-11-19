@@ -48,9 +48,9 @@ def display_dir(name="computesec"):
     ``~/.local/share/computesec/``：遵守 XDG 规范的用户会把 XDG_DATA_HOME 指到
     别处，写死之后那句提示就是错的。只算路径，不碰文件系统。
     """
-    d = data_dir(name, create=False)
-    home = os.path.expanduser("~")
-    if home and home != os.sep and (d == home or d.startswith(home + os.sep)):
+    d = os.path.normpath(data_dir(name, create=False))
+    home = os.path.expanduser("~").rstrip(os.sep)
+    if home and (d == home or d.startswith(home + os.sep)):
         return "~" + d[len(home):]
     return d
 

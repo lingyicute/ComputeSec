@@ -546,3 +546,17 @@ def test_kernelver_upfront_https_ascii_digits_and_unsorted_eol_stables(monkeypat
         {"moniker": "stable", "version": "7.2.9", "iseol": True},
     ]})
     assert kv.parse_releases_json(payload) == ("7.3", "7.2.9")
+
+
+def test_kernelver_rejects_negative_or_str_timestamp_and_empty_release_text():
+    for bad in (-1, -100, "1700000000", "bad"):
+        assert kv.KernelSupport.from_dict({"mainline": "7.3", "stable": "7.2.1", "checked_at": bad}) is None
+    for bad in (-5, float("inf"), float("nan"), True):
+        assert kv.KernelSupport(checked_at=bad).age_text(now=1000) == ""
+
+    empty_rel = kv.KernelSupport(release="", mainline="7.3", stable="7.2.1", tier="unknown")
+    assert "kernel.org" not in kv.fetch_failed_text(empty_rel)
+    assert "「」" not in kv.recheck_result_text(empty_rel)
+
+    offline_weird = kv.KernelSupport(release="weird", mainline="7.3", stable="7.2.1", error="offline")
+    assert "未能连上 kernel.org" in kv.recheck_result_text(offline_weird)

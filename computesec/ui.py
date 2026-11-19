@@ -160,7 +160,10 @@ def copy_button(win, text, label="复制"):
     btn.set_child(Adw.ButtonContent(icon_name="edit-copy-symbolic", label=label))
 
     def on_click(_b):
-        Gdk.Display.get_default().get_clipboard().set(text)
+        disp = Gdk.Display.get_default()
+        if disp is None:
+            return
+        disp.get_clipboard().set(text)
         win.toast("已复制到剪贴板")
 
     btn.connect("clicked", on_click)

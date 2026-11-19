@@ -228,7 +228,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     # ---- 交互 ----
     def toast(self, text):
-        self.toast_overlay.add_toast(Adw.Toast.new(text))
+        # Adw.Toast:title 默认按 Pango markup 解析，动态文本含 < 或 & 会破坏整条提示。
+        self.toast_overlay.add_toast(Adw.Toast.new(GLib.markup_escape_text(str(text))))
 
     def open_wizard(self, *_):
         """打开数据采集向导。向导保证 on_finish 恰好回调一次（完成或被关闭）。"""

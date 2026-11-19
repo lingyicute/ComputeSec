@@ -1420,3 +1420,9 @@ def test_ntfs_partitions_ignores_fuseblk_confirmed_non_windows_by_udev(monkeypat
     assert not any("/dev/sda1" in x for x in found)
     assert any("Win Data" in x for x in found)
     assert any("/media/Win Disk" in x for x in found)
+
+
+@pytest.mark.parametrize("raw", ["inf 0", "nan 0", "-5 0", ""])
+def test_check_uptime_rejects_non_finite_or_negative(monkeypatch, raw):
+    monkeypatch.setattr(checks, "read", lambda p, default="": raw if p == "/proc/uptime" else default)
+    assert checks.check_uptime().status == "unknown"

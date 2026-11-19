@@ -3,6 +3,7 @@
 
 import glob
 import json
+import math
 import os
 import platform
 import re
@@ -1076,6 +1077,8 @@ def check_uptime() -> HabitCheck:
     try:
         secs = float(read("/proc/uptime").split()[0])
     except (ValueError, IndexError):
+        return HabitCheck("uptime", "系统运行时间", "unknown", "无法读取 /proc/uptime", [], "")
+    if not math.isfinite(secs) or secs < 0:
         return HabitCheck("uptime", "系统运行时间", "unknown", "无法读取 /proc/uptime", [], "")
     days, rem = divmod(int(secs), 86400)
     hours, rem = divmod(rem, 3600)

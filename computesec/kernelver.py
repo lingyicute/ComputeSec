@@ -42,7 +42,7 @@ FETCH_TIMEOUT = 6.0
 MAX_RESPONSE_BYTES = 1_000_000
 
 # 内核 release 串：6.1.158+ / 7.2.12-200.fc44.x86_64 / 6.18.0-rc3 / 7.3
-_RELEASE_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?")
+_RELEASE_RE = re.compile(r"^([0-9]+)\.([0-9]+)(?:\.([0-9]+)|(?![0-9.]))")
 _UPSTREAM_RELEASE_RE = re.compile(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-rc[0-9]+)?")
 
 TIER_ZH = {
@@ -95,8 +95,8 @@ def parse_releases_json(text):
     releases = doc.get("releases")
     if not isinstance(releases, list):
         return "", ""
-    mainline = newest_stable = ""
-    maintained = []
+    mainline = ""
+    stables, maintained = [], []
     for rel in releases:
         if not isinstance(rel, dict):
             continue
@@ -107,14 +107,14 @@ def parse_releases_json(text):
         if moniker == "mainline" and not mainline:
             mainline = version
         elif moniker == "stable":
-            newest_stable = newest_stable or version
-            if rel.get("iseol") is not True and parse_release(version) is not None:
+            stables.append(version)
+            if rel.get("iseol") is not True:
                 maintained.append(version)
     # stable 可能同时有两条：新分支出了 .1 之后，上一条还会再维护两三周才标成 EOL
     # （iseol=true）。classify() 拿这里的 stable 当「受支持」的门槛，所以取仍在维护的
     # 最旧一条；只认最新一条会把还在上游维护期内的内核判成「旧分支」——Fedora 等
-    # 发行版此时多半还停在这条线上。全部标了 EOL 时退回最新的那条。
-    stable = min(maintained, key=parse_release) if maintained else newest_stable
+    # 发行版此时多半还停在这条线上。全部标了 EOL 时退回版本号最高的那条。
+    stable = min(maintained, key=parse_release) if maintained else (max(stables, key=parse_release) if stables else "")
     return mainline, stable
 
 

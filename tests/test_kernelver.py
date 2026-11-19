@@ -526,3 +526,23 @@ def test_warning_text_never_prints_empty_parentheses(mainline, stable):
 def test_tier_text_covers_all_tiers():
     for tier in ("mainline", "stable", "older", "unknown"):
         assert kv.TIER_ZH[tier]
+
+
+def test_kernelver_upfront_https_ascii_digits_and_unsorted_eol_stables(monkeypatch):
+    called = []
+    monkeypatch.setattr(kv, "_urlopen", lambda *a, **kw: called.append(1))
+    with pytest.raises(ValueError):
+        kv._default_fetcher("http://www.kernel.org/releases.json", 5)
+    assert called == []
+
+    assert kv.parse_release("٦.١.٠") is None
+    assert kv.parse_release("6.18.abc") is None
+    assert kv.parse_release("6.18.0-rc3") == (6, 18, 0)
+    assert kv.parse_release("6.18-rc1") == (6, 18, 0)
+
+    payload = json.dumps({"releases": [
+        {"moniker": "mainline", "version": "7.3"},
+        {"moniker": "stable", "version": "7.1.20", "iseol": True},
+        {"moniker": "stable", "version": "7.2.9", "iseol": True},
+    ]})
+    assert kv.parse_releases_json(payload) == ("7.3", "7.2.9")

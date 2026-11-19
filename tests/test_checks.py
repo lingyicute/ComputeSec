@@ -1225,6 +1225,11 @@ def test_cmdline_stops_at_double_dash_and_handles_quotes(monkeypatch):
     ('a=1 "b=2 c" d', [("a", "1"), ("b", "2 c"), ("d", None)]),
     ('k="x y" z', [("k", "x y"), ("z", None)]),
     ("quiet -- init_on_alloc=1", [("quiet", None)]),
+    ('quiet "--" init_on_alloc=1', [("quiet", None)]),
+    ('mitigations="auto,nosmt', [("mitigations", "auto,nosmt")]),
+    ('"slab_nomerge', [("slab_nomerge", None)]),
+    ('"init_on_alloc="', [("init_on_alloc", "")]),
+    ('foo="" bar=--',[("foo", ""), ("bar", "--")]),
     ("a  \t b=", [("a", None), ("b", "")]),
     ("", []),
 ])

@@ -430,9 +430,10 @@ _PROC_MEM_RANK = {"always": 0, "ptrace": 1, "never": 2}
 
 
 def _iter_cmdline_tokens(cmdline):
-    """按内核 lib/cmdline.c next_arg() 的规则切分 /proc/cmdline。
+    """按内核 lib/cmdline.c next_arg() 与 kernel/params.c parse_args() 切分 /proc/cmdline。
 
-    双引号内空白不拆分，遇到 `--` 即停止（其后参数交给 init 而非内核），并剥离外层双引号。
+    双引号内空白不拆分，先剥离参数/值外层双引号（含末尾未闭合的起始引号），
+    再在无值参数等于 `--` 时停止（其后参数交给 init 而非内核）。
     """
     n = len(cmdline)
     i = 0
@@ -441,24 +442,37 @@ def _iter_cmdline_tokens(cmdline):
             i += 1
         if i >= n:
             break
+        quoted = cmdline[i] == '"'
+        if quoted:
+            i += 1
+        in_quote = quoted
         start = i
-        in_quote = False
+        equals = -1
         while i < n and (in_quote or not cmdline[i].isspace()):
-            if cmdline[i] == '"':
+            ch = cmdline[i]
+            if equals < 0 and ch == "=":
+                equals = i
+            if ch == '"':
                 in_quote = not in_quote
             i += 1
-        tok = cmdline[start:i]
-        if tok == "--":
-            break
-        if len(tok) >= 2 and tok[0] == '"' and tok[-1] == '"':
-            tok = tok[1:-1]
-        if "=" in tok:
-            k, v = tok.split("=", 1)
-            if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
-                v = v[1:-1]
-            yield k, v
+        end = i
+        if equals < 0:
+            if quoted and end > start and cmdline[end - 1] == '"':
+                end -= 1
+            param = cmdline[start:end]
+            if param == "--":
+                break
+            yield param, None
         else:
-            yield tok, None
+            param = cmdline[start:equals]
+            vstart, vend = equals + 1, end
+            if vstart < vend and cmdline[vstart] == '"':
+                vstart += 1
+                if vend > vstart and cmdline[end - 1] == '"':
+                    vend -= 1
+            elif quoted and vend > vstart and cmdline[end - 1] == '"':
+                vend -= 1
+            yield param, cmdline[vstart:vend]
 
 
 def _cmdline_bool_norm(v):

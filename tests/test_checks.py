@@ -1298,3 +1298,11 @@ def test_cmdline_no_hash_pointers_interaction(monkeypatch, line, want):
 ])
 def test_iommu_nopt_overrides_earlier_pt(val, want):
     assert checks._cmdline_value_ok("iommu", val, "force") is want
+
+
+def test_cmdline_bare_slab_debug_overrides_earlier_disabled(monkeypatch):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, default="": "slab_debug=- slab_debug" if p == "/proc/cmdline" else default)
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert by_key["slab_debug"].status == "ok"

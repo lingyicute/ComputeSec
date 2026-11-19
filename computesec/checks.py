@@ -623,7 +623,12 @@ def get_cmdline_report() -> CmdlineReport:
             # 让已知信息消失。module_param(bool) 例外：内核按最后一次出现生效，
             # 裸 token 等价于真，必须照旧覆盖才能与内核结论一致。
             # hash_pointers 裸 token 在 hash_pointers_mode_parse(NULL) 中退回 auto，会覆盖 always。
-            if (present.get(nk) is not None
+            # mm/slub.c setup_slub_debug()：后置裸 slab_debug 会启用 DEBUG_DEFAULT_FLAGS (FZPU)，
+            # 若先前值已达标则保留原字面量展示，若未达标（如 slab_debug=-）则按裸 token 覆盖。
+            if nk == "slab_debug" and present.get(nk) is not None:
+                if _cmdline_value_ok("slab_debug", present[nk], "FZ"):
+                    continue
+            elif (present.get(nk) is not None
                     and nk not in _CMDLINE_MODULE_BOOL_KEYS
                     and nk not in _CMDLINE_DRACUT_BOOL_KEYS
                     and nk != "hash_pointers"):

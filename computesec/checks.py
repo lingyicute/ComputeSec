@@ -1256,6 +1256,11 @@ def _ntfs_from_lsblk_json(j):
     return found
 
 
+def _unescape_mount_field(s):
+    """解码 /proc/mounts 中的八进制转义（如空格 \040、反斜杠 \134）。"""
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), s)
+
+
 def _ntfs_partitions():
     """返回 (命中的分区行, 数据来源)。
 
@@ -1285,36 +1290,51 @@ def _ntfs_partitions():
     if not source:
         has_udev_fs = False
         seen_devices = set()
+        non_win_devices = set()
+        fs_pat = "|".join(re.escape(t) for t in data.WINDOWS_FS_TYPES)
         for f in sorted(glob.glob("/run/udev/data/b*")):
             content = read(f)
-            if "E:ID_FS_TYPE=" in content:
-                has_udev_fs = True
-            m_fs = re.search(r"^E:ID_FS_TYPE=(%s)\s*$" % "|".join(data.WINDOWS_FS_TYPES),
-                             content, re.M | re.I)
-            if m_fs:
-                name = re.search(r"^E:DEVNAME=(\S+)", content, re.M)
-                devname = name.group(1) if name else ""
-                if not devname:
-                    uevent = read(f"/sys/dev/block/{os.path.basename(f)[1:]}/uevent")
-                    m_dev = re.search(r"^DEVNAME=(\S+)", uevent, re.M)
-                    devname = f"/dev/{m_dev.group(1)}" if m_dev else f
-                label = re.search(r"^E:ID_FS_LABEL=(\S+)", content, re.M)
-                line = f"{devname}  标签: {label.group(1) if label else '-'}"
-                if m_fs.group(1).lower() == data.BITLOCKER_FS_TYPE:
+            m_any = re.search(r"^E:ID_FS_TYPE=([^\r\n]+)$", content, re.M)
+            if not m_any:
+                continue
+            fstype = m_any.group(1).strip()
+            if not fstype:
+                continue
+            has_udev_fs = True
+            name = re.search(r"^E:DEVNAME=(\S+)", content, re.M)
+            devname = name.group(1) if name else ""
+            if not devname:
+                uevent = read(f"/sys/dev/block/{os.path.basename(f)[1:]}/uevent")
+                m_dev = re.search(r"^DEVNAME=(\S+)", uevent, re.M)
+                devname = f"/dev/{m_dev.group(1)}" if m_dev else f
+            if re.fullmatch(fs_pat, fstype, re.I):
+                label = re.search(r"^E:ID_FS_LABEL=([^\r\n]+)$", content, re.M)
+                lbl_txt = label.group(1).strip() if label and label.group(1).strip() else "-"
+                line = f"{devname}  标签: {lbl_txt}"
+                if fstype.lower() == data.BITLOCKER_FS_TYPE:
                     line += "  （BitLocker 加密）"
                 found.append(line)
                 seen_devices.add(devname)
                 source = "udev"
+            elif devname:
+                non_win_devices.add(devname)
         if has_udev_fs and not source:
             source = "udev"
         # udev 数据库可能缺少后挂载设备的记录；即使已有 udev 数据，也必须用挂载表补全。
+        # 但 fuseblk 也用于 exfat-fuse / fuse-ext2 等非 NTFS 文件系统，不能覆盖 udev 已确认为非 Windows 的设备。
         for line in read("/proc/mounts").splitlines():
             parts = line.split()
-            if len(parts) > 2 and (parts[2] in ("ntfs", "ntfs3", "fuse.ntfs", "fuse.ntfs-3g")
-                                   or (parts[2] == "fuseblk" and parts[0].startswith("/dev/"))):
-                if parts[0] not in seen_devices:
-                    found.append(f"{parts[0]} 挂载于 {parts[1]} ({parts[2]})")
-                    seen_devices.add(parts[0])
+            if len(parts) <= 2:
+                continue
+            dev = _unescape_mount_field(parts[0])
+            mp = _unescape_mount_field(parts[1])
+            fstype = parts[2]
+            is_ntfs_mount = fstype in ("ntfs", "ntfs3", "fuse.ntfs", "fuse.ntfs-3g")
+            is_unknown_fuseblk = (fstype == "fuseblk" and dev.startswith("/dev/")
+                                  and dev not in non_win_devices)
+            if (is_ntfs_mount or is_unknown_fuseblk) and dev not in seen_devices:
+                found.append(f"{dev} 挂载于 {mp} ({fstype})")
+                seen_devices.add(dev)
         source = f"{source} + /proc/mounts" if source else "/proc/mounts"
     return found, source
 

@@ -1396,3 +1396,27 @@ def test_hsi_rejects_bool_flags_and_malformed_json(monkeypatch):
 ])
 def test_vendor_kw_match_letter_boundary(kw, text, want):
     assert checks._vendor_kw_match(kw, text) is want
+
+
+def test_ntfs_partitions_ignores_fuseblk_confirmed_non_windows_by_udev(monkeypatch):
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    monkeypatch.setattr(checks.glob, "glob", lambda _: ["/run/udev/data/b8:1", "/run/udev/data/b8:2"])
+
+    def fake_read(path, default=""):
+        if path == "/run/udev/data/b8:1":
+            return "E:ID_FS_TYPE=exfat\nE:DEVNAME=/dev/sda1\n"
+        if path == "/run/udev/data/b8:2":
+            return "E:ID_FS_TYPE=ntfs\nE:DEVNAME=/dev/sda2\nE:ID_FS_LABEL=Win Data\n"
+        if path == "/proc/mounts":
+            return (
+                r"/dev/sda1 /media/USB\040Stick fuseblk rw 0 0" + "\n"
+                r"/dev/sdb1 /media/Win\040Disk ntfs3 rw 0 0" + "\n"
+            )
+        return default
+
+    monkeypatch.setattr(checks, "read", fake_read)
+    found, _ = checks._ntfs_partitions()
+    assert not any("/dev/sda1" in x for x in found)
+    assert any("Win Data" in x for x in found)
+    assert any("/media/Win Disk" in x for x in found)

@@ -120,6 +120,7 @@ class CollectWizard(Adw.Window):
         self.primary_btn.set_sensitive(sensitive)
         self.back_btn.set_sensitive(sensitive)
         self.skip_btn.set_sensitive(sensitive)
+        self.copy_cmd_btn.set_sensitive(sensitive)
 
     def go(self, index):
         self._busy = False
@@ -269,9 +270,8 @@ class CollectWizard(Adw.Window):
         if self._finished:
             return
         idx = self.index if step_index is None else step_index
-        if idx != self.index or not (0 <= idx < len(self.steps)):
-            self._busy = False
-            self._set_controls_sensitive(True)
+        # 已切到其它步骤时，go() 已重置当前步状态；旧回调不得解锁新一步正在进行的读取。
+        if idx != self.index or not hostdata.valid_step_index(idx):
             return
         try:
             text = clipboard.read_text_finish(result)

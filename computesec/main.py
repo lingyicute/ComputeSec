@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """应用程序入口：窗口、导航、后台检测线程。"""
 
+import copy
 import os
 import platform
 import sys
@@ -191,7 +192,7 @@ class MainWindow(Adw.ApplicationWindow):
                 if key in self.built:
                     self.built.discard(key)
                     self.build_page(key)
-        if st.known and not st.supported and not self._kernel_warned:
+        if st.known and not st.supported and not self._kernel_warned and not self._kernel_pending:
             self._kernel_warned = True
             self._pending_kernel_warning = st
             self.show_kernel_warning()
@@ -239,7 +240,8 @@ class MainWindow(Adw.ApplicationWindow):
         if self._wizard is not None:
             self._wizard.present()
             return False
-        existing = hostdata.CURRENT if hostdata.CURRENT.any_data else hostdata.HostData.load()
+        existing = (hostdata.HostData(copy.deepcopy(hostdata.CURRENT.payload))
+                    if hostdata.CURRENT.any_data else hostdata.HostData.load())
         if not existing.fresh:
             existing = hostdata.HostData()
         self._wizard = wizard.CollectWizard(self, host_data=existing, on_finish=self.on_wizard_finish)
@@ -409,6 +411,7 @@ class MainWindow(Adw.ApplicationWindow):
         current = sel.page_key if sel else "dashboard"
         targets = self.bins.keys() if self.report is None else (current,)
         for k in targets:
+            self.built.discard(k)
             self.bins[k].set_child(Adw.StatusPage(
                 icon_name="dialog-error-symbolic", title="检测时发生错误",
                 description=f"{error}\n\n点击刷新按钮重试。"))
@@ -432,10 +435,10 @@ class Application(Adw.Application):
         display = Gdk.Display.get_default()
         if display is not None:
             theme = Gtk.IconTheme.get_for_display(display)
-            theme.add_search_path(os.path.join(PROJECT_ROOT, "data", "icons"))
             # --install 写的就是 $XDG_DATA_HOME/icons（见 cli.install_desktop），
-            # 同时覆盖 pip install / pip install --user 落入的各 share/icons 根目录。
-            icon_dirs = [os.path.join(xdg.data_home(), "icons")]
+            # 同时覆盖源码目录与 pip install 落入的各 share/icons 根目录。
+            icon_dirs = [os.path.join(PROJECT_ROOT, "data", "icons"),
+                         os.path.join(xdg.data_home(), "icons")]
             for root in cli._share_roots():
                 icon_dirs.append(os.path.join(root, "share", "icons"))
             icon_dirs.append("/app/share/icons")                    # Flatpak
@@ -456,10 +459,10 @@ class Application(Adw.Application):
 
     def _main_window(self):
         win = self.props.active_window
-        if isinstance(win, MainWindow):
+        if isinstance(win, MainWindow) and not win._closed:
             return win
         for w in self.get_windows():
-            if isinstance(w, MainWindow):
+            if isinstance(w, MainWindow) and not w._closed:
                 return w
         return None
 

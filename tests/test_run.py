@@ -355,3 +355,30 @@ def test_share_roots_include_default_scheme(monkeypatch):
     monkeypatch.setattr(cli.sysconfig, "get_path",
                         lambda name, *args: "/usr/local" if (name == "data" and not args) else orig(name, *args))
     assert "/usr/local" in cli._share_roots()
+
+
+def test_cli_replaces_readonly_desktop_and_symlink_and_handles_braces_in_prog(tmp_path, monkeypatch, capsys):
+    data_home = _prepare(tmp_path, monkeypatch)
+    root, src_icon = _readonly_source_tree(tmp_path)
+    monkeypatch.setattr(cli, "__file__", str(root / "computesec" / "cli.py"))
+
+    apps_dir = data_home / "applications"
+    icon_dir = data_home / "icons" / "hicolor" / "scalable" / "apps"
+    apps_dir.mkdir(parents=True)
+    icon_dir.mkdir(parents=True)
+
+    # 只读旧 .desktop 与指向源文件的软链都应被安全替换为独立普通文件
+    old_desktop = apps_dir / (cli.APP_ID + ".desktop")
+    old_desktop.write_text("[Desktop Entry]\nExec=old\n", encoding="utf-8")
+    os.chmod(old_desktop, 0o444)
+    icon_dst = icon_dir / (cli.APP_ID + ".svg")
+    icon_dst.symlink_to(src_icon)
+
+    assert cli.install_desktop(launcher=["/opt/computesec"]) is True
+    assert not icon_dst.is_symlink()
+    assert "Exec=/opt/computesec" in old_desktop.read_text(encoding="utf-8")
+
+    # prog 含花括号时 --help 不抛 KeyError/ValueError，sys.argv 为空时也不抛 IndexError
+    monkeypatch.setattr(cli.sys, "argv", [])
+    assert cli.main(["--help"], prog="cs{1}") == 0
+    assert "cs{1}" in capsys.readouterr().out

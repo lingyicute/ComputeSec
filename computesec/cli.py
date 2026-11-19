@@ -39,11 +39,35 @@ def _copy_icon(src, dst):
     只报一句「安装失败」。copyfile 只复制内容，新建的目标按 umask 取默认权限。
     旧版本已经装出一份只读目标时，同样先删掉再写，用户不必手动清理。
     """
+    if os.path.islink(dst):
+        os.remove(dst)
     try:
         shutil.copyfile(src, dst)
     except PermissionError:
         os.remove(dst)
         shutil.copyfile(src, dst)
+
+
+def _write_text(dst, content):
+    """写入文本文件；目标为符号链接或只读旧文件时先移除再重建，避免跟随软链或 PermissionError。"""
+    if os.path.islink(dst):
+        os.remove(dst)
+    try:
+        with open(dst, "w", encoding="utf-8") as f:
+            f.write(content)
+    except PermissionError:
+        os.remove(dst)
+        with open(dst, "w", encoding="utf-8") as f:
+            f.write(content)
+
+
+def _default_launcher():
+    argv0 = sys.argv[0] if sys.argv else ""
+    if argv0 and os.sep not in argv0:
+        found = shutil.which(argv0)
+        if found:
+            return [found]
+    return [os.path.abspath(argv0 or "computesec")]
 
 
 def _quote_desktop_arg(arg):
@@ -144,7 +168,7 @@ def install_desktop(uninstall=False, launcher=None):
                 + "请确认安装完整（pip 会在安装时把这两个文件装进 <prefix>/share），"
                   "或直接在源码目录里运行 run.py --install。\n")
             return False
-        launcher = launcher or [os.path.abspath(sys.argv[0])]
+        launcher = launcher or _default_launcher()
         try:
             with open(src_desktop, encoding="utf-8") as f:
                 content = f.read()
@@ -167,10 +191,9 @@ def install_desktop(uninstall=False, launcher=None):
             # pip install --user 把 data-files 装进 ~/.local/share，默认的 XDG_DATA_HOME
             # 也是它：源与目标是同一个文件，shutil.copy 会抛 SameFileError。图标已经
             # 在位，跳过即可；.desktop 的内容上面已整份读出，原地改写没有问题。
-            if not _same_file(src_icon, icon_path):
+            if os.path.islink(icon_path) or not _same_file(src_icon, icon_path):
                 _copy_icon(src_icon, icon_path)
-            with open(desktop_path, "w", encoding="utf-8") as f:
-                f.write(content)
+            _write_text(desktop_path, content)
         except OSError as e:
             sys.stderr.write(f"安装失败：{e}\n")
             return False
@@ -178,7 +201,7 @@ def install_desktop(uninstall=False, launcher=None):
         print("已安装", icon_path)
     for cmd in (["update-desktop-database", apps_dir],
                 ["gtk-update-icon-cache", "-f", "-t", os.path.join(data_home, "icons", "hicolor")]):
-        if shutil.which(cmd[0]):
+        if os.path.isdir(cmd[-1]) and shutil.which(cmd[0]):
             try:
                 os.spawnvp(os.P_WAIT, cmd[0], cmd)
             except OSError as e:      # 缓存刷新失败不影响文件已经装好这一事实
@@ -203,7 +226,7 @@ HELP = """\
 def _print_help(prog, stream=None):
     # 不把 sys.stdout 写成默认参数：那样会在导入时就把流固定下来，
     # 之后（测试、重定向）替换 sys.stdout 就不再生效。
-    (stream or sys.stdout).write(HELP.format(prog=prog))
+    (stream or sys.stdout).write(HELP.replace("{prog}", prog))
 
 
 def _missing_deps_message(err):
@@ -246,7 +269,8 @@ def _parse(argv):
 
 def main(argv=None, prog=None, launcher=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    prog = prog or os.path.basename(sys.argv[0] or "") or "computesec"
+    argv0 = sys.argv[0] if sys.argv else ""
+    prog = prog or os.path.basename(argv0 or "") or "computesec"
     # 参数在导入 gi 之前处理：没有图形环境的机器上，--version / --help 也该能用。
     actions, unknown = _parse(argv)
     if unknown:
@@ -279,4 +303,4 @@ def main(argv=None, prog=None, launcher=None):
         return 1
     from .main import main as gui_main
     # 参数已在上面处理完毕，不再交给 GApplication 解析。
-    return gui_main([sys.argv[0]])
+    return gui_main([argv0 or "computesec"])

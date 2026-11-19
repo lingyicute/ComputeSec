@@ -98,10 +98,9 @@ def cpu_vendor():
 def cpu_model():
     lines = read("/proc/cpuinfo").splitlines()
     for line in lines:
-        if line.lower().startswith("model name"):
-            val = line.split(":", 1)[1].strip()
-            if val:
-                return val
+        k, sep, val = line.partition(":")
+        if sep and k.strip().lower() == "model name" and val.strip():
+            return val.strip()
     for prefix in ("hardware", "cpu model", "uarch", "processor"):
         for line in lines:
             k, sep, val = line.partition(":")
@@ -1444,6 +1443,6 @@ def collect() -> Report:
         sysctl=_safe(get_sysctl_report, lambda e: SysctlReport(arch=arch(), groups=[])),
         hardware=_safe(get_hardware, lambda e: HardwareReport("", "", "", "", "", "", data.DEFAULT_VENDOR, "")),
         habits=_safe(get_habits, lambda e: HabitsReport(checks=[HabitCheck("err", "检测出错", "unknown", str(e), [], "")])),
-        arch=arch(), cpu=cpu_model(), os_name=ident.os_name, kernel=ident.kernel, in_flatpak=IN_FLATPAK,
+        arch=_safe(arch, lambda _e: ""), cpu=_safe(cpu_model, lambda _e: ""), os_name=ident.os_name, kernel=ident.kernel, in_flatpak=IN_FLATPAK,
         identity=ident, hostdata=hostdata.CURRENT, kernel_support=kernelver.CURRENT,
     )

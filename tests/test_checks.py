@@ -1438,3 +1438,10 @@ def test_flatpak_and_lsusb_ignore_failed_command_output(monkeypatch, tmp_path):
     monkeypatch.setattr(checks, "run", lambda cmd, **_: (1, "Bus 001 Device 001: ID 046d:c52b Logitech\n"))
     devs, usrc = checks._usb_devices()
     assert devs == [] and usrc == ""
+
+
+def test_cpu_model_tolerates_malformed_model_name_line(monkeypatch):
+    monkeypatch.setattr(checks, "read", lambda p, default="": (
+        "model name without colon\nmodel name\t: Test CPU\n" if p == "/proc/cpuinfo" else default
+    ))
+    assert checks.cpu_model() == "Test CPU"

@@ -347,3 +347,11 @@ def test_xdg_display_dir_trailing_slash_symlink_and_nan(monkeypatch, tmp_path):
     xdg.atomic_write_json(str(cache), {"ok": 1})
     xdg.atomic_write_json(str(cache), {"bad": float("nan")})
     assert cache.read_text(encoding="utf-8") == '{"ok": 1}'
+
+
+def test_share_roots_include_default_scheme(monkeypatch):
+    """Debian/Ubuntu 默认 posix_local 将 data-files 装到 /usr/local，不能漏掉。"""
+    orig = cli.sysconfig.get_path
+    monkeypatch.setattr(cli.sysconfig, "get_path",
+                        lambda name, *args: "/usr/local" if (name == "data" and not args) else orig(name, *args))
+    assert "/usr/local" in cli._share_roots()

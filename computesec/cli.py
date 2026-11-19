@@ -73,10 +73,14 @@ def _share_roots():
     scheme（~/.local），此时 sys.prefix 仍是系统 Python（/usr），照它去找只会拿到
     两个不存在的路径。这里把 sysconfig 认识的 scheme 一并列上，逐个试。
     """
-    roots = [sys.prefix]
-    for scheme in ("posix_user", "posix_prefix"):
+    roots = []
+    for base in (sys.prefix, sys.base_prefix):
+        if base and base not in roots:
+            roots.append(base)
+    # None 表示当前默认 scheme：Debian/Ubuntu 为 posix_local（/usr/local），与 /usr 不同。
+    for scheme in (None, "posix_user", "posix_prefix"):
         try:
-            root = sysconfig.get_path("data", scheme)
+            root = sysconfig.get_path("data") if scheme is None else sysconfig.get_path("data", scheme)
         except (KeyError, TypeError):          # 非 posix 平台没有这些 scheme
             continue
         if root and root not in roots:

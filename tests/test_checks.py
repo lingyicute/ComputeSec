@@ -1286,3 +1286,13 @@ def test_cmdline_no_hash_pointers_interaction(monkeypatch, line, want):
     monkeypatch.setattr(checks, "read", lambda p, default="": line if p == "/proc/cmdline" else default)
     by_key = {i.key: i for i in checks.get_cmdline_report().items}
     assert by_key["hash_pointers"].status == want
+
+
+@pytest.mark.parametrize("val,want", [
+    ("pt,nopt,force", True),
+    ("force,pt,nopt", True),
+    ("nopt,pt,force", False),
+    ("off,nopt,force", False),
+])
+def test_iommu_nopt_overrides_earlier_pt(val, want):
+    assert checks._cmdline_value_ok("iommu", val, "force") is want

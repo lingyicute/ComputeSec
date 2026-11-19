@@ -518,14 +518,19 @@ def _iommu_opts_ok(nk, opts, expected):
         # 后者覆盖前者（"forcesac" 同样以 force 开头，内核也会置 force_iommu）；
         # off 关闭 IOMMU，pt 让设备直通、绕过地址转换。
         forced = False
+        passthrough = False
         for o in opts:
-            if o.startswith(("off", "pt")):
+            if o.startswith("off"):
                 return False
-            if o.startswith("force"):
+            if o.startswith("pt"):
+                passthrough = True
+            elif o.startswith("nopt"):
+                passthrough = False
+            elif o.startswith("force"):
                 forced = True
             elif o.startswith("noforce"):
                 forced = False
-        return forced
+        return forced and not passthrough
     return False
 
 

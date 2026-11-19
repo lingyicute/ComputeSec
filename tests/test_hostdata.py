@@ -480,3 +480,14 @@ def test_save_tightens_leftover_tmp_file(tmp_path, monkeypatch):
     hd.set("sysctl", {"values": {"kernel.ostype": "Linux"}})
     hd.save()
     assert (os.stat(d / hostdata.CACHE_NAME).st_mode & 0o777) == 0o600
+
+
+def test_sysctl_lookup_wildcard_matches_single_nonempty_segment():
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {
+        "net.ipv4.conf.eth0.rp_filter": "1",
+        "net.ipv4.conf.eth0/100.rp_filter": "1",
+        "net.ipv4.conf..rp_filter": "0",
+        "net.ipv4.conf.a.b.rp_filter": "0",
+    }}}}})
+    got = hd.sysctl_lookup("net.ipv4.conf.*.rp_filter")
+    assert set(got) == {"net.ipv4.conf.eth0.rp_filter", "net.ipv4.conf.eth0/100.rp_filter"}

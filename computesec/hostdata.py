@@ -17,7 +17,6 @@
 可能已经改变），同一次开机内不再重复打扰用户。
 """
 
-import fnmatch
 import json
 import os
 import re
@@ -335,7 +334,11 @@ class HostData:
         if not values:
             return {}
         if "*" in key:
-            return {k: v for k, v in values.items() if fnmatch.fnmatchcase(k, key)}
+            # 仅匹配单个非空键段（与 /proc/sys/* 不跨目录一致），避免匹配空段或多层子键。
+            pat = re.compile("^" + r"\.".join(
+                r"[^.]+" if part == "*" else re.escape(part) for part in key.split(".")
+            ) + "$")
+            return {k: v for k, v in values.items() if pat.match(k)}
         return {key: values[key]} if key in values else {}
 
     # -- 修改 ------------------------------------------------------------

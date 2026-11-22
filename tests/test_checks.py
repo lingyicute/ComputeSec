@@ -218,6 +218,8 @@ def test_hsi_attr_tails_have_no_ambiguity():
     ("module.sig_enforce", "true", "1", False),
     ("bdev_allow_write_mounted", "false", "0", False),
     ("rodata", "true", "on", False),
+    ("rodata", "1", "on", False),         # 6.18+ 对 on/off/noalias 做 strcmp，不走 kstrtobool
+    ("rodata", "on", "on", True),
     # fs/proc/base.c proc_mem.force_override：never 严格强于 ptrace，always 弱于 ptrace
     ("proc_mem.force_override", "ptrace", "ptrace", True),
     ("proc_mem.force_override", "never", "ptrace", True),
@@ -729,7 +731,7 @@ def test_cmdline_params_are_arch_scoped(monkeypatch):
     ("6.17.9", "", "full", "missing"),
     # 6.18 起：on 即完整保护，full 不再识别（被忽略并打印警告）
     ("6.18.0-rc3", "rodata=on", "on", "ok"),
-    ("6.18.0", "rodata=1", "on", "ok"),
+    ("6.18.0", "rodata=1", "on", "wrong"),      # strcmp 精确匹配，1 被当作非法取值
     ("6.17.9", "rodata=1", "full", "wrong"),
     ("6.18.2-200.fc43.aarch64", "rodata=full", "on", "wrong"),
     ("7.3.1", "rodata=on", "on", "ok"),

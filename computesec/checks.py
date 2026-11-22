@@ -618,15 +618,15 @@ def _cmdline_value_ok(key, actual, expected):
         rank_a = _PROC_MEM_RANK.get(actual)
         rank_e = _PROC_MEM_RANK.get(expected)
         return rank_a is not None and rank_e is not None and rank_a >= rank_e
-    if nk == "rodata" and expected == "on":
-        # 6.18+ ARM64 走 init/main.c set_debug_rodata() -> kstrtobool()；6.17 及更早期望 full，仅精确匹配。
-        return _cmdline_bool_norm(actual) == "1"
     if nk in _CMDLINE_DRACUT_BOOL_KEYS:
         return (actual in _DRACUT_FALSE) == (expected in _DRACUT_FALSE)
     if nk == "rd.emergency" and expected in _RD_EMERGENCY_NO_SHELL:
         return actual in _RD_EMERGENCY_NO_SHELL
     if nk in _CMDLINE_SYSTEMD_BOOL_KEYS:
         return _cmdline_bool_norm(actual, systemd=True) == _cmdline_bool_norm(expected, systemd=True)
+    # rodata= 不走 kstrtobool：6.18+ 的 arm64 arch_parse_debug_rodata() 与 init/main.c
+    # set_debug_rodata() 都对 on / off / noalias 做 strcmp 精确匹配，rodata=1 只会打印
+    # "Invalid option string for rodata"，因此和 pti= 一样只认上面的精确匹配。
     # l1tf= 由内核在固定选项列表（off/flush/flush,nosmt/flush,nowarn/full/full,force）
     # 中做精确匹配，任何改写顺序的值都会被忽略，因此不做集合比较，仅精确匹配。
     if nk in _CMDLINE_BOOL_KEYS or nk in _CMDLINE_MODULE_BOOL_KEYS:

@@ -382,3 +382,29 @@ def test_cli_replaces_readonly_desktop_and_symlink_and_handles_braces_in_prog(tm
     monkeypatch.setattr(cli.sys, "argv", [])
     assert cli.main(["--help"], prog="cs{1}") == 0
     assert "cs{1}" in capsys.readouterr().out
+
+
+def test_install_desktop_same_path_symlink_icon_survives(tmp_path, monkeypatch):
+    """源图标与目标图标是同一个符号链接时，先读后删，不能把源图标删丢。"""
+    prefix = tmp_path / "local"
+    data_home = prefix / "share"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setattr(cli, "__file__", str(tmp_path / "empty" / "computesec" / "cli.py"))
+    monkeypatch.setattr(cli, "_share_roots", lambda: [str(prefix)])
+    monkeypatch.setattr(cli.shutil, "which", lambda _cmd: None)
+
+    apps_dir = data_home / "applications"
+    icon_dir = data_home / "icons" / "hicolor" / "scalable" / "apps"
+    apps_dir.mkdir(parents=True)
+    icon_dir.mkdir(parents=True)
+    (apps_dir / (cli.APP_ID + ".desktop")).write_text("[Desktop Entry]\nExec=computesec\n", encoding="utf-8")
+
+    real_icon = tmp_path / "real.svg"
+    real_icon.write_text("<svg>ok</svg>", encoding="utf-8")
+    icon_link = icon_dir / (cli.APP_ID + ".svg")
+    icon_link.symlink_to(real_icon)
+
+    assert cli.install_desktop(launcher=["/opt/computesec"]) is True
+    assert not icon_link.is_symlink()
+    assert icon_link.read_text(encoding="utf-8") == "<svg>ok</svg>"
+    assert real_icon.read_text(encoding="utf-8") == "<svg>ok</svg>"

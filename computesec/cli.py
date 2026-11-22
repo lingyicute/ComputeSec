@@ -36,16 +36,20 @@ def _copy_icon(src, dst):
 
     shutil.copy 会连 mode 一起复制：源在系统目录 / Nix store 里是只读（0444）时，
     目标也成了只读，之后再跑一次 --install 就在 open(dst, "wb") 上 PermissionError，
-    只报一句「安装失败」。copyfile 只复制内容，新建的目标按 umask 取默认权限。
-    旧版本已经装出一份只读目标时，同样先删掉再写，用户不必手动清理。
+    只报一句「安装失败」。先读入内存再写出，新建的目标按 umask 取默认权限；同时
+    避免 src 与 dst 恰好是同一个符号链接时，先删除 dst 把源文件一并删掉。
     """
+    with open(src, "rb") as f:
+        blob = f.read()
     if os.path.islink(dst):
         os.remove(dst)
     try:
-        shutil.copyfile(src, dst)
+        with open(dst, "wb") as f:
+            f.write(blob)
     except PermissionError:
         os.remove(dst)
-        shutil.copyfile(src, dst)
+        with open(dst, "wb") as f:
+            f.write(blob)
 
 
 def _write_text(dst, content):

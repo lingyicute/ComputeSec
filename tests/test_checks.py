@@ -210,13 +210,20 @@ def test_hsi_attr_tails_have_no_ambiguity():
     ("systemd.ssh_auto", "f", "no", True),
     ("systemd.ssh_auto", "yes", "no", False),
     ("systemd.ssh_auto", None, "no", False),
-    # Linux kstrtobool() 不接受 true/false/t/f（返回 -EINVAL 并忽略参数）
-    ("init_on_alloc", "true", "1", False),
-    ("init_on_alloc", "t", "1", False),
-    ("iommu.passthrough", "false", "0", False),
-    ("iommu.passthrough", "f", "0", False),
-    ("module.sig_enforce", "true", "1", False),
-    ("bdev_allow_write_mounted", "false", "0", False),
+    # Linux kstrtobool() 只看首字符：[eEyYtT1] 为真、[dDnNfF0] 为假、o 开头再看第二个字符
+    ("init_on_alloc", "true", "1", True),
+    ("init_on_alloc", "t", "1", True),
+    ("init_on_alloc", "enable", "1", True),
+    ("init_on_alloc", "Yes", "1", True),
+    ("init_on_alloc", "false", "1", False),
+    ("init_on_alloc", "o", "1", False),          # 只有 o，没有第二个字符：-EINVAL
+    ("init_on_alloc", "x", "1", False),
+    ("iommu.passthrough", "false", "0", True),
+    ("iommu.passthrough", "f", "0", True),
+    ("iommu.passthrough", "disable", "0", True),
+    ("iommu.passthrough", "OFF", "0", True),
+    ("module.sig_enforce", "true", "1", True),
+    ("bdev_allow_write_mounted", "false", "0", True),
     ("rodata", "true", "on", False),
     ("rodata", "1", "on", False),         # 6.18+ 对 on/off/noalias 做 strcmp，不走 kstrtobool
     ("rodata", "on", "on", True),
@@ -1334,8 +1341,8 @@ def test_cmdline_bare_rdshell_and_ssh_auto_override_disabled(monkeypatch):
         assert by_key["rd.shell"].status == "wrong"
         want_ssh = "ok" if line.endswith("=f") else "wrong"
         assert by_key["systemd.ssh_auto"].status == want_ssh
-    assert checks._cmdline_value_ok("init_on_alloc", "t", "1") is False
-    assert checks._cmdline_value_ok("ia32_emulation", "f", "0") is False
+    assert checks._cmdline_value_ok("init_on_alloc", "t", "1") is True
+    assert checks._cmdline_value_ok("ia32_emulation", "f", "0") is True
     assert checks._cmdline_value_ok("init_on_alloc", " 1", "1") is False
 
 

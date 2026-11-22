@@ -347,7 +347,9 @@ class MainWindow(Adw.ApplicationWindow):
         except Exception as e:  # 页面构建失败时给出可见错误而非崩溃
             import traceback
             traceback.print_exc()
-            self.bins[key].set_child(Adw.StatusPage(icon_name="dialog-error-symbolic", title="页面渲染失败", description=str(e)))
+            # Adw.StatusPage:description 按 Pango markup 解析，异常文本含 < 或 & 时需先转义。
+            self.bins[key].set_child(Adw.StatusPage(icon_name="dialog-error-symbolic", title="页面渲染失败",
+                description=GLib.markup_escape_text(str(e))))
         self.built.add(key)
 
     def _build_pending(self):
@@ -415,7 +417,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.built.discard(k)
             self.bins[k].set_child(Adw.StatusPage(
                 icon_name="dialog-error-symbolic", title="检测时发生错误",
-                description=f"{error}\n\n点击刷新按钮重试。"))
+                description=f"{GLib.markup_escape_text(str(error))}\n\n点击刷新按钮重试。"))
         self.refresh_btn.set_sensitive(True)
         self._run_pending_refresh()
         return False

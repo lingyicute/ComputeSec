@@ -438,16 +438,20 @@ _CMDLINE_MODULE_BOOL_KEYS = {
     # mm/shuffle.c 用 module_param_cb 注册、底层走 param_set_bool（FL_NOARG），
     # 因此裸 token 同样等价于真，归类应与上面的 module_param(bool) 一致。
     "page_alloc.shuffle",
-    # systemd ssh-generator.c：value ? parse_boolean(value) : 1，裸 token 会重新置真。
-    "systemd.ssh_auto",
 }
+# systemd ssh-generator.c：value ? parse_boolean(value) : 1，裸 token 会重新置真；
+# parse_boolean() 额外接受 true/false/t/f，而内核 kstrtobool() 不接受。
+_CMDLINE_SYSTEMD_BOOL_KEYS = {"systemd.ssh_auto"}
 # 处理函数按逗号逐个解析子选项、且多次出现时依次累加的参数（efi_parse_options、
 # intel_iommu_setup、parse_amd_iommu_options、x86 iommu_setup 都是
 # `while (*str) { strncmp…; str += strcspn(str, ","); }`）。同名 token 出现多次时
 # 要按顺序拼起来，只保留最后一个会丢掉前面已经生效的选项。
 _CMDLINE_COMMA_KEYS = {"intel_iommu", "amd_iommu", "iommu"}
-_BOOL_TRUE = {"1", "on", "y", "yes", "true", "t"}
-_BOOL_FALSE = {"0", "off", "n", "no", "false", "f"}
+# Linux lib/kstrtox.c kstrtobool() 只认 [yY1] / [nN0] / [oO][nNfF]（不接受 true/false/t/f）。
+_BOOL_TRUE = {"1", "on", "y", "yes"}
+_BOOL_FALSE = {"0", "off", "n", "no"}
+_SYSTEMD_BOOL_TRUE = _BOOL_TRUE | {"true", "t"}
+_SYSTEMD_BOOL_FALSE = _BOOL_FALSE | {"false", "f"}
 
 # mitigations= 的合法取值及缓解强度。kernel/cpu.c 的 mitigations_parse_cmdline()
 # 对三个值做 strcmp 精确匹配（"nosmt,auto" 等非常规顺序会被整体忽略并保持默认），
@@ -503,12 +507,12 @@ def _iter_cmdline_tokens(cmdline):
             yield param, cmdline[vstart:vend]
 
 
-def _cmdline_bool_norm(v):
+def _cmdline_bool_norm(v, systemd=False):
     # kstrtobool() 与 systemd parse_boolean() 都不跳过首尾空白（如 " 1" 返回 -EINVAL）。
     low = v.lower()
-    if low in _BOOL_TRUE:
+    if low in (_SYSTEMD_BOOL_TRUE if systemd else _BOOL_TRUE):
         return "1"
-    if low in _BOOL_FALSE:
+    if low in (_SYSTEMD_BOOL_FALSE if systemd else _BOOL_FALSE):
         return "0"
     return v
 
@@ -571,9 +575,9 @@ def _cmdline_value_ok(key, actual, expected):
         # 记录调用者 U，严格强于推荐的 FZ。
         actual = "FZPU"
     if actual is None:
-        # 裸 token（无 =）仅对 module_param 型布尔参数等价于真；
+        # 裸 token（无 =）仅对 module_param / systemd 布尔参数等价于真；
         # early_param 型会解析失败，内核保持默认值，不能视为已启用。
-        if nk not in _CMDLINE_MODULE_BOOL_KEYS:
+        if nk not in _CMDLINE_MODULE_BOOL_KEYS and nk not in _CMDLINE_SYSTEMD_BOOL_KEYS:
             return False
         actual = "1"
     if actual == expected:
@@ -619,6 +623,8 @@ def _cmdline_value_ok(key, actual, expected):
         return (actual in _DRACUT_FALSE) == (expected in _DRACUT_FALSE)
     if nk == "rd.emergency" and expected in _RD_EMERGENCY_NO_SHELL:
         return actual in _RD_EMERGENCY_NO_SHELL
+    if nk in _CMDLINE_SYSTEMD_BOOL_KEYS:
+        return _cmdline_bool_norm(actual, systemd=True) == _cmdline_bool_norm(expected, systemd=True)
     # l1tf= 由内核在固定选项列表（off/flush/flush,nosmt/flush,nowarn/full/full,force）
     # 中做精确匹配，任何改写顺序的值都会被忽略，因此不做集合比较，仅精确匹配。
     if nk in _CMDLINE_BOOL_KEYS or nk in _CMDLINE_MODULE_BOOL_KEYS:
@@ -647,8 +653,8 @@ def get_cmdline_report() -> CmdlineReport:
             # 裸 token（无 =）不该抹掉同名的带值 token：内核会把两者分别交给各自的
             # 处理函数——slab_debug 的裸 token 仍会启用 DEBUG_DEFAULT_FLAGS，efi 的
             # 裸 token 被 parse_efi_cmdline(NULL) 拒绝并保持原值——丢掉带值形式只会
-            # 让已知信息消失。module_param(bool) 例外：内核按最后一次出现生效，
-            # 裸 token 等价于真，必须照旧覆盖才能与内核结论一致。
+            # 让已知信息消失。module_param(bool) 与 systemd 布尔参数例外：裸 token 等价于真，
+            # 必须照旧覆盖才能与内核/systemd 结论一致。
             # hash_pointers 裸 token 在 hash_pointers_mode_parse(NULL) 中退回 auto，会覆盖 always。
             # mm/slub.c setup_slub_debug()：后置裸 slab_debug 会启用 DEBUG_DEFAULT_FLAGS (FZPU)，
             # 若先前值已达标则保留原字面量展示，若未达标（如 slab_debug=-）则按裸 token 覆盖。
@@ -657,6 +663,7 @@ def get_cmdline_report() -> CmdlineReport:
                     continue
             elif (present.get(nk) is not None
                     and nk not in _CMDLINE_MODULE_BOOL_KEYS
+                    and nk not in _CMDLINE_SYSTEMD_BOOL_KEYS
                     and nk not in _CMDLINE_DRACUT_BOOL_KEYS
                     and nk != "hash_pointers"):
                 continue

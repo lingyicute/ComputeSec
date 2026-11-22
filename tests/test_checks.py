@@ -203,11 +203,21 @@ def test_hsi_attr_tails_have_no_ambiguity():
     ("rd.shell", "OFF", "0", False),
     ("rd.shell", "1", "0", False),
     ("rd.shell", None, "0", False),          # 裸 rd.shell 等价于真
-    # systemd parse_boolean
+    # systemd parse_boolean（支持 true/false/t/f，裸 token 等价于真）
     ("systemd.ssh_auto", "no", "no", True),
     ("systemd.ssh_auto", "0", "no", True),
     ("systemd.ssh_auto", "false", "no", True),
+    ("systemd.ssh_auto", "f", "no", True),
     ("systemd.ssh_auto", "yes", "no", False),
+    ("systemd.ssh_auto", None, "no", False),
+    # Linux kstrtobool() 不接受 true/false/t/f（返回 -EINVAL 并忽略参数）
+    ("init_on_alloc", "true", "1", False),
+    ("init_on_alloc", "t", "1", False),
+    ("iommu.passthrough", "false", "0", False),
+    ("iommu.passthrough", "f", "0", False),
+    ("module.sig_enforce", "true", "1", False),
+    ("bdev_allow_write_mounted", "false", "0", False),
+    ("rodata", "true", "on", False),
     # fs/proc/base.c proc_mem.force_override：never 严格强于 ptrace，always 弱于 ptrace
     ("proc_mem.force_override", "ptrace", "ptrace", True),
     ("proc_mem.force_override", "never", "ptrace", True),
@@ -1322,8 +1332,8 @@ def test_cmdline_bare_rdshell_and_ssh_auto_override_disabled(monkeypatch):
         assert by_key["rd.shell"].status == "wrong"
         want_ssh = "ok" if line.endswith("=f") else "wrong"
         assert by_key["systemd.ssh_auto"].status == want_ssh
-    assert checks._cmdline_value_ok("init_on_alloc", "t", "1") is True
-    assert checks._cmdline_value_ok("ia32_emulation", "f", "0") is True
+    assert checks._cmdline_value_ok("init_on_alloc", "t", "1") is False
+    assert checks._cmdline_value_ok("ia32_emulation", "f", "0") is False
     assert checks._cmdline_value_ok("init_on_alloc", " 1", "1") is False
 
 

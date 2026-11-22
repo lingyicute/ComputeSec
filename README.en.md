@@ -48,10 +48,10 @@ Here, security advice is plain-spoken and actionable. ComputeSec will not tell y
   * Outside Flatpak, **live `/proc/sys` values win**: your snapshot only fills in entries that cannot be read (and labels each filled entry with the snapshot's age), so changes you make after collecting a snapshot take effect immediately.
   * Compares them against the built-in recommended kargs list and sysctl hardening list for your architecture (amd64 / aarch64).
 * **Version line check**: at startup the app asks kernel.org for the current mainline / stable version. If your kernel belongs to neither (for example any LTS branch), it states plainly that LTS branches do **not** carry all upstream security fixes and hardening improvements, so the recommended sysctls and boot parameters are **not guaranteed** to deliver the intended hardening on those kernels (some parameters do not exist on older kernels, others are silently ignored by the kernel even when present on the command line, and some are then wrongly counted as hardened because they appear in `/proc/cmdline`). Conclusions drawn on such a branch **must not be used as a basis for hardening**; switching to a mainline or stable kernel is recommended. If the check fails (offline, blocked by a firewall, or the Flatpak network permission revoked) you are not bothered — the Kernel page shows a **not verified** row with a retry button, and the main menu can re-run it too. If the fetch fails while an expired cache exists, the app still reports a conclusion but states how old those version numbers are.
-* **Three cases that are excluded from scoring** (they never lower the score, and they do not mean "passed"):
+* **Three cases that never lower the score** (the first two are excluded from scoring; a suspected device counts as full marks; none of them means "passed"):
   * **cannot read**: the file is not readable by your user (e.g. `vm.mmap_rnd_bits` is `0600 root:root`);
   * **unverified**: readings taken inside the Flatpak sandbox cannot be trusted (without host network sharing, `net.*` belongs to a private network namespace; or the snapshot you provided does not cover the entry), so they are ignored;
-  * **suspected**: an unconfirmed 2.4G wireless receiver is only a reminder (see "Usage Habits").
+  * **suspected**: an unconfirmed 2.4G wireless receiver is only a reminder with no deduction (see "Usage Habits").
 * **Quick fixes and guidance**:
   * One-click copy of the missing parameters.
   * Instructions for `grubby` / GRUB / systemd-boot / rpm-ostree.

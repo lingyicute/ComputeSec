@@ -1173,7 +1173,7 @@ USB_ADVICE_CONFIRMED = ("绝大多数 2.4G 无线键鼠不加密或使用弱加�
 USB_ADVICE_SUSPECT = ("这些设备的厂商或型号与常见的 2.4G 无线键鼠方案高度重合（例如型号里只写了"
                       "「Wireless Mouse」，或只写了「Receiver」「Dongle」），但没有「2.4G」或键鼠接收器型号之类"
                       "能够确认的字样，ComputeSec 无法确认它是 2.4G 接收器，还是同厂的有线 / 蓝牙设备"
-                      "或别的无线接收设备，因此这一项不计入评分。\n\n"
+                      "或别的无线接收设备，因此这一项只提醒、不扣分。\n\n"
                       "请自行确认：① 拔下该设备后重新检测，看这一条是否消失；② 检查它是否配有一个同样插在 USB 口上的"
                       "小接收器（有则是 2.4G 无线接收器方案）；③ 在终端执行 lsusb -v 查看其接口描述符与供电需求。"
                       "若确认是 2.4G 无线键鼠，请按「已确认」情形处理：改用有线，或支持蓝牙 LE Secure Connections 的设备。")
@@ -1261,7 +1261,7 @@ def check_usb() -> HabitCheck:
     if suspects:
         return HabitCheck("usb", "2.4G 无线接收器", "suspect",
                           f"发现 {len(suspects)} 个疑似 2.4G 无线设备，需要您自行确认",
-                          suspects + [f"（以上仅为疑似，不计入评分；共枚举 {len(devs)} 个 USB 设备，来源：{source}。）"],
+                          suspects + [f"（以上仅为疑似，只提醒、不扣分；共枚举 {len(devs)} 个 USB 设备，来源：{source}。）"],
                           USB_ADVICE_SUSPECT)
     return HabitCheck("usb", "2.4G 无线接收器", "good", "未发现 2.4G 无线接收器", [f"共枚举 {len(devs)} 个 USB 设备（{source}）。"],
                       "很好！有线或支持蓝牙 LE Secure Connections 的输入设备能有效防止按键被嗅探，请继续保持。")

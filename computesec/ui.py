@@ -731,7 +731,8 @@ def build_kernel(report, win):
                 sub += ("  （您提供的 sysctl -a 快照中没有这一项；沙箱内的读数不是宿主机视图，"
                         "已忽略且未参与评分）")
             row.set_subtitle(esc(sub))
-            row.add_prefix(status_icon("locked" if it.status == "unknown" else it.status))
+            row.add_prefix(status_icon(
+                "locked" if it.status == "unknown" and it.source != "读取失败" else it.status))
             # source 可能是 "用户提供" 或 "用户提供（3 小时前）"：只有这一项是
             # 靠快照补上的才打标签，剩下的都是 /proc 的实时读数。
             if it.source.startswith("用户提供"):

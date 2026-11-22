@@ -216,7 +216,8 @@ class MainWindow(Adw.ApplicationWindow):
         首次运行时采集向导是模态窗口，若此时再叠一个同样以主窗口为父的模态对话框，
         两者会互相抢焦点、甚至被向导挡在后面。因此向导开着就先记下来，等它关闭后再弹。
         """
-        if self._closed or self._pending_kernel_warning is None or self._wizard is not None:
+        if (self._closed or self._pending_kernel_warning is None
+                or self._wizard is not None or self._wizard_idle_id):
             return False
         st, self._pending_kernel_warning = self._pending_kernel_warning, None
         dlg = ui.kernel_warning_dialog(st)

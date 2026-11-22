@@ -372,7 +372,7 @@ def get_status(release=None, now=None, fetcher=None, cache_path=None, force=Fals
         prev = load_cache(cache_path, None)
         if prev is None:
             return KernelSupport(release=release, checked_at=now, error=reason)
-        expired = load_cache(cache_path, now) is None
+        expired = prev.checked_at <= 0 or not 0 <= now - prev.checked_at <= CACHE_TTL
         return KernelSupport(release=release, mainline=prev.mainline, stable=prev.stable,
                              tier=classify(release, prev.mainline, prev.stable),
                              checked_at=prev.checked_at, error=reason, stale=expired)

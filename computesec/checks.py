@@ -39,6 +39,8 @@ def _flatpak_shared_subsystems():
 
 def _flatpak_shares_network():
     return "network" in _flatpak_shared_subsystems()
+
+
 MISSING = object()
 
 

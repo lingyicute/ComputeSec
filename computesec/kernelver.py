@@ -191,9 +191,14 @@ class KernelSupport:
         ts = self.checked_at
         if isinstance(ts, bool) or not isinstance(ts, (int, float)) or ts <= 0:
             return ""
+        if isinstance(now, bool) or (now is not None and not isinstance(now, (int, float))):
+            return ""
         try:
+            ts_int = int(ts)
+            if ts_int <= 0:
+                return ""
             cur = int(time.time()) if now is None else int(now)
-            secs = cur - int(ts)
+            secs = cur - ts_int
         except (TypeError, ValueError, OverflowError):
             return ""
         if secs < 0:
@@ -229,10 +234,10 @@ class KernelSupport:
         if isinstance(raw_ts, bool) or not isinstance(raw_ts, (int, float)):
             return None
         try:
+            if raw_ts < 0:
+                return None
             checked_at = int(raw_ts)
         except (ValueError, OverflowError):     # int(NaN/Infinity) 抛 ValueError/OverflowError
-            return None
-        if checked_at < 0:
             return None
         return cls(release=d.get("release", ""), mainline=d.get("mainline", ""),
                    stable=d.get("stable", ""), tier=d.get("tier", "unknown"),

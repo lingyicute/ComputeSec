@@ -584,3 +584,9 @@ def test_future_checked_at_age_text_is_empty():
     st = kv.KernelSupport(release="6.1.158+", mainline="7.3", stable="7.2.12",
                          tier="older", checked_at=2000, stale=True)
     assert st.age_text(now=1000) == ""
+
+
+def test_negative_float_timestamp_and_subsecond_or_bool_now_rejected():
+    assert kv.KernelSupport.from_dict({"mainline": "7.3", "stable": "7.2.1", "checked_at": -0.5}) is None
+    assert kv.KernelSupport(checked_at=0.5).age_text(now=1000) == ""
+    assert kv.KernelSupport(checked_at=1000).age_text(now=True) == ""

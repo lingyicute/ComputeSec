@@ -605,6 +605,14 @@ def _kernel_support_block(report, win=None):
             old.set_tooltip_text(st.error)
         old.add_suffix(_kernel_check_button(win))
         g.add(old)
+    elif st.error:
+        age = st.age_text() or "较早"
+        cached_row = Adw.ActionRow(title="本次未能刷新版本号",
+                                   subtitle=esc(f"本次没能连上 kernel.org，继续沿用 {age}取得的版本号（仍在 24 小时有效期内）。"))
+        cached_row.add_prefix(status_icon("unknown"))
+        cached_row.set_tooltip_text(st.error)
+        cached_row.add_suffix(_kernel_check_button(win))
+        g.add(cached_row)
     elif st.checked_at:
         age = st.age_text()
         if age:
@@ -654,7 +662,8 @@ def build_kernel(report, win):
             if n_perm or m:
                 parts.append("点击右侧按钮，按向导在终端执行一条只读命令并复制结果，即可得到完整准确的评估。")
         g_src = group(title, "".join(parts))
-        g_src.set_header_suffix(_collect_button(win, "重新采集" if s.user_supplied else "采集系统数据"))
+        if s.user_supplied or n_perm or m:
+            g_src.set_header_suffix(_collect_button(win, "重新采集" if s.user_supplied else "采集系统数据"))
 
     # ---- cmdline ----
     g1 = group("内核当前启动参数和加固状态", f"架构: {c.arch} · CPU 制造商: {cpu_zh}\n{data.KERNEL_MACHINE_SPECIFIC_NOTE}")

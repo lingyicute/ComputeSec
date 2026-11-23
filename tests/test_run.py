@@ -429,3 +429,10 @@ def test_install_desktop_readonly_parent_dir_reports_permission_error(tmp_path, 
     err = capsys.readouterr().err
     assert "Permission denied" in err
     assert "No such file or directory" not in err
+
+
+def test_default_launcher_normalizes_relative_which_hit(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.sys, "argv", ["computesec"])
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: "./bin/computesec")
+    got = cli._default_launcher()
+    assert len(got) == 1 and os.path.isabs(got[0])

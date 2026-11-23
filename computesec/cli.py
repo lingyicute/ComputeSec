@@ -74,7 +74,7 @@ def _default_launcher():
     if argv0 and os.sep not in argv0:
         found = shutil.which(argv0)
         if found:
-            return [found]
+            return [os.path.abspath(found)]
     return [os.path.abspath(argv0 or "computesec")]
 
 

@@ -193,8 +193,10 @@ class KernelSupport:
             return ""
         try:
             cur = int(time.time()) if now is None else int(now)
-            secs = max(0, cur - int(ts))
+            secs = cur - int(ts)
         except (TypeError, ValueError, OverflowError):
+            return ""
+        if secs < 0:
             return ""
         if secs < 60:
             return "刚刚"

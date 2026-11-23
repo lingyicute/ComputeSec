@@ -332,7 +332,10 @@ class HostData:
         if not _is_timestamp(ts) or ts == 0:
             return ""
         try:
-            secs = max(0, int(time.time() - ts))
+            diff = time.time() - ts
+            if diff < 0:
+                return ""
+            secs = int(diff)
         except (OverflowError, ValueError):     # 超出 float 范围的整数、NaN / Infinity
             return ""
         if secs < 60:

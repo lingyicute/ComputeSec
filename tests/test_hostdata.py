@@ -511,3 +511,11 @@ def test_hostdata_set_recovers_from_non_dict_steps():
     hd = hostdata.HostData({"steps": ["corrupt"]})
     hd.set("sysctl", {"values": {"kernel.ostype": "Linux"}})
     assert hd.sysctl_values == {"kernel.ostype": "Linux"}
+
+
+def test_future_timestamp_age_text_is_empty():
+    future = int(time.time()) + 3600
+    hd = hostdata.HostData({"collected_at": future, "steps": {
+        "sysctl": {"data": {"values": {}}, "at": future}}})
+    assert hd.age_text == ""
+    assert hd.step_age_text("sysctl") == ""

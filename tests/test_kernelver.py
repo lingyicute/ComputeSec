@@ -578,3 +578,9 @@ def test_get_status_reads_cache_only_once_on_expired_offline_fallback(tmp_path, 
                        fetcher=_fetcher_failing(), cache_path=str(cache))
     assert st.known and st.stale is True
     assert len(loads) == 1
+
+
+def test_future_checked_at_age_text_is_empty():
+    st = kv.KernelSupport(release="6.1.158+", mainline="7.3", stable="7.2.12",
+                         tier="older", checked_at=2000, stale=True)
+    assert st.age_text(now=1000) == ""

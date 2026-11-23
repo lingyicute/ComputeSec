@@ -174,9 +174,12 @@ def _build_identity() -> HostIdentity:
     parsed = parse_os_release(text) if text else {}
     if parsed:
         ident.os_release = parsed
+        os_pretty = parsed.get("PRETTY_NAME") or parsed.get("NAME") or ""
+        os_cpe = parsed.get("CPE_NAME") or ""
+        used_os_release = (not ident.pretty_name and bool(os_pretty)) or (not ident.cpe_name and bool(os_cpe))
         if not ident.source:
             ident.source = src
-        elif not ident.pretty_name:
+        elif used_os_release:
             ident.source += f" + {src}"
 
     if not ident.pretty_name:
@@ -185,7 +188,7 @@ def _build_identity() -> HostIdentity:
         ident.cpe_name = ident.os_release.get("CPE_NAME") or ""
 
     # 兜底：runtime 的 /etc/os-release（Flatpak 内不准确，仅在别无选择时使用）
-    if not ident.pretty_name and not ident.os_release:
+    if not ident.pretty_name:
         fallback = parse_os_release(_read("/etc/os-release"))
         if fallback:
             ident.os_release = fallback

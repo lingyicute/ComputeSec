@@ -196,3 +196,23 @@ def test_parse_os_release_rejects_invalid_keys_and_escaped_closing_quote(monkeyp
     assert d["UNCLOSED"] == '"foo"'
     assert d["CLOSED"] == "bar\\"
     assert d["PRETTY_NAME"] == "Valid OS"
+
+
+def test_build_identity_records_os_release_when_filling_cpe_and_falls_back_when_pretty_missing(monkeypatch):
+    monkeypatch.setattr(hostinfo, "_dbus_hostname1",
+                        lambda: ({"OperatingSystemPrettyName": "Fedora 44"}, ""))
+    monkeypatch.setattr(hostinfo, "_host_os_release_text",
+                        lambda: ('CPE_NAME="cpe:/o:fedoraproject:fedora:44"\n', "/etc/os-release"))
+    ident = hostinfo._build_identity()
+    assert ident.cpe_name == "cpe:/o:fedoraproject:fedora:44"
+    assert ident.source == "D-Bus org.freedesktop.hostname1 + /etc/os-release"
+
+    # 若主 os-release 仅有 ID 而无 PRETTY_NAME/NAME，仍应尝试兜底读取
+    monkeypatch.setattr(hostinfo, "_dbus_hostname1", lambda: ({}, "err"))
+    monkeypatch.setattr(hostinfo, "_host_os_release_text", lambda: ("ID=custom\n", "/run/host/os-release"))
+    monkeypatch.setattr(hostinfo, "IN_FLATPAK", False)
+    monkeypatch.setattr(hostinfo, "_read", lambda p, default="": (
+        'PRETTY_NAME="Fallback OS"\n' if p == "/etc/os-release" else default
+    ))
+    ident2 = hostinfo._build_identity()
+    assert ident2.pretty_name == "Fallback OS"

@@ -449,3 +449,17 @@ def test_xdg_display_dir_unnormalized_home_and_atomic_write_type_error(monkeypat
     xdg.atomic_write_json(str(cache), {"ok": 1})
     xdg.atomic_write_json(str(cache), {"bad": {1, 2, 3}})
     assert cache.read_text(encoding="utf-8") == '{"ok": 1}'
+
+
+def test_default_launcher_empty_argv_checks_path_and_venv_bin(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.sys, "argv", [])
+    monkeypatch.setattr(cli.shutil, "which", lambda name: "/usr/bin/computesec" if name == "computesec" else None)
+    assert cli._default_launcher() == ["/usr/bin/computesec"]
+
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    script = venv_bin / "computesec"
+    script.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(cli.sys, "executable", str(venv_bin / "python3"))
+    assert cli._default_launcher() == [str(script)]

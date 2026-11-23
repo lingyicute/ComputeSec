@@ -70,12 +70,16 @@ def _write_text(dst, content):
 
 
 def _default_launcher():
-    argv0 = sys.argv[0] if sys.argv else ""
-    if argv0 and os.sep not in argv0:
+    argv0 = (sys.argv[0] if sys.argv else "") or "computesec"
+    if os.sep not in argv0:
         found = shutil.which(argv0)
         if found:
             return [os.path.abspath(found)]
-    return [os.path.abspath(argv0 or "computesec")]
+        if sys.executable:
+            cand = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), argv0)
+            if os.path.isfile(cand):
+                return [cand]
+    return [os.path.abspath(argv0)]
 
 
 def _quote_desktop_arg(arg):

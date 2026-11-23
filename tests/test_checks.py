@@ -1515,3 +1515,16 @@ def test_cpu_model_tolerates_malformed_model_name_line(monkeypatch):
         "model name without colon\nmodel name\t: Test CPU\n" if p == "/proc/cpuinfo" else default
     ))
     assert checks.cpu_model() == "Test CPU"
+
+
+def test_collect_survives_arch_and_cpu_vendor_exceptions(monkeypatch):
+    def boom():
+        raise RuntimeError("broken platform")
+
+    monkeypatch.setattr(checks, "arch", boom)
+    monkeypatch.setattr(checks, "cpu_vendor", boom)
+    rep = checks.collect()
+    assert rep.arch == ""
+    assert rep.cmdline.arch == ""
+    assert rep.cmdline.cpu is None
+    assert rep.sysctl.arch == ""

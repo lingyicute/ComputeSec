@@ -1496,12 +1496,14 @@ def _safe(fn, fallback):
 
 def collect() -> Report:
     ident = _safe(lambda: hostinfo.get_identity(refresh=True), lambda e: hostinfo.HostIdentity(dbus_error=str(e)))
+    ar = _safe(arch, lambda _e: "")
+    cv = _safe(cpu_vendor, lambda _e: None)
     return Report(
         hsi=_safe(get_hsi, lambda e: HsiReport(ok=False, error=f"检测时出错：{e}")),
-        cmdline=_safe(get_cmdline_report, lambda e: CmdlineReport(arch=arch(), cpu=cpu_vendor(), cmdline=f"读取失败：{e}", items=[])),
-        sysctl=_safe(get_sysctl_report, lambda e: SysctlReport(arch=arch(), groups=[])),
+        cmdline=_safe(get_cmdline_report, lambda e: CmdlineReport(arch=ar, cpu=cv, cmdline=f"读取失败：{e}", items=[])),
+        sysctl=_safe(get_sysctl_report, lambda e: SysctlReport(arch=ar, groups=[])),
         hardware=_safe(get_hardware, lambda e: HardwareReport("", "", "", "", "", "", data.DEFAULT_VENDOR, "")),
         habits=_safe(get_habits, lambda e: HabitsReport(checks=[HabitCheck("err", "检测出错", "unknown", str(e), [], "")])),
-        arch=_safe(arch, lambda _e: ""), cpu=_safe(cpu_model, lambda _e: ""), os_name=ident.os_name, kernel=ident.kernel, in_flatpak=IN_FLATPAK,
+        arch=ar, cpu=_safe(cpu_model, lambda _e: ""), os_name=ident.os_name, kernel=ident.kernel, in_flatpak=IN_FLATPAK,
         identity=ident, hostdata=hostdata.CURRENT, kernel_support=kernelver.CURRENT,
     )

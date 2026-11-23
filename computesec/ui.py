@@ -655,6 +655,8 @@ def build_kernel(report, win):
                 parts.append(f"当前有 {m_net} 项 net.* 参数只能在宿主机上读取：Flatpak 沙箱没有共享宿主网络，"
                              "沙箱内的 net.* 属于独立的网络命名空间，数值与宿主机的加固状态无关，"
                              "已忽略且未计入评分。")
+            if m - m_net:
+                parts.append(f"当前有 {m - m_net} 项 sysctl 在沙箱内的读数不可信，已忽略且未计入评分。")
             if n_perm:
                 parts.append(f"当前有 {n_perm} 项 sysctl 因为文件仅 root 可读而无法判定（例如 vm.mmap_rnd_bits），未计入评分。")
             if n_io:
@@ -744,7 +746,7 @@ def build_kernel(report, win):
                 "locked" if it.status == "unknown" and it.source != "读取失败" else it.status))
             # source 可能是 "用户提供" 或 "用户提供（3 小时前）"：只有这一项是
             # 靠快照补上的才打标签，剩下的都是 /proc 的实时读数。
-            if it.source.startswith("用户提供"):
+            if it.source.startswith("用户提供") and it.status != "unknown":
                 tag = Gtk.Label(label="您提供", valign=Gtk.Align.CENTER)
                 tag.add_css_class("caption")
                 tag.add_css_class("dim-label")
@@ -806,16 +808,19 @@ def build_hardware(report, win):
     if ident is not None:
         sysinfo = group("宿主机系统信息", "通过 D-Bus 接口 org.freedesktop.hostname1 读取，因此在 Flatpak 内也是您真实的系统信息，"
                                           "而不是 runtime（org.gnome.Platform）的字段。")
+        has_sysinfo = False
         for label, val in (("操作系统", ident.pretty_name), ("CPE 名称", ident.cpe_name),
                            ("内核", " ".join(x for x in (ident.kernel_name, ident.kernel_release) if x)),
                            ("机箱类型", ident.chassis), ("主机名", ident.static_hostname or ident.hostname),
                            ("数据来源", ident.source)):
             if val:
                 sysinfo.add(text_row(label, val, selectable=True))
+                has_sysinfo = True
         if ident.dbus_error:
             fb = f"（已回退到 {ident.source}）" if ident.source else ""
             sysinfo.add(text_row("⚠ D-Bus 读取失败", ident.dbus_error + fb))
-        info_extra = sysinfo
+            has_sysinfo = True
+        info_extra = sysinfo if has_sysinfo else None
     else:
         info_extra = None
 

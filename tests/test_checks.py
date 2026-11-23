@@ -1556,3 +1556,28 @@ def test_flatpak_apps_ignores_hidden_and_non_id_directories(monkeypatch, tmp_pat
     apps, source = checks._flatpak_apps()
     assert apps == {"org.example.Valid"}
     assert source == "目录扫描"
+
+
+def test_windows_installed_deduplicates_same_file_paths(monkeypatch, tmp_path):
+    real_esp = tmp_path / "efi" / "EFI" / "Microsoft" / "Boot"
+    real_esp.mkdir(parents=True)
+    bootmgfw = real_esp / "bootmgfw.efi"
+    bootmgfw.write_bytes(b"MZ")
+    link_boot = tmp_path / "boot"
+    link_boot.mkdir()
+    (link_boot / "efi").symlink_to(tmp_path / "efi")
+
+    p1 = str(link_boot / "efi" / "EFI" / "Microsoft" / "Boot" / "bootmgfw.efi")
+    p2 = str(tmp_path / "efi" / "EFI" / "Microsoft" / "Boot" / "bootmgfw.efi")
+    orig_exists = checks.os.path.exists
+    orig_same = checks._same_path
+    mapping = {
+        "/boot/efi/EFI/Microsoft/Boot/bootmgfw.efi": p1,
+        "/efi/EFI/Microsoft/Boot/bootmgfw.efi": p2,
+        "/boot/EFI/Microsoft/Boot/bootmgfw.efi": str(tmp_path / "missing"),
+    }
+    monkeypatch.setattr(checks.os.path, "exists", lambda p: orig_exists(mapping.get(p, p)))
+    monkeypatch.setattr(checks, "_same_path", lambda a, b: orig_same(mapping.get(a, a), mapping.get(b, b)))
+    monkeypatch.setattr(checks.glob, "glob", lambda _pat: [])
+    hints = checks._windows_installed()
+    assert len(hints) == 1

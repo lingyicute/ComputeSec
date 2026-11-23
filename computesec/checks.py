@@ -1404,11 +1404,20 @@ def _ntfs_partitions():
     return found, source
 
 
+def _same_path(a, b):
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
 def _windows_installed():
     hints = []
+    seen = []
     for p in ("/boot/efi/EFI/Microsoft/Boot/bootmgfw.efi", "/efi/EFI/Microsoft/Boot/bootmgfw.efi",
               "/boot/EFI/Microsoft/Boot/bootmgfw.efi"):
-        if os.path.exists(p):
+        if os.path.exists(p) and not any(_same_path(p, s) for s in seen):
+            seen.append(p)
             hints.append(f"发现 Windows 引导管理器：{p}")
     for f in glob.glob("/sys/firmware/efi/efivars/Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]-*"):
         if "Windows Boot Manager".encode("utf-16-le") in read_bytes(f):

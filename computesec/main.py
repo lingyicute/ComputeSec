@@ -150,6 +150,8 @@ class MainWindow(Adw.ApplicationWindow):
         排队而不是直接丢弃，是因为网络慢时一次检查可能要等满 FETCH_TIMEOUT：
         若此时把用户的点击静默丢掉，重试按钮看上去就是坏的。
         """
+        if force:
+            self._kernel_warned = False
         if self._kernel_checking:
             if not force:
                 return KERNEL_CHECK_BUSY

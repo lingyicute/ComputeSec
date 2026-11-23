@@ -1103,7 +1103,7 @@ def _flatpak_apps():
     for d in dirs:
         try:
             for name in os.listdir(d):
-                if os.path.isdir(os.path.join(d, name)):
+                if "." in name and not name.startswith(".") and os.path.isdir(os.path.join(d, name)):
                     apps.add(name)
             source = "目录扫描"
         except OSError:

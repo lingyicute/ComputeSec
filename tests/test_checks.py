@@ -1544,3 +1544,15 @@ def test_cmdline_empty_efi_or_iommu_segments_do_not_leave_dangling_commas(monkey
     by_key = {i.key: i for i in checks.get_cmdline_report().items}
     assert by_key["efi"].actual == "noruntime"
     assert by_key["intel_iommu"].actual == "off"
+
+
+def test_flatpak_apps_ignores_hidden_and_non_id_directories(monkeypatch, tmp_path):
+    app_dir = tmp_path / "flatpak" / "app"
+    (app_dir / ".ostree").mkdir(parents=True)
+    (app_dir / "notanappid").mkdir(parents=True)
+    (app_dir / "org.example.Valid").mkdir(parents=True)
+    monkeypatch.setattr(checks, "_flatpak_app_dirs", lambda: [str(app_dir)])
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    apps, source = checks._flatpak_apps()
+    assert apps == {"org.example.Valid"}
+    assert source == "目录扫描"

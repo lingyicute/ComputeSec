@@ -275,24 +275,30 @@ def _lookup_hsi_info(aid):
     return {}
 
 
+def _str_field(v):
+    return v if isinstance(v, str) else ""
+
+
 def _normalize_attrs(raw):
     items = []
     for a in raw:
         if not isinstance(a, dict):
             continue
-        aid = str(a.get("AppstreamId") or "")
+        aid = _str_field(a.get("AppstreamId")).strip()
+        if not aid:
+            continue
         flags = _flags_to_set(a.get("Flags", 0))
         result = _result_to_str(a.get("HsiResult", 0))
         info = _lookup_hsi_info(aid)
         raw_lvl = a.get("HsiLevel", 0)
         try:
-            level = 0 if isinstance(raw_lvl, bool) else int(raw_lvl or 0)
-        except (TypeError, ValueError):
+            level = 0 if isinstance(raw_lvl, bool) else max(0, int(raw_lvl or 0))
+        except (TypeError, ValueError, OverflowError):
             level = 0
         items.append(HsiItem(
-            id=aid, name=str(info.get("name") or a.get("Name") or aid),
-            summary=str(a.get("Summary") or a.get("Description") or ""),
-            level=level, result=result, flags=flags, uri=str(a.get("Uri") or ""), info=info,
+            id=aid, name=str(info.get("name") or _str_field(a.get("Name")) or aid),
+            summary=_str_field(a.get("Summary")) or _str_field(a.get("Description")),
+            level=level, result=result, flags=flags, uri=_str_field(a.get("Uri")), info=info,
             passed="success" in flags, obsoleted="obsoleted" in flags))
     items.sort(key=lambda i: (i.passed, i.level, i.name))
     return items

@@ -1585,9 +1585,52 @@ def test_windows_installed_deduplicates_same_file_paths(monkeypatch, tmp_path):
 
 def test_ntfs_from_lsblk_json_does_not_double_dev_prefix():
     j = {"blockdevices": [
-        {"name": "/dev/sda2", "fstype": "ntfs", "label": "Win", "size": "50G", "mountpoint": None},
+        {"name": "/dev/sda2", "fstype": "ntfs", "label": "Win", "size": None, "mountpoint": None},
     ]}
     found = checks._ntfs_from_lsblk_json(j)
     assert len(found) == 1
     assert found[0].startswith("/dev/sda2 ")
     assert "/dev//dev/" not in found[0]
+    assert "None" not in found[0]
+
+
+def test_ntfs_partitions_normalizes_udev_devname_against_mounts(monkeypatch):
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    monkeypatch.setattr(checks.glob, "glob", lambda _: ["/run/udev/data/b8:1", "/run/udev/data/b8:2"])
+
+    def fake_read(path, default=""):
+        if path == "/run/udev/data/b8:1":
+            return "E:ID_FS_TYPE=exfat\nE:DEVNAME=sda1\n"
+        if path == "/run/udev/data/b8:2":
+            return "E:ID_FS_TYPE=ntfs\n"
+        if path == "/sys/dev/block/8:2/uevent":
+            return "DEVNAME=/dev/sda2\n"
+        if path == "/proc/mounts":
+            return "/dev/sda1 /mnt/exfat fuseblk rw 0 0\n/dev/sda2 /mnt/win ntfs3 rw 0 0\n"
+        return default
+
+    monkeypatch.setattr(checks, "read", fake_read)
+    found, _ = checks._ntfs_partitions()
+    assert len(found) == 1
+    assert found[0].startswith("/dev/sda2 ")
+    assert "/dev//dev/" not in found[0]
+
+
+def test_hsi_normalize_attrs_skips_missing_id_and_clamps_level_and_no_hash_pointers_val(monkeypatch):
+    items = checks._normalize_attrs([
+        {"Flags": 1},
+        {"AppstreamId": "   ", "Flags": 1},
+        {"AppstreamId": "org.fwupd.hsi.Iommu", "HsiLevel": -3, "Name": 123, "Uri": True, "Flags": 1},
+        {"AppstreamId": "org.fwupd.hsi.Tpm.Version20", "HsiLevel": float("inf"), "Flags": 0},
+    ])
+    assert [i.id for i in items] == ["org.fwupd.hsi.Tpm.Version20", "org.fwupd.hsi.Iommu"]
+    assert all(i.level == 0 and i.uri == "" for i in items)
+
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, default="": (
+        "hash_pointers=always no_hash_pointers=0" if p == "/proc/cmdline" else default
+    ))
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert by_key["hash_pointers"].status == "ok"

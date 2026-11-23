@@ -1318,7 +1318,9 @@ def _ntfs_from_lsblk_json(j):
                     mp = ", ".join(str(x) for x in n["mountpoints"] if x)
                 dev = str(n.get("name") or "")
                 dev_path = dev if dev.startswith("/dev/") else f"/dev/{dev}"
-                line = (f"{dev_path}  {n.get('size', '')}  标签: {n.get('label') or '-'}"
+                size = n.get("size")
+                size_txt = "" if size is None else str(size)
+                line = (f"{dev_path}  {size_txt}  标签: {n.get('label') or '-'}"
                         f"  挂载: {mp or '-'}")
                 if ftype == data.BITLOCKER_FS_TYPE:
                     # 加密卷看不出里面是 NTFS，界面上要说清楚是被什么加密的。
@@ -1381,7 +1383,11 @@ def _ntfs_partitions():
             if not devname:
                 uevent = read(f"/sys/dev/block/{os.path.basename(f)[1:]}/uevent")
                 m_dev = re.search(r"^DEVNAME=(\S+)", uevent, re.M)
-                devname = f"/dev/{m_dev.group(1)}" if m_dev else f
+                devname = m_dev.group(1) if m_dev else ""
+            if devname and not devname.startswith("/"):
+                devname = f"/dev/{devname}"
+            elif not devname:
+                devname = f
             if re.fullmatch(fs_pat, fstype, re.I):
                 label = re.search(r"^E:ID_FS_LABEL=([^\r\n]+)$", content, re.M)
                 lbl_txt = label.group(1).strip() if label and label.group(1).strip() else "-"

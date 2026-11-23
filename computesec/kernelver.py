@@ -358,21 +358,20 @@ def get_status(release=None, now=None, fetcher=None, cache_path=None, force=Fals
     release = platform.release() if release is None else release
     now = int(time.time()) if now is None else int(now)
 
-    cached = None if force else load_cache(cache_path, now)
-    if cached is not None:
-        return KernelSupport(release=release, mainline=cached.mainline, stable=cached.stable,
-                             tier=classify(release, cached.mainline, cached.stable),
-                             checked_at=cached.checked_at)
+    prev = load_cache(cache_path, None)
+    expired = prev is None or prev.checked_at <= 0 or not 0 <= now - prev.checked_at <= CACHE_TTL
+    if not force and not expired:
+        return KernelSupport(release=release, mainline=prev.mainline, stable=prev.stable,
+                             tier=classify(release, prev.mainline, prev.stable),
+                             checked_at=prev.checked_at)
 
     try:
         mainline, stable = fetch_versions(fetcher=fetcher)
     except Exception as e:                                        # noqa: BLE001 (离线、代理、DNS 全都要吞掉)
         reason = str(e) or e.__class__.__name__
         # 拿不到就用上次的缓存（哪怕过期）算出一个结论；过期了要标明。
-        prev = load_cache(cache_path, None)
         if prev is None:
             return KernelSupport(release=release, checked_at=now, error=reason)
-        expired = prev.checked_at <= 0 or not 0 <= now - prev.checked_at <= CACHE_TTL
         return KernelSupport(release=release, mainline=prev.mainline, stable=prev.stable,
                              tier=classify(release, prev.mainline, prev.stable),
                              checked_at=prev.checked_at, error=reason, stale=expired)

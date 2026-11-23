@@ -560,3 +560,21 @@ def test_kernelver_rejects_negative_or_str_timestamp_and_empty_release_text():
 
     offline_weird = kv.KernelSupport(release="weird", mainline="7.3", stable="7.2.1", error="offline")
     assert "未能连上 kernel.org" in kv.recheck_result_text(offline_weird)
+
+
+def test_get_status_reads_cache_only_once_on_expired_offline_fallback(tmp_path, monkeypatch):
+    cache = tmp_path / "kv.json"
+    kv.save_cache(kv.KernelSupport(release="7.2.1", mainline="7.3", stable="7.2.12",
+                                   tier="stable", checked_at=1000), str(cache))
+    loads = []
+    orig_load = kv.load_cache
+
+    def counting_load(path=None, now=None):
+        loads.append((path, now))
+        return orig_load(path, now)
+
+    monkeypatch.setattr(kv, "load_cache", counting_load)
+    st = kv.get_status(release="7.2.1", now=1000 + kv.CACHE_TTL + 50,
+                       fetcher=_fetcher_failing(), cache_path=str(cache))
+    assert st.known and st.stale is True
+    assert len(loads) == 1

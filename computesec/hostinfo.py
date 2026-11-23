@@ -177,9 +177,9 @@ def _build_identity() -> HostIdentity:
         os_pretty = parsed.get("PRETTY_NAME") or parsed.get("NAME") or ""
         os_cpe = parsed.get("CPE_NAME") or ""
         used_os_release = (not ident.pretty_name and bool(os_pretty)) or (not ident.cpe_name and bool(os_cpe))
-        if not ident.source:
+        if not ident.source and (used_os_release or src == "/etc/os-release"):
             ident.source = src
-        elif used_os_release:
+        elif ident.source and used_os_release:
             ident.source += f" + {src}"
 
     if not ident.pretty_name:
@@ -188,13 +188,22 @@ def _build_identity() -> HostIdentity:
         ident.cpe_name = ident.os_release.get("CPE_NAME") or ""
 
     # 兜底：runtime 的 /etc/os-release（Flatpak 内不准确，仅在别无选择时使用）
-    if not ident.pretty_name:
+    if not ident.pretty_name and src != "/etc/os-release":
         fallback = parse_os_release(_read("/etc/os-release"))
         if fallback:
-            ident.os_release = fallback
-            ident.pretty_name = fallback.get("PRETTY_NAME") or fallback.get("NAME") or ""
-            fb_src = "/etc/os-release（Flatpak 内为 runtime 字段，可能不准确）" if IN_FLATPAK else "/etc/os-release"
-            ident.source = f"{ident.source} + {fb_src}" if ident.source else fb_src
+            fb_pretty = fallback.get("PRETTY_NAME") or fallback.get("NAME") or ""
+            fb_cpe = fallback.get("CPE_NAME") or ""
+            used_fb = bool(fb_pretty) or (not ident.cpe_name and bool(fb_cpe))
+            ident.os_release = {**fallback, **ident.os_release}
+            if fb_pretty:
+                ident.pretty_name = fb_pretty
+            if not ident.cpe_name and fb_cpe:
+                ident.cpe_name = fb_cpe
+            if used_fb or not ident.source:
+                fb_src = "/etc/os-release（Flatpak 内为 runtime 字段，可能不准确）" if IN_FLATPAK else "/etc/os-release"
+                ident.source = f"{ident.source} + {fb_src}" if ident.source else fb_src
+    elif parsed and not ident.source:
+        ident.source = src
 
     if not ident.kernel_release:
         ident.kernel_release = platform.release()

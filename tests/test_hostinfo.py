@@ -207,12 +207,18 @@ def test_build_identity_records_os_release_when_filling_cpe_and_falls_back_when_
     assert ident.cpe_name == "cpe:/o:fedoraproject:fedora:44"
     assert ident.source == "D-Bus org.freedesktop.hostname1 + /etc/os-release"
 
-    # 若主 os-release 仅有 ID 而无 PRETTY_NAME/NAME，仍应尝试兜底读取
+    # 若主 os-release 仅有 ID 而无 PRETTY_NAME/NAME，仍应尝试兜底读取，且不覆盖宿主已有字段
     monkeypatch.setattr(hostinfo, "_dbus_hostname1", lambda: ({}, "err"))
     monkeypatch.setattr(hostinfo, "_host_os_release_text", lambda: ("ID=custom\n", "/run/host/os-release"))
     monkeypatch.setattr(hostinfo, "IN_FLATPAK", False)
     monkeypatch.setattr(hostinfo, "_read", lambda p, default="": (
-        'PRETTY_NAME="Fallback OS"\n' if p == "/etc/os-release" else default
+        'ID=runtime\nPRETTY_NAME="Fallback OS"\n' if p == "/etc/os-release" else default
     ))
     ident2 = hostinfo._build_identity()
     assert ident2.pretty_name == "Fallback OS"
+    assert ident2.os_release["ID"] == "custom"
+
+    # 主来源就是 /etc/os-release 时不再重复兜底读取，避免 source 出现两个 /etc/os-release
+    monkeypatch.setattr(hostinfo, "_host_os_release_text", lambda: ("ID=custom\n", "/etc/os-release"))
+    ident3 = hostinfo._build_identity()
+    assert ident3.source == "/etc/os-release"

@@ -519,3 +519,8 @@ def test_future_timestamp_age_text_is_empty():
         "sysctl": {"data": {"values": {}}, "at": future}}})
     assert hd.age_text == ""
     assert hd.step_age_text("sysctl") == ""
+
+
+def test_lsblk_rejects_whitespace_name_and_negative_size():
+    assert hostdata._lsblk_data_ok({"blockdevices": [{"name": "   ", "fstype": "ntfs"}]}) is False
+    assert hostdata._lsblk_data_ok({"blockdevices": [{"name": "sda1", "fstype": "ntfs", "size": -1}]}) is False

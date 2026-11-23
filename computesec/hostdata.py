@@ -187,7 +187,7 @@ def _lsblk_data_ok(d):
     pending = list(d["blockdevices"])
     while pending:
         node = pending.pop()
-        if not isinstance(node, dict) or not isinstance(node.get("name"), str) or not node["name"]:
+        if not isinstance(node, dict) or not isinstance(node.get("name"), str) or not node["name"].strip():
             return False
         if "fstype" not in node or (node["fstype"] is not None and not isinstance(node["fstype"], str)):
             return False
@@ -195,7 +195,8 @@ def _lsblk_data_ok(d):
             if node.get(key) is not None and not isinstance(node[key], str):
                 return False
         size = node.get("size")
-        if size is not None and (isinstance(size, bool) or not isinstance(size, (str, int))):
+        if size is not None and (isinstance(size, bool) or not isinstance(size, (str, int)) or (
+                isinstance(size, int) and size < 0)):
             return False
         children = node.get("children")
         if children is not None:

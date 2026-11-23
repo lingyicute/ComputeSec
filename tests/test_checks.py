@@ -1528,3 +1528,8 @@ def test_collect_survives_arch_and_cpu_vendor_exceptions(monkeypatch):
     assert rep.cmdline.arch == ""
     assert rep.cmdline.cpu is None
     assert rep.sysctl.arch == ""
+
+
+def test_cmdline_bare_rdshell_is_truthy_in_value_ok():
+    assert checks._cmdline_value_ok("rd.shell", None, "1") is True
+    assert checks._cmdline_value_ok("rd.shell", None, "0") is False

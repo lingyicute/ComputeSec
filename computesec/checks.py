@@ -599,9 +599,11 @@ def _cmdline_value_ok(key, actual, expected):
         # 记录调用者 U，严格强于推荐的 FZ。
         actual = "FZPU"
     if actual is None:
-        # 裸 token（无 =）仅对 module_param / systemd 布尔参数等价于真；
+        # 裸 token（无 =）仅对 module_param / systemd / dracut 布尔参数等价于真；
         # early_param 型会解析失败，内核保持默认值，不能视为已启用。
-        if nk not in _CMDLINE_MODULE_BOOL_KEYS and nk not in _CMDLINE_SYSTEMD_BOOL_KEYS:
+        if (nk not in _CMDLINE_MODULE_BOOL_KEYS
+                and nk not in _CMDLINE_SYSTEMD_BOOL_KEYS
+                and nk not in _CMDLINE_DRACUT_BOOL_KEYS):
             return False
         actual = "1"
     if actual == expected:

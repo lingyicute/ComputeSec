@@ -436,3 +436,16 @@ def test_default_launcher_normalizes_relative_which_hit(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.shutil, "which", lambda _name: "./bin/computesec")
     got = cli._default_launcher()
     assert len(got) == 1 and os.path.isabs(got[0])
+
+
+def test_xdg_display_dir_unnormalized_home_and_atomic_write_type_error(monkeypatch, tmp_path):
+    from computesec import xdg
+
+    monkeypatch.setenv("HOME", str(tmp_path) + "/./sub/..")
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert xdg.display_dir() == "~/.local/share/computesec"
+
+    cache = tmp_path / "t.json"
+    xdg.atomic_write_json(str(cache), {"ok": 1})
+    xdg.atomic_write_json(str(cache), {"bad": {1, 2, 3}})
+    assert cache.read_text(encoding="utf-8") == '{"ok": 1}'

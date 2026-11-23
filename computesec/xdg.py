@@ -51,7 +51,8 @@ def display_dir(name="computesec"):
     别处，写死之后那句提示就是错的。只算路径，不碰文件系统。
     """
     d = os.path.normpath(data_dir(name, create=False))
-    home = os.path.expanduser("~").rstrip(os.sep)
+    raw_home = os.path.expanduser("~")
+    home = os.path.normpath(raw_home).rstrip(os.sep) if raw_home else ""
     if home and (d == home or d.startswith(home + os.sep)):
         return "~" + d[len(home):]
     return d
@@ -68,7 +69,7 @@ def atomic_write_json(path, payload):
             json.dump(payload, stream, allow_nan=False)
         os.replace(tmp, path)
         tmp = None      # 已被替换成正式文件，不再有临时文件需要清理
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError):
         pass
     finally:
         if tmp is not None:

@@ -1581,3 +1581,13 @@ def test_windows_installed_deduplicates_same_file_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(checks.glob, "glob", lambda _pat: [])
     hints = checks._windows_installed()
     assert len(hints) == 1
+
+
+def test_ntfs_from_lsblk_json_does_not_double_dev_prefix():
+    j = {"blockdevices": [
+        {"name": "/dev/sda2", "fstype": "ntfs", "label": "Win", "size": "50G", "mountpoint": None},
+    ]}
+    found = checks._ntfs_from_lsblk_json(j)
+    assert len(found) == 1
+    assert found[0].startswith("/dev/sda2 ")
+    assert "/dev//dev/" not in found[0]

@@ -124,7 +124,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.refresh()
         else:
             hostdata.set_current(hostdata.HostData())
-            self._wizard_idle_id = GLib.idle_add(self.open_wizard)
+            self._wizard_idle_id = GLib.idle_add(self._open_wizard_on_idle)
         # 与首次检测并行：联网核对内核版本线（不阻塞界面；失败不弹窗，内核页会显示「未能核对」）
         self.start_kernel_check()
 
@@ -192,8 +192,9 @@ class MainWindow(Adw.ApplicationWindow):
                 if key in self.built:
                     self.built.discard(key)
                     self.build_page(key)
-        if st.known and not st.supported and not self._kernel_warned and not self._kernel_pending:
-            self._kernel_warned = True
+        if st.known and st.supported:
+            self._pending_kernel_warning = None
+        elif st.known and not st.supported and not self._kernel_warned and not self._kernel_pending:
             self._pending_kernel_warning = st
             self.show_kernel_warning()
         self._run_pending_kernel_check()
@@ -220,6 +221,7 @@ class MainWindow(Adw.ApplicationWindow):
                 or self._wizard is not None or self._wizard_idle_id):
             return False
         st, self._pending_kernel_warning = self._pending_kernel_warning, None
+        self._kernel_warned = True
         dlg = ui.kernel_warning_dialog(st)
         if hasattr(Adw, "AlertDialog"):
             dlg.present(self)
@@ -233,9 +235,16 @@ class MainWindow(Adw.ApplicationWindow):
         # Adw.Toast:title 默认按 Pango markup 解析，动态文本含 < 或 & 会破坏整条提示。
         self.toast_overlay.add_toast(Adw.Toast.new(GLib.markup_escape_text(str(text))))
 
+    def _open_wizard_on_idle(self):
+        self._wizard_idle_id = 0
+        self.open_wizard()
+        return False
+
     def open_wizard(self, *_):
         """打开数据采集向导。向导保证 on_finish 恰好回调一次（完成或被关闭）。"""
-        self._wizard_idle_id = 0
+        if self._wizard_idle_id:
+            GLib.source_remove(self._wizard_idle_id)
+            self._wizard_idle_id = 0
         if self._closed:
             return False
         if self._wizard is not None:

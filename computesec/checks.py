@@ -670,9 +670,10 @@ def get_cmdline_report() -> CmdlineReport:
         if v is not None:
             if nk == "efi":
                 efi_tokens.append(v)
-                present[nk] = ",".join(efi_tokens)
+                present[nk] = ",".join(x for x in efi_tokens if x)
             elif nk in _CMDLINE_COMMA_KEYS and present.get(nk):
-                present[nk] = f"{present[nk]},{v}"
+                if v:
+                    present[nk] = f"{present[nk]},{v}"
             else:
                 present[nk] = v
         else:

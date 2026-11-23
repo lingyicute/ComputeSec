@@ -1533,3 +1533,14 @@ def test_collect_survives_arch_and_cpu_vendor_exceptions(monkeypatch):
 def test_cmdline_bare_rdshell_is_truthy_in_value_ok():
     assert checks._cmdline_value_ok("rd.shell", None, "1") is True
     assert checks._cmdline_value_ok("rd.shell", None, "0") is False
+
+
+def test_cmdline_empty_efi_or_iommu_segments_do_not_leave_dangling_commas(monkeypatch):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, default="": (
+        "efi= efi=noruntime efi= intel_iommu=off intel_iommu=" if p == "/proc/cmdline" else default
+    ))
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert by_key["efi"].actual == "noruntime"
+    assert by_key["intel_iommu"].actual == "off"

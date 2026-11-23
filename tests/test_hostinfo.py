@@ -180,3 +180,19 @@ def test_hostinfo_skips_comment_only_file_unescapes_unquoted_and_fills_cpe(monke
     assert ident.source == "/usr/lib/os-release"
     assert ident.pretty_name == "Fedora 44"
     assert ident.cpe_name == "cpe:/o:fedoraproject:fedora:44"
+
+
+def test_parse_os_release_rejects_invalid_keys_and_escaped_closing_quote(monkeypatch):
+    raw = (
+        'invalid key="ignored"\n'
+        '123BAD="ignored"\n'
+        'UNCLOSED="foo\\"\n'
+        'CLOSED="bar\\\\"\n'
+        'PRETTY_NAME="Valid OS"\n'
+    )
+    d = hostinfo.parse_os_release(raw)
+    assert "invalid key" not in d
+    assert "123BAD" not in d
+    assert d["UNCLOSED"] == '"foo"'
+    assert d["CLOSED"] == "bar\\"
+    assert d["PRETTY_NAME"] == "Valid OS"

@@ -670,8 +670,10 @@ def get_cmdline_report() -> CmdlineReport:
     efi_tokens = []
     for k, v in _iter_cmdline_tokens(cmdline):
         nk = _CMDLINE_KEY_ALIASES.get(_norm_key(k), _norm_key(k))
-        # lib/vsprintf.c：no_hash_pointers 等价于 hash_pointers=never，后出现会覆盖 always。
+        # lib/vsprintf.c no_hash_pointers_enable()：仅接受无值的裸 token（带 = 返回 -EINVAL）。
         if nk == "no_hash_pointers":
+            if v is not None:
+                continue
             nk, v = "hash_pointers", "never"
         if v is not None:
             if nk == "efi":

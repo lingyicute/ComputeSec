@@ -108,7 +108,7 @@ def cpu_model():
             k, sep, val = line.partition(":")
             if sep and k.strip().lower() == prefix and val.strip() and not val.strip().isdigit():
                 return val.strip()
-    soc = read("/sys/devices/soc0/machine").strip()
+    soc = read("/sys/devices/soc0/machine").replace("\x00", "").strip()
     return soc or platform.processor() or platform.machine()
 
 
@@ -1100,7 +1100,7 @@ def _vendor_kw_match(kw, text):
 
 def get_hardware() -> HardwareReport:
     def dmi(n):
-        return read(f"/sys/class/dmi/id/{n}").strip()
+        return read(f"/sys/class/dmi/id/{n}").replace("\x00", "").strip()
     sv, pn, bv, biosv, biosver = dmi("sys_vendor"), dmi("product_name"), dmi("board_vendor"), dmi("bios_vendor"), dmi("bios_version")
     model = read("/proc/device-tree/model").strip("\x00\n ")
     # D-Bus hostname1 也提供厂商/型号/固件版本（宿主机视角），用于补全沙箱内读不到的字段

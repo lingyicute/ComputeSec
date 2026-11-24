@@ -42,3 +42,14 @@ def test_invalid_later_mitigations_keeps_mitigations_off_active(monkeypatch):
         assert by_key["mitigations"].status == "wrong"
         assert by_key["pti"].status == "wrong" and by_key["pti"].actual == "mitigations=off"
         assert by_key["spectre_v2"].status == "wrong" and by_key["spectre_v2"].actual == "mitigations=off"
+
+
+def test_mitigations_off_overrides_arm64_ssbd_but_not_explicit_kpti(monkeypatch):
+    monkeypatch.setattr(checks, "arch", lambda: "aarch64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: None)
+    cmdline = "mitigations=off ssbd=force-on kpti=on"
+    monkeypatch.setattr(checks, "read", lambda path, default="": cmdline if path == "/proc/cmdline" else default)
+    by_key = {item.key: item for item in checks.get_cmdline_report().items}
+    assert by_key["ssbd"].status == "wrong"
+    assert by_key["ssbd"].actual == "mitigations=off"
+    assert by_key["kpti"].status == "ok"

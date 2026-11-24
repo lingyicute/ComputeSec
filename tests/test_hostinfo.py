@@ -217,6 +217,12 @@ def test_build_identity_records_os_release_when_filling_cpe_and_falls_back_when_
     ident2 = hostinfo._build_identity()
     assert ident2.pretty_name == "Fallback OS"
     assert ident2.os_release["ID"] == "custom"
+    assert ident2.source == "/run/host/os-release + /etc/os-release"
+
+    # 兜底 /etc/os-release 不存在或未提供名称时，仍应保留宿主 os-release 来源而非留空或误标
+    monkeypatch.setattr(hostinfo, "_read", lambda _p, default="": default)
+    ident_no_fb = hostinfo._build_identity()
+    assert ident_no_fb.source == "/run/host/os-release"
 
     # 主来源就是 /etc/os-release 时不再重复兜底读取，避免 source 出现两个 /etc/os-release
     monkeypatch.setattr(hostinfo, "_host_os_release_text", lambda: ("ID=custom\n", "/etc/os-release"))

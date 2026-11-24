@@ -125,8 +125,9 @@ def score_label(score, big=False):
 
 def level_bar(score):
     bar = Gtk.LevelBar(min_value=0, max_value=100, hexpand=True, valign=Gtk.Align.CENTER)
-    bar.add_offset_value("low", 50)
-    bar.add_offset_value("high", 80)
+    # Gtk.LevelBar 按 value <= offset 匹配区间，用 .5 对齐 score_css() 的 >= 50 / >= 80。
+    bar.add_offset_value("low", 49.5)
+    bar.add_offset_value("high", 79.5)
     bar.add_offset_value("full", 100)
     bar.set_value(0 if score is None else score)
     if score is None:

@@ -363,8 +363,10 @@ SYSCTL_GROUPS = [
         dict(key="net.ipv4.conf.*.accept_source_route", value="0", desc="拒绝源路由报文。"),
         # ip-sysctl.rst: IPv6 accepts type-2 routing headers at zero.
         dict(key="net.ipv6.conf.*.accept_source_route", value="-1", desc="拒绝所有 IPv6 路由扩展首部（0 仍允许 type 2）。"),
-        dict(key="net.ipv6.conf.all.use_tempaddr", value="2", cmp="ge", desc="优先使用 IPv6 临时隐私地址。"),
-        dict(key="net.ipv6.conf.default.use_tempaddr", value="2", cmp="ge", desc="新接口默认使用临时隐私地址。"),
+        # addrconf.c reads idev->cnf.use_tempaddr; all is not propagated.
+        dict(key="net.ipv6.conf.*.use_tempaddr", value="2", cmp="ge", skip_ifaces=("all", "lo"),
+             desc="现有接口及新接口默认配置优先使用 IPv6 临时隐私地址。",
+             note="all 的值不会应用到现有接口；回环接口不参与此项评估。隧道等不使用 SLAAC 的接口请按用途评估。"),
         dict(key="net.ipv4.conf.all.log_martians", value="1", desc="记录来源可疑的数据包。"),
         dict(key="net.ipv4.conf.default.log_martians", value="1", desc="新接口同上。"),
     ]),

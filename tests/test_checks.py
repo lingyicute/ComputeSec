@@ -981,7 +981,8 @@ def test_sysctl_flatpak_without_host_network_marks_net_unverified(monkeypatch):
 def _fake_sysctl_reader(value_for_key):
     """伪造 _sysctl_from_proc：按 sysctl 表里的期望值返回"已加固"的读数。"""
     expected = {e["key"]: e["value"] for _, entries in data.SYSCTL_GROUPS for e in entries}
-    return lambda key: ({key.replace("*", "all"): str(expected.get(key, value_for_key))}, False)
+    return lambda key: ({key.replace("*", name): str(expected.get(key, value_for_key))
+                         for name in ("all", "default", "eth0")}, False)
 
 
 def test_sysctl_flatpak_with_shared_network_trusts_sandbox(monkeypatch):

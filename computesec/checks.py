@@ -980,6 +980,12 @@ def get_sysctl_report() -> SysctlReport:
                 # 这种情况落到下面的 unknown，界面才会给出「可能没有加 sudo」的提示。
                 actual, source, snapshot_gap = {}, "快照缺失", "快照缺失"
                 unreadable = False
+            if e.get("skip_ifaces"):
+                # Some per-interface settings have no effective conf/all value.
+                actual = {k: v for k, v in actual.items()
+                          if k.split(".")[-2] not in e["skip_ifaces"]}
+                if denied_keys is not None:
+                    unreadable = unreadable and bool(denied_keys.intersection(actual))
             if snapshot_gap:
                 status = "unverified"
             elif not actual:

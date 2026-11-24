@@ -245,3 +245,15 @@ def test_build_identity_ignores_whitespace_only_dbus_fields(monkeypatch):
     assert ident.pretty_name == "Debian 13"
     assert ident.hostname == "host1"
     assert "/etc/os-release" in ident.source
+
+
+def test_build_identity_ignores_whitespace_only_os_release_fields(monkeypatch):
+    monkeypatch.setattr(hostinfo, "IN_FLATPAK", False)
+    monkeypatch.setattr(hostinfo, "_dbus_hostname1", lambda: ({}, "err"))
+    monkeypatch.setattr(hostinfo, "_host_os_release_text",
+                        lambda: ('PRETTY_NAME="   "\nNAME="  Arch Linux  "\nCPE_NAME="  "\n', "/run/host/os-release"))
+    ident = hostinfo._build_identity()
+    assert ident.pretty_name == "Arch Linux"
+    assert ident.os_name == "Arch Linux"
+    assert ident.cpe_name == ""
+    assert hostinfo.HostIdentity(pretty_name="   ", os_release={"PRETTY_NAME": "  ", "NAME": "Debian"}).os_name == "Debian"

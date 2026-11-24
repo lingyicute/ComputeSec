@@ -55,9 +55,9 @@ class HostIdentity:
 
     @property
     def os_name(self):
-        return (self.pretty_name
-                or self.os_release.get("PRETTY_NAME")
-                or self.os_release.get("NAME")
+        return (self.pretty_name.strip()
+                or (self.os_release.get("PRETTY_NAME") or "").strip()
+                or (self.os_release.get("NAME") or "").strip()
                 or "Linux")
 
     @property
@@ -174,8 +174,8 @@ def _build_identity() -> HostIdentity:
     parsed = parse_os_release(text) if text else {}
     if parsed:
         ident.os_release = parsed
-        os_pretty = parsed.get("PRETTY_NAME") or parsed.get("NAME") or ""
-        os_cpe = parsed.get("CPE_NAME") or ""
+        os_pretty = (parsed.get("PRETTY_NAME") or "").strip() or (parsed.get("NAME") or "").strip()
+        os_cpe = (parsed.get("CPE_NAME") or "").strip()
         used_os_release = (not ident.pretty_name and bool(os_pretty)) or (not ident.cpe_name and bool(os_cpe))
         if not ident.source:
             ident.source = src
@@ -183,16 +183,17 @@ def _build_identity() -> HostIdentity:
             ident.source += f" + {src}"
 
     if not ident.pretty_name:
-        ident.pretty_name = ident.os_release.get("PRETTY_NAME") or ident.os_release.get("NAME") or ""
+        ident.pretty_name = ((ident.os_release.get("PRETTY_NAME") or "").strip()
+                             or (ident.os_release.get("NAME") or "").strip())
     if not ident.cpe_name:
-        ident.cpe_name = ident.os_release.get("CPE_NAME") or ""
+        ident.cpe_name = (ident.os_release.get("CPE_NAME") or "").strip()
 
     # 兜底：runtime 的 /etc/os-release（Flatpak 内不准确，仅在别无选择时使用）
     if not ident.pretty_name and src != "/etc/os-release":
         fallback = parse_os_release(_read("/etc/os-release"))
         if fallback:
-            fb_pretty = fallback.get("PRETTY_NAME") or fallback.get("NAME") or ""
-            fb_cpe = fallback.get("CPE_NAME") or ""
+            fb_pretty = (fallback.get("PRETTY_NAME") or "").strip() or (fallback.get("NAME") or "").strip()
+            fb_cpe = (fallback.get("CPE_NAME") or "").strip()
             used_fb = bool(fb_pretty) or (not ident.cpe_name and bool(fb_cpe))
             ident.os_release = {**fallback, **ident.os_release}
             if fb_pretty:

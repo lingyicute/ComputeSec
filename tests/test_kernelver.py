@@ -624,3 +624,16 @@ def test_parse_releases_json_prefers_latest_maintained_mainline():
         {"moniker": "stable", "version": "7.1.4", "iseol": False},
     ]}
     assert kv.parse_releases_json(json.dumps(doc)) == ("7.3-rc2", "7.1.4")
+
+
+def test_parse_releases_json_orders_rc_and_final_mainline():
+    rc_only = json.dumps({"releases": [
+        {"moniker": "mainline", "version": "7.3-rc2"},
+        {"moniker": "mainline", "version": "7.3-rc10"},
+    ]})
+    assert kv.parse_releases_json(rc_only) == ("7.3-rc10", "")
+    with_final = json.dumps({"releases": [
+        {"moniker": "mainline", "version": "7.3-rc7"},
+        {"moniker": "mainline", "version": "7.3"},
+    ]})
+    assert kv.parse_releases_json(with_final) == ("7.3", "")

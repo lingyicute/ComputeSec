@@ -1522,8 +1522,12 @@ def _ntfs_from_lsblk_json(j):
 
 
 def _unescape_mount_field(s):
-    """解码 /proc/mounts 中的八进制转义（如空格 \040、反斜杠 \134）。"""
-    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), s)
+    """解码 /proc/mounts 中的八进制字节转义（如空格 \040、反斜杠 \134 及多字节 UTF-8）。"""
+    def _decode_run(m):
+        raw = bytes(int(o, 8) for o in re.findall(r"\\([0-3][0-7]{2})", m.group(0)))
+        return raw.decode("utf-8", errors="replace")
+
+    return re.sub(r"(?:\\[0-3][0-7]{2})+", _decode_run, s)
 
 
 def _ntfs_partitions():
@@ -1602,7 +1606,7 @@ def _ntfs_partitions():
         # udev 数据库可能缺少后挂载设备的记录；即使已有 udev 数据，也必须用挂载表补全。
         # 但 fuseblk 也用于 exfat-fuse / fuse-ext2 等非 NTFS 文件系统，不能覆盖 udev 已确认为非 Windows 的设备。
         for line in read("/proc/mounts").splitlines():
-            parts = line.split()
+            parts = [p for p in re.split(r"[ \t]+", line.strip(" \t\r\n")) if p]
             if len(parts) <= 2:
                 continue
             dev = _unescape_mount_field(parts[0])

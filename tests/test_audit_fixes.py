@@ -147,3 +147,17 @@ def test_ntfs_from_lsblk_json_handles_deeply_nested_children_without_recursion_e
     assert hostdata._lsblk_data_ok(payload) is True
     found = checks._ntfs_from_lsblk_json(payload)
     assert len(found) == 1 and "/dev/dm-999" in found[0]
+
+
+def test_mounts_parser_preserves_unicode_spaces_and_decodes_utf8_octal_bytes(monkeypatch):
+    assert checks._unescape_mount_field(r"/mnt/\344\270\255\346\226\207\040盘") == "/mnt/中文 盘"
+    assert checks._unescape_mount_field(r"a\134040b") == r"a\040b"
+    assert checks._unescape_mount_field(r"\777") == r"\777"
+
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    monkeypatch.setattr(checks.glob, "glob", lambda _: [])
+    mounts = "/dev/sda2 /run/media/u/新加卷\u3000D ntfs3 rw,relatime 0 0\n"
+    monkeypatch.setattr(checks, "read", lambda p, d="": mounts if p == "/proc/mounts" else d)
+    found, _ = checks._ntfs_partitions()
+    assert len(found) == 1 and "新加卷　D" in found[0]

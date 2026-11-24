@@ -228,3 +228,8 @@ def test_build_identity_records_os_release_when_filling_cpe_and_falls_back_when_
     monkeypatch.setattr(hostinfo, "_host_os_release_text", lambda: ("ID=custom\n", "/etc/os-release"))
     ident3 = hostinfo._build_identity()
     assert ident3.source == "/etc/os-release"
+
+
+def test_parse_os_release_strips_utf8_bom():
+    d = hostinfo.parse_os_release('\ufeffPRETTY_NAME="Fedora Linux 42"\nID=fedora\n')
+    assert d == {"PRETTY_NAME": "Fedora Linux 42", "ID": "fedora"}

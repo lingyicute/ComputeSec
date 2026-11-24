@@ -67,7 +67,7 @@ class HostIdentity:
 
 def _read(path, default=""):
     try:
-        with open(path, "r", errors="replace") as f:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
     except OSError:
         return default
@@ -88,7 +88,7 @@ def _has_closing_quote(v):
 
 def parse_os_release(text):
     d = {}
-    for line in text.splitlines():
+    for line in text.lstrip("\ufeff").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue

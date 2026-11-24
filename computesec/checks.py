@@ -1177,7 +1177,7 @@ def get_hardware() -> HardwareReport:
     def dmi(n):
         return read(f"/sys/class/dmi/id/{n}").replace("\x00", "").strip()
     sv, pn, bv, biosv, biosver = dmi("sys_vendor"), dmi("product_name"), dmi("board_vendor"), dmi("bios_vendor"), dmi("bios_version")
-    model = read("/proc/device-tree/model").strip("\x00\n ")
+    model = read("/proc/device-tree/model").replace("\x00", "").strip()
     # D-Bus hostname1 也提供厂商/型号/固件版本（宿主机视角），用于补全沙箱内读不到的字段
     chassis = ""
     try:
@@ -1198,7 +1198,7 @@ def get_hardware() -> HardwareReport:
     if chassis == "vm":
         vendor, matched = data.VM_VENDOR, "机箱类型: vm"
     else:
-        for label, text in candidates:
+        for label, text in candidates + [("固件厂商", biosv)]:
             t = (text or "").lower()
             if t and any(_vendor_kw_match(m, t) for m in data.VM_VENDOR["match"]):
                 vendor, matched = data.VM_VENDOR, f"{label}: {text}"

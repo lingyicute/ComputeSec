@@ -96,3 +96,18 @@ def test_sysctl_rejects_python_underscores_non_ascii_digits_and_invalid_rp_filte
         monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _, v=vals: (v, set()))
         item = checks.get_sysctl_report().all_items[0]
         assert item.status == "missing"
+
+
+def test_hardware_strips_interior_nul_in_dt_model_and_detects_vm_bios_vendor(monkeypatch):
+    files = {
+        "/sys/class/dmi/id/sys_vendor": "LENOVO\n",
+        "/sys/class/dmi/id/product_name": "20XW\n",
+        "/sys/class/dmi/id/bios_vendor": "QEMU\n",
+        "/proc/device-tree/model": "Raspberry\x00Pi 5\r\n\x00",
+    }
+    monkeypatch.setattr(checks, "read", lambda p, d="": files.get(p, d))
+    monkeypatch.setattr(checks.hostinfo, "get_identity", lambda refresh=False: checks.hostinfo.HostIdentity())
+    hw = checks.get_hardware()
+    assert "\x00" not in hw.model and hw.model == "RaspberryPi 5"
+    assert hw.vendor is data.VM_VENDOR
+    assert hw.matched_on == "固件厂商: QEMU"

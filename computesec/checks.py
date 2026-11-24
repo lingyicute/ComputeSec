@@ -695,6 +695,7 @@ def get_cmdline_report() -> CmdlineReport:
     efi_tokens = []
     forced_off = {}
     effective_mitigations = None
+    iommu_pt_active = False
     for k, v in _iter_cmdline_tokens(cmdline):
         nk = _CMDLINE_KEY_ALIASES.get(_norm_key(k), _norm_key(k))
         if v is None and nk in _CMDLINE_FORCE_DISABLE:
@@ -712,6 +713,14 @@ def get_cmdline_report() -> CmdlineReport:
         if v is not None:
             if nk == "mitigations" and v in _MITIGATIONS_RANK:
                 effective_mitigations = v
+            if nk == "iommu":
+                for opt in v.split(","):
+                    if opt.startswith("pt"):
+                        iommu_pt_active = True
+                    elif opt.startswith("nopt"):
+                        iommu_pt_active = False
+            elif nk == "iommu.passthrough" and _kstrtobool(v) is not None:
+                iommu_pt_active = False
             if nk == "efi":
                 efi_tokens.append(v)
                 present[nk] = ",".join(x for x in efi_tokens if x)
@@ -752,6 +761,9 @@ def get_cmdline_report() -> CmdlineReport:
             for target in ("intel_iommu", "amd_iommu"):
                 if target in present:
                     present[target] = "iommu=off"
+        if (iommu_pt_active and "iommu.passthrough" in present
+                and _cmdline_value_ok("iommu.passthrough", present["iommu.passthrough"], "0")):
+            present["iommu.passthrough"] = "iommu=pt"
     running = kernelver.parse_release(platform.release())
     items = []
     for p in data.KERNEL_PARAMS:

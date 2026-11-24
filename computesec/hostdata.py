@@ -322,7 +322,8 @@ class HostData:
     def fresh(self):
         """本次开机内采集的数据才算新鲜（重启后 sysctl 可能已改变）。"""
         bid = boot_id()
-        return bool(self.payload) and (not bid or self.collected_boot_id == bid)
+        # An unreadable current boot ID cannot establish cache freshness.
+        return bool(bid) and self.collected_boot_id == bid
 
     @property
     def age_text(self):

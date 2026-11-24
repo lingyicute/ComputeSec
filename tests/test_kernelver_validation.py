@@ -50,3 +50,26 @@ def test_kernel_support_clears_invalid_upstream_version_strings():
     assert st.mainline == ""
     assert st.stable == "7.2.12"
     assert st.tier == "older"
+
+
+def test_from_dict_recomputes_tier_instead_of_trusting_cached_label():
+    st = kv.KernelSupport.from_dict({
+        "release": "6.1.158",
+        "mainline": "7.3",
+        "stable": "7.2.12",
+        "tier": "mainline",
+        "checked_at": 1000,
+    })
+    assert st is not None
+    assert st.tier == "older"
+    assert not st.supported
+    st_no_stable = kv.KernelSupport.from_dict({
+        "release": "6.1.158",
+        "mainline": "7.3",
+        "stable": "",
+        "tier": "stable",
+        "checked_at": 1000,
+    })
+    assert st_no_stable is not None
+    assert st_no_stable.tier == "unknown"
+    assert not st_no_stable.known

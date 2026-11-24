@@ -270,8 +270,11 @@ class KernelSupport:
             checked_at = int(raw_ts)
         except (ValueError, OverflowError):     # int(NaN/Infinity) 抛 ValueError/OverflowError
             return None
-        return cls(release=d.get("release", ""), mainline=d.get("mainline", ""),
-                   stable=d.get("stable", ""), tier=d.get("tier", "unknown"),
+        release = d.get("release", "")
+        mainline = d.get("mainline", "")
+        stable = d.get("stable", "")
+        return cls(release=release, mainline=mainline,
+                   stable=stable, tier=classify(release, mainline, stable),
                    checked_at=checked_at, error=d.get("error", ""))
 
 

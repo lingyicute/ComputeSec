@@ -693,6 +693,7 @@ def get_cmdline_report() -> CmdlineReport:
     present = {}
     efi_tokens = []
     forced_off = {}
+    effective_mitigations = None
     for k, v in _iter_cmdline_tokens(cmdline):
         nk = _CMDLINE_KEY_ALIASES.get(_norm_key(k), _norm_key(k))
         if v is None and nk in _CMDLINE_FORCE_DISABLE:
@@ -708,6 +709,8 @@ def get_cmdline_report() -> CmdlineReport:
                 continue
             nk, v = "hash_pointers", "never"
         if v is not None:
+            if nk == "mitigations" and v in _MITIGATIONS_RANK:
+                effective_mitigations = v
             if nk == "efi":
                 efi_tokens.append(v)
                 present[nk] = ",".join(x for x in efi_tokens if x)
@@ -735,7 +738,7 @@ def get_cmdline_report() -> CmdlineReport:
                     and nk != "hash_pointers"):
                 continue
             present[nk] = None
-    if present.get("mitigations") == "off":
+    if effective_mitigations == "off":
         for target in _MITIGATIONS_OFF_TARGETS:
             if target in present:
                 present[target] = "mitigations=off"

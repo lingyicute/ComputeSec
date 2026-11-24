@@ -27,3 +27,18 @@ def test_later_mitigations_re_enables_individual_x86_mitigations(monkeypatch):
     assert by_key["mitigations"].status == "ok"
     assert by_key["pti"].status == "ok"
     assert by_key["spectre_v2"].status == "ok"
+
+
+def test_invalid_later_mitigations_keeps_mitigations_off_active(monkeypatch):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    for bad in ("bogus", ""):
+        cmdline = f"mitigations=off mitigations={bad} pti=on spectre_v2=on"
+        monkeypatch.setattr(
+            checks, "read",
+            lambda path, default="", line=cmdline: line if path == "/proc/cmdline" else default,
+        )
+        by_key = {item.key: item for item in checks.get_cmdline_report().items}
+        assert by_key["mitigations"].status == "wrong"
+        assert by_key["pti"].status == "wrong" and by_key["pti"].actual == "mitigations=off"
+        assert by_key["spectre_v2"].status == "wrong" and by_key["spectre_v2"].actual == "mitigations=off"

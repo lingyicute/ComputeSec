@@ -1403,8 +1403,13 @@ def _ntfs_partitions():
                 devname = f"/dev/{devname}"
             elif not devname:
                 devname = f
-            links = re.search(r"^E:DEVLINKS=([^\r\n]+)$", content, re.M)
             dev_aliases = {devname} if devname else set()
+            # systemd-udev 在 /run/udev/data/b* 中以逐行 S:<相对路径> 记录设备软链，而非 E:DEVLINKS=。
+            for m_sym in re.finditer(r"^S:([^\r\n]+)$", content, re.M):
+                lnk = m_sym.group(1).strip()
+                if lnk:
+                    dev_aliases.add(lnk if lnk.startswith("/") else f"/dev/{lnk}")
+            links = re.search(r"^E:DEVLINKS=([^\r\n]+)$", content, re.M)
             if links:
                 for lnk in links.group(1).split():
                     dev_aliases.add(lnk if lnk.startswith("/") else f"/dev/{lnk}")

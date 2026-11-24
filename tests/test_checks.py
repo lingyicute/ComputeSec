@@ -1700,3 +1700,31 @@ def test_udev_devlinks_dedup_and_usb_camera_exclusion(monkeypatch):
     found, _ = checks._ntfs_partitions()
     assert len(found) == 1
     assert found[0].startswith("/dev/sda2 ")
+
+
+def test_udev_s_symlinks_dedup_and_filter_fuseblk(monkeypatch):
+    """真实的 /run/udev/data/b* 以逐行 S: 记录设备软链。"""
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    monkeypatch.setattr(checks.glob, "glob", lambda _: ["/run/udev/data/b8:1", "/run/udev/data/b8:2"])
+
+    def fake_read(path, default=""):
+        if path == "/run/udev/data/b8:1":
+            return "S:disk/by-uuid/AAAA-1111\nS:mapper/exfat-vol\nE:ID_FS_TYPE=exfat\n"
+        if path == "/sys/dev/block/8:1/uevent":
+            return "DEVNAME=sda1\n"
+        if path == "/run/udev/data/b8:2":
+            return "S:disk/by-uuid/BBBB-2222\nE:ID_FS_TYPE=ntfs\nE:ID_FS_LABEL=Win\n"
+        if path == "/sys/dev/block/8:2/uevent":
+            return "DEVNAME=sda2\n"
+        if path == "/proc/mounts":
+            return (
+                "/dev/mapper/exfat-vol /mnt/exfat fuseblk rw 0 0\n"
+                "/dev/disk/by-uuid/BBBB-2222 /mnt/win ntfs3 rw 0 0\n"
+            )
+        return default
+
+    monkeypatch.setattr(checks, "read", fake_read)
+    found, _ = checks._ntfs_partitions()
+    assert len(found) == 1
+    assert found[0].startswith("/dev/sda2 ")

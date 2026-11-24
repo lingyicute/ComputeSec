@@ -273,7 +273,8 @@ class _HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if not newurl.lower().startswith("https://"):
-            fp.close()
+            if fp is not None:
+                fp.close()
             raise urllib.error.URLError(f"拒绝跟随到非 https 地址的重定向：{newurl}")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -298,6 +299,8 @@ def _default_fetcher(url, timeout):
     """
     if not isinstance(url, str) or not url.lower().startswith("https://"):
         raise ValueError(f"拒绝请求非 https 地址：{url}")
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError(f"无效的请求超时时间：{timeout}")
     req = urllib.request.Request(url, headers={"User-Agent": "ComputeSec"})
     deadline = time.monotonic() + timeout
     with _urlopen(req, timeout) as resp:

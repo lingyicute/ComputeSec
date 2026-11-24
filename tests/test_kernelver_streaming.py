@@ -49,3 +49,16 @@ def test_trickle_body_returns_to_deadline_between_socket_reads(monkeypatch, head
         kv._default_fetcher(kv.RELEASES_URL, 1)
     assert raw.body_reads <= 5
     assert response.closed
+
+
+@pytest.mark.parametrize("bad", [0, -1, float("nan"), float("inf"), True, False, "5"])
+def test_default_fetcher_rejects_invalid_timeout(bad):
+    with pytest.raises(ValueError):
+        kv._default_fetcher("https://www.kernel.org/releases.json", bad)
+
+
+def test_redirect_handler_handles_none_fp():
+    import urllib.error
+    handler = kv._HttpsOnlyRedirectHandler()
+    with pytest.raises(urllib.error.URLError):
+        handler.redirect_request(None, None, 302, "Found", {}, "http://example.invalid/")

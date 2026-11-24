@@ -50,6 +50,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._kernel_check_gen = 0     # 检查代际：只有最新一次的结果才允许复位标志位
         self._kernel_pending = 0       # 检查进行中收到的重查请求数，结束后补跑一次
         self._pending_kernel_warning = None  # 等采集向导关闭后再弹的版本线提示
+        self._error_pages = set()      # 当前展示检测错误页的页面键，防止异步回调覆盖
 
         self.toast_overlay = Adw.ToastOverlay()
         self.set_content(self.toast_overlay)
@@ -150,6 +151,8 @@ class MainWindow(Adw.ApplicationWindow):
         排队而不是直接丢弃，是因为网络慢时一次检查可能要等满 FETCH_TIMEOUT：
         若此时把用户的点击静默丢掉，重试按钮看上去就是坏的。
         """
+        if self._closed:
+            return ""
         if force:
             self._kernel_warned = False
             self._pending_kernel_warning = None
@@ -190,9 +193,9 @@ class MainWindow(Adw.ApplicationWindow):
         kernelver.set_current(st)
         if self.report is not None:
             self.report.kernel_support = st
-            # 内核页与仪表盘用到了它，重建这两页（其余页面不受影响）
+            # 内核页与仪表盘用到了它，重建这两页（其余页面与错误页不受影响）
             for key in ("dashboard", "kernel"):
-                if key in self.built:
+                if key in self.built and key not in self._error_pages:
                     self.built.discard(key)
                     self.build_page(key)
         if not st.known or st.supported:
@@ -292,6 +295,9 @@ class MainWindow(Adw.ApplicationWindow):
         if self._refreshing:
             self.title_widget.set_subtitle("正在检测…")
             return
+        if key in self._error_pages:
+            self.title_widget.set_subtitle("检测失败")
+            return
         if r is None:
             return
         sub = {"dashboard": f"综合评分 {ui.score_str(r.overall)}",
@@ -386,6 +392,7 @@ class MainWindow(Adw.ApplicationWindow):
         # 同步主线程上已完成的内核版本线状态，避免 collect() 线程捕获旧值后覆盖新结果
         if kernelver.CURRENT is not None:
             report.kernel_support = kernelver.CURRENT
+        self._error_pages.clear()
         self.report = report
         # 只构建当前可见的页面，其余留到空闲时增量构建。
         # 一次性构建全部五页会在一个主循环回调里创建数千个控件，
@@ -427,6 +434,7 @@ class MainWindow(Adw.ApplicationWindow):
         sel = self.listbox.get_selected_row()
         current = sel.page_key if sel else "dashboard"
         targets = self.bins.keys() if self.report is None else (current,)
+        self._error_pages.update(targets)
         for k in targets:
             if self.report is not None:
                 self.built.add(k)

@@ -19,10 +19,14 @@ def test_effective_reverse_path_filter(monkeypatch, all_value, default, iface, w
     snapshot = {k: v for k, v in values.items() if v is not None}
     hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": snapshot}}}}) if sandbox else hostdata.HostData()
     monkeypatch.setattr(hostdata, "CURRENT", hd)
-    # A snapshot has no evidence of an absent interface; verify that case too.
-    if sandbox and iface is None:
-        want = "ok"
     monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _: (values, set()))
     item = checks.get_sysctl_report().all_items[0]
     assert item.status == want
     assert item.actual == (snapshot if sandbox else values)
+
+
+@pytest.mark.parametrize("names", [("all",), ("all", "default"), ("all", "eth0")])
+def test_incomplete_interface_snapshot_cannot_pass(names):
+    actual = {f"net.ipv4.conf.{name}.rp_filter": "1" for name in names}
+    compared = checks._sysctl_effective_values("net.ipv4.conf.*.rp_filter", actual)
+    assert any(value is None for value in compared.values())

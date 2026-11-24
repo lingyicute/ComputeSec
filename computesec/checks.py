@@ -911,7 +911,13 @@ def _sysctl_effective_values(key, actual):
     if key != "net.ipv4.conf.*.rp_filter" or not actual:
         return actual
     all_key = "net.ipv4.conf.all.rp_filter"
+    default_key = "net.ipv4.conf.default.rp_filter"
     effective = {}
+    if default_key not in actual:
+        effective[default_key] = None
+    if not any(k not in (all_key, default_key) for k in actual):
+        # All/default alone cannot rule out a loose-mode existing interface.
+        effective[key] = None
     try:
         global_mode = int(actual.get(all_key))
     except (TypeError, ValueError):

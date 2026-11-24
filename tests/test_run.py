@@ -484,3 +484,10 @@ def test_share_roots_includes_custom_pip_prefix(tmp_path, monkeypatch):
     fake_cli.write_text("")
     monkeypatch.setattr(cli, "__file__", str(fake_cli))
     assert str(tmp_path / "opt") in cli._share_roots()
+
+
+def test_run_help_uses_installed_script_basename(monkeypatch, capsys):
+    import run as run_mod
+    monkeypatch.setattr(run_mod, "_SCRIPT", "/app/bin/computesec")
+    assert run_mod.main(["--help"]) == 0
+    assert "用法: computesec [选项]" in capsys.readouterr().out

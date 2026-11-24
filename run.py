@@ -39,7 +39,7 @@ def install_desktop(uninstall=False):
 
 
 def main(argv=None):
-    return cli.main(argv, prog="run.py", launcher=_LAUNCHER)
+    return cli.main(argv, prog=os.path.basename(_SCRIPT) or "run.py", launcher=_LAUNCHER)
 
 
 if __name__ == "__main__":

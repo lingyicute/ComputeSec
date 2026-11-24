@@ -152,6 +152,7 @@ class MainWindow(Adw.ApplicationWindow):
         """
         if force:
             self._kernel_warned = False
+            self._pending_kernel_warning = None
         if self._kernel_checking:
             if not force:
                 return KERNEL_CHECK_BUSY
@@ -194,7 +195,7 @@ class MainWindow(Adw.ApplicationWindow):
                 if key in self.built:
                     self.built.discard(key)
                     self.build_page(key)
-        if st.known and st.supported:
+        if not st.known or st.supported:
             self._pending_kernel_warning = None
         elif st.known and not st.supported and not self._kernel_warned and not self._kernel_pending:
             self._pending_kernel_warning = st
@@ -288,8 +289,10 @@ class MainWindow(Adw.ApplicationWindow):
 
     def update_subtitle(self, key):
         r = self.report
-        if r is None:
+        if self._refreshing:
             self.title_widget.set_subtitle("正在检测…")
+            return
+        if r is None:
             return
         sub = {"dashboard": f"综合评分 {ui.score_str(r.overall)}",
                "hsi": (r.hsi.host_id or f"评分 {ui.score_str(r.hsi.score)}") if r.hsi.ok else "不可用",
@@ -425,7 +428,10 @@ class MainWindow(Adw.ApplicationWindow):
         current = sel.page_key if sel else "dashboard"
         targets = self.bins.keys() if self.report is None else (current,)
         for k in targets:
-            self.built.discard(k)
+            if self.report is not None:
+                self.built.add(k)
+            else:
+                self.built.discard(k)
             self.bins[k].set_child(Adw.StatusPage(
                 icon_name="dialog-error-symbolic", title="检测时发生错误",
                 description=f"{GLib.markup_escape_text(str(error))}\n\n点击刷新按钮重试。"))

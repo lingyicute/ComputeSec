@@ -469,6 +469,12 @@ _SYSTEMD_BOOL_FALSE = {"0", "off", "n", "no", "false", "f"}
 _MITIGATIONS_RANK = {"off": 0, "auto": 1, "auto,nosmt": 2}
 # fs/proc/base.c proc_mem.force_override：never 彻底禁止 FOLL_FORCE，严格强于 ptrace。
 _PROC_MEM_RANK = {"always": 0, "ptrace": 1, "never": 2}
+# 裸出现即无条件禁用对应缓解的参数（内核 cmdline_find_option_bool，顺序无关）。
+_CMDLINE_FORCE_DISABLE = {
+    "nopti": "pti",
+    "nospectre_v2": "spectre_v2",
+    "nospec_store_bypass_disable": "spec_store_bypass_disable",
+}
 
 
 def _iter_cmdline_tokens(cmdline):
@@ -672,8 +678,12 @@ def get_cmdline_report() -> CmdlineReport:
     cmdline = read("/proc/cmdline").strip()
     present = {}
     efi_tokens = []
+    forced_off = {}
     for k, v in _iter_cmdline_tokens(cmdline):
         nk = _CMDLINE_KEY_ALIASES.get(_norm_key(k), _norm_key(k))
+        if v is None and nk in _CMDLINE_FORCE_DISABLE:
+            forced_off[_CMDLINE_FORCE_DISABLE[nk]] = nk
+            continue
         # lib/vsprintf.c no_hash_pointers_enable()：仅接受无值的裸 token（带 = 返回 -EINVAL）。
         if nk == "no_hash_pointers":
             if v is not None:
@@ -707,6 +717,8 @@ def get_cmdline_report() -> CmdlineReport:
                     and nk != "hash_pointers"):
                 continue
             present[nk] = None
+    for target, flag in forced_off.items():
+        present[target] = flag
     ar, cv = arch(), cpu_vendor()
     running = kernelver.parse_release(platform.release())
     items = []

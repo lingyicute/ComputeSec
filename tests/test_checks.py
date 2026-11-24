@@ -1728,3 +1728,19 @@ def test_udev_s_symlinks_dedup_and_filter_fuseblk(monkeypatch):
     found, _ = checks._ntfs_partitions()
     assert len(found) == 1
     assert found[0].startswith("/dev/sda2 ")
+
+
+@pytest.mark.parametrize("cmdline,key,flag", [
+    ("pti=on nopti", "pti", "nopti"),
+    ("nopti pti=on", "pti", "nopti"),
+    ("spectre_v2=on nospectre_v2", "spectre_v2", "nospectre_v2"),
+    ("nospectre-v2 spectre_v2=on", "spectre_v2", "nospectre_v2"),
+    ("spec_store_bypass_disable=on nospec_store_bypass_disable", "spec_store_bypass_disable", "nospec_store_bypass_disable"),
+])
+def test_cmdline_force_disable_flags_override_enabled_params(monkeypatch, cmdline, key, flag):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, d="": cmdline if p == "/proc/cmdline" else d)
+    item = next(i for i in checks.get_cmdline_report().items if i.key == key)
+    assert item.status == "wrong"
+    assert item.actual == flag

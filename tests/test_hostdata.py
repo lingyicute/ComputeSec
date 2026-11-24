@@ -532,3 +532,14 @@ def test_future_timestamp_age_text_is_empty():
 def test_lsblk_rejects_whitespace_name_and_negative_size():
     assert hostdata._lsblk_data_ok({"blockdevices": [{"name": "   ", "fstype": "ntfs"}]}) is False
     assert hostdata._lsblk_data_ok({"blockdevices": [{"name": "sda1", "fstype": "ntfs", "size": -1}]}) is False
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity", "1e999"])
+def test_lsblk_and_load_reject_non_finite_json_in_extra_fields(tmp_path, monkeypatch, literal):
+    raw = '{"blockdevices": [{"name": "sda1", "fstype": "ext4", "extra": %s}]}' % literal
+    parsed, err = hostdata.parse_lsblk(raw)
+    assert parsed is None and err
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    _write_cache(tmp_path, '{"collected_at": 1000, "boot_id": "b", "steps": {"lsblk": {"data": %s}}}' % raw)
+    assert hostdata.HostData.load().payload == {}

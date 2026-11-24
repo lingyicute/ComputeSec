@@ -89,6 +89,17 @@ def parse_sysctl(text):
     return {"values": values, "meta": meta}, ""
 
 
+def _reject_json_constant(token):
+    raise ValueError(f"不允许非标准 JSON 常量：{token}")
+
+
+def _parse_finite_float(token):
+    val = float(token)
+    if val != val or abs(val) == float("inf"):
+        raise ValueError(f"不允许非有限浮点值：{token}")
+    return val
+
+
 def parse_lsblk(text):
     """解析 ``lsblk -J`` 的 JSON 输出。"""
     if not text or not text.strip():
@@ -100,11 +111,13 @@ def parse_lsblk(text):
     j = None
     last_err = None
     try:
-        j = json.loads(text[start:end + 1])
+        j = json.loads(text[start:end + 1], parse_constant=_reject_json_constant,
+                       parse_float=_parse_finite_float)
     except ValueError as e:
         last_err = e
         # 终端提示符中若恰巧含有 { 或 }，从每个 { 起尝试解码首个完整 JSON 对象
-        decoder = json.JSONDecoder()
+        decoder = json.JSONDecoder(parse_constant=_reject_json_constant,
+                                   parse_float=_parse_finite_float)
         pos = start
         while pos >= 0:
             try:
@@ -381,7 +394,8 @@ class HostData:
         path = os.path.join(_data_dir(create=False), CACHE_NAME)
         try:
             with open(path) as f:
-                payload = json.load(f)
+                payload = json.load(f, parse_constant=_reject_json_constant,
+                                    parse_float=_parse_finite_float)
         except (OSError, ValueError):
             return cls()
         return cls(payload if _payload_ok(payload) else None)

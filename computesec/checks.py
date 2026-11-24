@@ -922,7 +922,14 @@ def _sysctl_from_proc(key):
 
 def _sysctl_effective_values(key, actual):
     """Preserve raw readings for display, but compare effective rp_filter modes."""
-    if key != "net.ipv4.conf.*.rp_filter" or not actual:
+    if not actual:
+        return actual
+    if key == "net.ipv6.conf.*.use_tempaddr":
+        default_key = "net.ipv6.conf.default.use_tempaddr"
+        if default_key not in actual:
+            return {**actual, default_key: None}
+        return actual
+    if key != "net.ipv4.conf.*.rp_filter":
         return actual
     all_key = "net.ipv4.conf.all.rp_filter"
     default_key = "net.ipv4.conf.default.rp_filter"

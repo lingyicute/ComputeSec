@@ -63,3 +63,14 @@ def test_native_denied_skipped_iface_does_not_taint_live_source(monkeypatch):
     item = checks.get_sysctl_report().all_items[0]
     assert item.status == "ok"
     assert item.source == "proc"
+
+
+def test_missing_default_use_tempaddr_cannot_pass(monkeypatch):
+    entries = [e for _, group in data.SYSCTL_GROUPS for e in group
+               if e["key"].endswith(".use_tempaddr")]
+    monkeypatch.setattr(data, "SYSCTL_GROUPS", [("privacy", entries)])
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(hostdata, "CURRENT", hostdata.HostData({"steps": {
+        "sysctl": {"data": {"values": {"net.ipv6.conf.eth0.use_tempaddr": "2"}}}}}))
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.status == "unknown"

@@ -272,7 +272,7 @@ def build_dashboard(report, win, navigate):
         grade = "安全状况良好，请继续保持！" if overall >= 90 else ("还有一些可以改进的地方" if overall >= 70 else "存在多项需要处理的风险")
     head.append(wrapped_label(grade, css=("title-4",)))
     head.get_last_child().set_halign(Gtk.Align.CENTER)
-    parts = [report.os_name, f"内核 {report.kernel}", report.arch]
+    parts = [x for x in (report.os_name, f"内核 {report.kernel}" if report.kernel else "", report.arch) if x]
     if report.cpu and report.cpu != report.arch:
         parts.append(report.cpu)
     sub = wrapped_label(" · ".join(parts), css=("dim-label", "caption"))
@@ -668,7 +668,7 @@ def build_kernel(report, win):
             g_src.set_header_suffix(_collect_button(win, "重新采集" if s.user_supplied else "采集系统数据"))
 
     # ---- cmdline ----
-    g1 = group("内核当前启动参数和加固状态", f"架构: {c.arch} · CPU 制造商: {cpu_zh}\n{data.KERNEL_MACHINE_SPECIFIC_NOTE}")
+    g1 = group("内核当前启动参数和加固状态", f"架构: {c.arch or '未知'} · CPU 制造商: {cpu_zh}\n{data.KERNEL_MACHINE_SPECIFIC_NOTE}")
     g1.set_header_suffix(score_label(c.score))
     g1.add(code_block(c.cmdline or "（无法读取）"))
     # 排序权重用 .get 兜底：将来给 ParamItem 加第五种状态时，这里不该变成一个
@@ -809,7 +809,8 @@ def build_hardware(report, win):
         sysinfo = group("宿主机系统信息", "通过 D-Bus 接口 org.freedesktop.hostname1 读取，因此在 Flatpak 内也是您真实的系统信息，"
                                           "而不是 runtime（org.gnome.Platform）的字段。")
         has_sysinfo = False
-        for label, val in (("操作系统", ident.pretty_name), ("CPE 名称", ident.cpe_name),
+        os_val = ident.pretty_name or ident.os_release.get("PRETTY_NAME") or ident.os_release.get("NAME")
+        for label, val in (("操作系统", os_val), ("CPE 名称", ident.cpe_name),
                            ("内核", " ".join(x for x in (ident.kernel_name, ident.kernel_release) if x)),
                            ("机箱类型", ident.chassis), ("主机名", ident.static_hostname or ident.hostname),
                            ("数据来源", ident.source)):

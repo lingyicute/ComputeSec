@@ -222,10 +222,12 @@ class KernelSupport:
     def age_text(self, now=None):
         """版本号是多久以前拿到的；没有时间戳或数值非法时返回空串。"""
         ts = self.checked_at
-        if isinstance(ts, bool) or not isinstance(ts, (int, float)) or not math.isfinite(ts) or ts < 1:
+        if (isinstance(ts, bool) or not isinstance(ts, (int, float))
+                or (isinstance(ts, float) and not math.isfinite(ts)) or ts < 1):
             return ""
         if isinstance(now, bool) or (now is not None and (
-                not isinstance(now, (int, float)) or not math.isfinite(now))):
+                not isinstance(now, (int, float))
+                or (isinstance(now, float) and not math.isfinite(now)))):
             return ""
         try:
             diff = (time.time() if now is None else now) - ts

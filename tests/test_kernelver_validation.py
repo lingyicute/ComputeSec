@@ -73,3 +73,16 @@ def test_from_dict_recomputes_tier_instead_of_trusting_cached_label():
     assert st_no_stable is not None
     assert st_no_stable.tier == "unknown"
     assert not st_no_stable.known
+
+
+def test_age_text_handles_huge_integer_timestamps():
+    huge = 10 ** 400
+    st = kv.KernelSupport.from_dict({
+        "release": "6.18.1",
+        "mainline": "6.18.1",
+        "checked_at": huge,
+    })
+    assert st is not None
+    assert st.age_text() == ""
+    assert st.age_text(now=1000) == ""
+    assert st.age_text(now=huge + 10) == "刚刚"

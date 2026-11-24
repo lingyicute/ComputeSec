@@ -72,14 +72,19 @@ def css_content_values(html):
     return values
 
 
+_JS_TOKEN_RE = re.compile(
+    r"""//[^\r\n]*|/\*[\s\S]*?\*/|'(?:\\.|[^'\\\r\n])*'|"(?:\\.|[^"\\\r\n])*"|`(?:\\.|[^`\\])*`"""
+)
+
+
 def script_ui_chars(html):
     """提取 <script> 中动态写入界面的非 ASCII 文案（如 toast('复制失败…')、色板名）。"""
     chars = set()
     for script in re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.S | re.I):
-        code = re.sub(r"/\*.*?\*/", "", script, flags=re.S)
-        code = re.sub(r"(?m)//.*$", "", code)
-        for lit in re.findall(r"['\"]([^'\"\r\n]*[^\x00-\x7f][^'\"\r\n]*)['\"]", code):
-            chars.update(lit)
+        for m in _JS_TOKEN_RE.finditer(script):
+            tok = m.group(0)
+            if tok[0] in ("'", '"', "`") and any(ord(ch) > 127 for ch in tok):
+                chars.update(tok[1:-1])
     return chars
 
 
@@ -211,7 +216,7 @@ def main(argv=None):
             for path in OUTPUTS.values()
         ):
             print("Visible charset unchanged; WOFF2 subset is current.")
-            return
+            return 0
 
     if local_font:
         blob = Path(local_font).read_bytes()
@@ -243,6 +248,7 @@ def main(argv=None):
         "outputs": {p.name: digest(p) for p in OUTPUTS.values()},
     }, indent=2) + "\n", encoding="utf-8")
     print("Updated external subset; no font data embedded in render-blocking CSS.")
+    return 0
 
 
 if __name__ == "__main__":

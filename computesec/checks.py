@@ -967,6 +967,16 @@ def get_sysctl_report() -> SysctlReport:
             actual, raw_unreadable = _sysctl_from_proc(key)
             denied_keys = set(raw_unreadable) if isinstance(raw_unreadable, (set, frozenset, list, tuple)) else None
             unreadable = bool(raw_unreadable)
+            skip_ifaces = set(e.get("skip_ifaces") or ())
+            if skip_ifaces:
+                # Some per-interface settings have no effective conf/all value.
+                actual = {k: v for k, v in actual.items()
+                          if k.split(".")[-2] not in skip_ifaces}
+                if denied_keys is not None:
+                    denied_keys = {k for k in denied_keys if k.split(".")[-2] not in skip_ifaces}
+                    unreadable = bool(denied_keys)
+                else:
+                    unreadable = unreadable and any(v is None for v in actual.values())
             source = "proc"
             snapshot_gap = ""
             net_isolated = sandbox_netns and key.startswith("net.")
@@ -974,6 +984,9 @@ def get_sysctl_report() -> SysctlReport:
             # 条目，也能补上被 Flatpak 沙箱屏蔽或隔离的条目。但它在本机的地位取决于
             # 环境，两种环境必须分开处理。
             supplied = hd.sysctl_lookup(key) if user_values else {}
+            if skip_ifaces and supplied:
+                supplied = {k: v for k, v in supplied.items()
+                            if k.split(".")[-2] not in skip_ifaces}
             if supplied and IN_FLATPAK:
                 # 沙箱里的 /proc/sys 可能属于隔离视图（被屏蔽、被改写、或另一个
                 # netns），不能混入宿主机快照，只能整块以快照为准。
@@ -1028,12 +1041,6 @@ def get_sysctl_report() -> SysctlReport:
                 # 这种情况落到下面的 unknown，界面才会给出「可能没有加 sudo」的提示。
                 actual, source, snapshot_gap = {}, "快照缺失", "快照缺失"
                 unreadable = False
-            if e.get("skip_ifaces"):
-                # Some per-interface settings have no effective conf/all value.
-                actual = {k: v for k, v in actual.items()
-                          if k.split(".")[-2] not in e["skip_ifaces"]}
-                if denied_keys is not None:
-                    unreadable = unreadable and bool(denied_keys.intersection(actual))
             compared = _sysctl_effective_values(key, actual)
             if snapshot_gap:
                 status = "unverified"

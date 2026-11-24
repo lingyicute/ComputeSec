@@ -30,3 +30,36 @@ def test_irrelevant_all_and_loopback_values_do_not_fail_privacy(monkeypatch):
     assert item.status == "ok"
     assert "net.ipv6.conf.all.use_tempaddr" not in item.actual
     assert "net.ipv6.conf.lo.use_tempaddr" not in item.actual
+
+
+def test_flatpak_snapshot_with_only_skipped_ifaces_is_unverified(monkeypatch):
+    entries = [e for _, group in data.SYSCTL_GROUPS for e in group
+               if e["key"].endswith(".use_tempaddr")]
+    monkeypatch.setattr(data, "SYSCTL_GROUPS", [("privacy", entries)])
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(checks, "_flatpak_shares_network", lambda: True)
+    values = {"net.ipv6.conf.all.use_tempaddr": "2", "net.ipv6.conf.lo.use_tempaddr": "-1"}
+    monkeypatch.setattr(hostdata, "CURRENT", hostdata.HostData({"steps": {
+        "sysctl": {"data": {"values": values}}}}))
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.status == "unverified"
+    assert item.source == "快照缺失"
+
+
+def test_native_denied_skipped_iface_does_not_taint_live_source(monkeypatch):
+    entries = [e for _, group in data.SYSCTL_GROUPS for e in group
+               if e["key"].endswith(".use_tempaddr")]
+    monkeypatch.setattr(data, "SYSCTL_GROUPS", [("privacy", entries)])
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    proc_vals = {
+        "net.ipv6.conf.all.use_tempaddr": None,
+        "net.ipv6.conf.default.use_tempaddr": "2",
+        "net.ipv6.conf.eth0.use_tempaddr": "2",
+    }
+    monkeypatch.setattr(checks, "_sysctl_from_proc",
+                        lambda _: (proc_vals, {"net.ipv6.conf.all.use_tempaddr"}))
+    monkeypatch.setattr(hostdata, "CURRENT", hostdata.HostData({"steps": {
+        "sysctl": {"data": {"values": {"net.ipv6.conf.all.use_tempaddr": "2"}}}}}))
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.status == "ok"
+    assert item.source == "proc"

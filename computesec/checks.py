@@ -712,6 +712,21 @@ def get_cmdline_report() -> CmdlineReport:
             if "loglevel" in present:
                 present["loglevel"] = nk
             continue
+        # kernel/printk/printk.c：early_param("ignore_loglevel") 无条件置真；
+        # printk.ignore_loglevel 作为 module_param(bool) 在第二阶段覆盖。
+        if nk == "ignore_loglevel":
+            forced_off.setdefault("_early_ignore_loglevel", "ignore_loglevel")
+            continue
+        if nk == "printk.ignore_loglevel":
+            if v is None:
+                forced_off["_param_ignore_loglevel"] = "printk.ignore_loglevel"
+            else:
+                b = _kstrtobool(v)
+                if b == "1":
+                    forced_off["_param_ignore_loglevel"] = f"printk.ignore_loglevel={v}"
+                elif b == "0":
+                    forced_off["_param_ignore_loglevel"] = ""
+            continue
         # lib/vsprintf.c no_hash_pointers_enable()：early_param 仅比较参数名，
         # 处理函数忽略参数值并一律调用 hash_pointers_mode_parse("never")。
         if nk == "no_hash_pointers":
@@ -754,6 +769,11 @@ def get_cmdline_report() -> CmdlineReport:
                     and nk != "hash_pointers"):
                 continue
             present[nk] = None
+    early_ign = forced_off.pop("_early_ignore_loglevel", None)
+    param_ign = forced_off.pop("_param_ignore_loglevel", None)
+    eff_ign = early_ign if param_ign is None else (param_ign or None)
+    if eff_ign and "loglevel" in present:
+        present["loglevel"] = eff_ign
     if effective_mitigations == "off":
         for target in _MITIGATIONS_OFF_TARGETS:
             if target in present:

@@ -208,10 +208,10 @@ HSI_ATTRS = {
         name="AMD SMM 已锁定", kind="oem",
         meaning="系统管理模式应被锁定。", risk="SMM 可被恶意代码利用。", fix="需 OEM 固件更新。"),
     "org.fwupd.hsi.SupportedCpu": dict(
-        name="CPU 仍受支持", kind="oem",
-        meaning="CPU 应仍在厂商的支持周期内，可获得微码更新。",
-        risk="新发现的侧信道漏洞（Spectre 家族等）将不再获得微码修补。",
-        fix="无法软件修复，考虑更换较新的硬件。"),
+        name="CPU 平台检测支持", kind="oem",
+        meaning="fwupd 是否实现了当前 CPU 平台的 HSI 检测；此项不判断厂商的微码支持期限。",
+        risk="检测覆盖不足时，fwupd 无法完整验证平台固件安全，不能把缺少检测项当成安全。",
+        fix="更新 fwupd 与内核，并确认平台所需驱动（如 AMD 的 ccp）已加载。仍无检测数据时联系平台厂商补充 HSI 支持；此结果不表示 CPU 已停止微码更新。"),
     "org.fwupd.hsi.IntelGds": dict(
         name="Intel GDS (Downfall) 微码缓解", kind="os",
         meaning="CPU 微码应提供 Gather Data Sampling（CVE-2022-40982，Downfall）漏洞的缓解。",

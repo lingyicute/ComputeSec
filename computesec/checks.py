@@ -213,7 +213,9 @@ def _flags_to_set(v):
             if v & bit:
                 s.add(name)
     elif isinstance(v, (list, tuple)):
-        s.update(str(x) for x in v)
+        for item in v:
+            if isinstance(item, str):
+                s.update(x.strip() for x in item.split("|") if x.strip())
     elif isinstance(v, str):
         s.update(x.strip() for x in v.split("|") if x.strip())
     return s
@@ -224,7 +226,9 @@ def _result_to_str(v):
         return "unknown"
     if isinstance(v, int):
         return data.HSI_RESULT_ENUM.get(v, "unknown")
-    return str(v or "unknown")
+    if isinstance(v, str):
+        return v.strip() or "unknown"
+    return "unknown"
 
 
 # 尾段过于通用的属性名，单靠最后一段模糊匹配会跨类别误中（例如把任意 *.Enabled 误判为 IntelBootguard.Enabled）
@@ -861,12 +865,12 @@ def _sysctl_value_ok(actual, expected, cmp):
 
 
 def _sysctl_from_proc(key):
-    """从 /proc/sys 读取。返回 (actual, unreadable)。
+    """从 /proc/sys 读取。返回 (actual, denied_keys)。
 
-    unreadable=True 表示文件存在但因权限（EACCES/EPERM）读不到，
+    denied_keys 为因权限（EACCES/EPERM）读不到的键集合（布尔上下文中非空即真），
     典型例子是 vm.mmap_rnd_bits / vm.mmap_rnd_compat_bits（0600 root:root）。
     """
-    actual, unreadable = {}, False
+    actual, denied = {}, set()
     for p in _sysctl_paths(key):
         # 与 procps sysctl 保持一致：目录名自带的 '.' 转为 '/'（如 VLAN 接口 eth0.100 -> eth0/100）
         rel = p[len("/proc/sys/"):]
@@ -876,10 +880,10 @@ def _sysctl_from_proc(key):
                 actual[k] = f.read().strip()
         except PermissionError:
             actual[k] = None
-            unreadable = True
+            denied.add(k)
         except (OSError, UnicodeDecodeError):
             actual[k] = None
-    return actual, unreadable
+    return actual, denied
 
 
 def get_sysctl_report() -> SysctlReport:
@@ -896,7 +900,9 @@ def get_sysctl_report() -> SysctlReport:
         for e in entries:
             key = e["key"]
             cmp = e.get("cmp", "eq")
-            actual, unreadable = _sysctl_from_proc(key)
+            actual, raw_unreadable = _sysctl_from_proc(key)
+            denied_keys = set(raw_unreadable) if isinstance(raw_unreadable, (set, frozenset, list, tuple)) else None
+            unreadable = bool(raw_unreadable)
             source = "proc"
             snapshot_gap = ""
             net_isolated = sandbox_netns and key.startswith("net.")
@@ -921,7 +927,7 @@ def get_sysctl_report() -> SysctlReport:
                 # 反过来让快照覆盖实时值会错两次：用户加固后（快照是加固前采的）
                 # 被判成未加固；用户把 sysctl 撤销后（快照里还是加固后的值）却被
                 # 判成"已加固"——后者是本程序最不该犯的错。快照的存活期是整次开机
-                # （hostdata.fresh 只比对 boot_id），而本程序自己就在提醒用户
+                # （hostdata.fresh 只比对 boot_id），而本程序本身就在提醒用户
                 # "长时间不重启"，两者叠在一起，快照可能已经过了一整天。
                 # 只在「这一项完全没读到」或「确有文件因权限读不到」时才补。通配符条目
                 # （net.ipv4.conf.*.…）读到了一部分、又没有权限错误时，快照里多出来的
@@ -930,8 +936,11 @@ def get_sysctl_report() -> SysctlReport:
                 if not actual:
                     filled = dict(supplied)
                 elif unreadable and any(v is None for v in actual.values()):
-                    # 仅补 /proc 中确实存在但因权限读不到的键，不把快照里已消失的旧接口带回来。
-                    filled = {k: v for k, v in supplied.items() if k in actual and actual[k] is None}
+                    # 仅补 /proc 中确实存在且因权限读不到的键，不覆盖 EIO 读错，也不把旧接口带回来。
+                    filled = {
+                        k: v for k, v in supplied.items()
+                        if k in actual and actual[k] is None and (denied_keys is None or k in denied_keys)
+                    }
                 elif unreadable:
                     filled = {k: v for k, v in supplied.items() if actual.get(k) is None}
                 else:
@@ -941,7 +950,10 @@ def get_sysctl_report() -> SysctlReport:
                     actual = {**actual, **filled}
                     age = hd.step_age_text("sysctl")
                     source = f"用户提供（{age}）" if age else "用户提供"
-                    unreadable = any(v is None for v in actual.values())
+                    if denied_keys is not None and any(k in denied_keys for k in actual):
+                        unreadable = bool(denied_keys - set(filled))
+                    else:
+                        unreadable = any(v is None for v in actual.values())
             elif IN_FLATPAK and user_values and not (
                     unreadable and not any(v is not None for v in actual.values())):
                 # 沙箱内的 /proc/sys 不是宿主机视图（可能被屏蔽、改写或加了命名空间），
@@ -962,7 +974,7 @@ def get_sysctl_report() -> SysctlReport:
             elif unreadable or any(v is None for v in actual.values()):
                 # 部分接口读不到时，不能凭其余接口的正确值宣称整项已加固；非权限错误（如 EIO）单独标记来源。
                 status = "unknown"
-                if not unreadable and source == "proc":
+                if not unreadable:
                     source = "读取失败"
             else:
                 status = "ok"
@@ -1231,9 +1243,11 @@ def _usb_receiver_kind(d):
         return "bad", "Logitech Bolt 接收器（使用 BLE 安全连接加密，风险较低，但仍建议有线）"
     if vid == "046d" and pid in data.LOGITECH_UNIFYING_PIDS:
         return "bad", _LOGITECH_UNIFYING_DESC
-    # 蓝牙适配器、红外接收器、电视棒、无线耳机接收器等：型号里也常写 dongle / receiver，
+    # 蓝牙适配器、摄像头、红外接收器、电视棒、无线耳机接收器等：型号里也常写 dongle / receiver，
     # 但与 2.4G 键鼠无关，不能让它们触发「已确认」（会把这一项扣到 0 分）。
-    if d.get("cls") in data.USB_NON_INPUT_CLASSES or re.search(data.USB_NON_INPUT_RADIO_RE, text):
+    if (d.get("cls") in data.USB_NON_INPUT_CLASSES
+            or any(w in text for w in ("webcam", "camera", "uvc", "integrated_webcam"))
+            or re.search(data.USB_NON_INPUT_RADIO_RE, text)):
         return None
     inputish = any(k in text for k in data.USB_24G_INPUT_KEYWORDS)
     if not inputish and re.search(data.USB_GAME_CONTROLLER_RE, text):
@@ -1313,14 +1327,15 @@ def _ntfs_from_lsblk_json(j):
                 continue
             ftype = (n.get("fstype") or "").lower()
             if ftype in data.WINDOWS_FS_TYPES:
-                mp = n.get("mountpoint")
+                mp = (n.get("mountpoint") or "").strip()
                 if not mp and isinstance(n.get("mountpoints"), list):
-                    mp = ", ".join(str(x) for x in n["mountpoints"] if x)
-                dev = str(n.get("name") or "")
+                    mp = ", ".join(str(x).strip() for x in n["mountpoints"] if x and str(x).strip())
+                dev = str(n.get("name") or "").strip()
                 dev_path = dev if dev.startswith("/dev/") else f"/dev/{dev}"
                 size = n.get("size")
-                size_txt = "" if size is None else str(size)
-                line = (f"{dev_path}  {size_txt}  标签: {n.get('label') or '-'}"
+                size_txt = "" if size is None else str(size).strip()
+                lbl = (n.get("label") or "").strip()
+                line = (f"{dev_path}  {size_txt}  标签: {lbl or '-'}"
                         f"  挂载: {mp or '-'}")
                 if ftype == data.BITLOCKER_FS_TYPE:
                     # 加密卷看不出里面是 NTFS，界面上要说清楚是被什么加密的。
@@ -1388,6 +1403,11 @@ def _ntfs_partitions():
                 devname = f"/dev/{devname}"
             elif not devname:
                 devname = f
+            links = re.search(r"^E:DEVLINKS=([^\r\n]+)$", content, re.M)
+            dev_aliases = {devname} if devname else set()
+            if links:
+                for lnk in links.group(1).split():
+                    dev_aliases.add(lnk if lnk.startswith("/") else f"/dev/{lnk}")
             if re.fullmatch(fs_pat, fstype, re.I):
                 label = re.search(r"^E:ID_FS_LABEL=([^\r\n]+)$", content, re.M)
                 lbl_txt = label.group(1).strip() if label and label.group(1).strip() else "-"
@@ -1395,10 +1415,10 @@ def _ntfs_partitions():
                 if fstype.lower() == data.BITLOCKER_FS_TYPE:
                     line += "  （BitLocker 加密）"
                 found.append(line)
-                seen_devices.add(devname)
+                seen_devices.update(dev_aliases)
                 source = "udev"
             elif devname:
-                non_win_devices.add(devname)
+                non_win_devices.update(dev_aliases)
         if has_udev_fs and not source:
             source = "udev"
         # udev 数据库可能缺少后挂载设备的记录；即使已有 udev 数据，也必须用挂载表补全。
@@ -1435,7 +1455,7 @@ def _windows_installed():
         if os.path.exists(p) and not any(_same_path(p, s) for s in seen):
             seen.append(p)
             hints.append(f"发现 Windows 引导管理器：{p}")
-    for f in glob.glob("/sys/firmware/efi/efivars/Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]-*"):
+    for f in sorted(glob.glob("/sys/firmware/efi/efivars/Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]-*")):
         if "Windows Boot Manager".encode("utf-16-le") in read_bytes(f):
             hints.append(f"UEFI 启动项中存在 Windows Boot Manager（{os.path.basename(f)[:8]}）")
             break

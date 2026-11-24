@@ -1634,3 +1634,69 @@ def test_hsi_normalize_attrs_skips_missing_id_and_clamps_level_and_no_hash_point
     ))
     by_key = {i.key: i for i in checks.get_cmdline_report().items}
     assert by_key["hash_pointers"].status == "ok"
+
+
+def test_hsi_flags_and_result_strip_whitespace_and_ignore_non_strings():
+    assert checks._flags_to_set([" success ", "", None, 123, "missing-data|obsoleted"]) == {
+        "success", "missing-data", "obsoleted"
+    }
+    assert checks._result_to_str("   ") == "unknown"
+    assert checks._result_to_str(["bad"]) == "unknown"
+    assert checks._result_to_str(" enabled ") == "enabled"
+
+
+def test_sysctl_from_proc_tracks_denied_keys_per_interface(monkeypatch):
+    import io
+
+    key = "net.ipv4.conf.*.accept_redirects"
+    eth0 = "net.ipv4.conf.eth0.accept_redirects"
+    wlan0 = "net.ipv4.conf.wlan0.accept_redirects"
+    paths = ["/proc/sys/" + k.replace(".", "/") for k in (eth0, wlan0)]
+    monkeypatch.setattr(checks, "_sysctl_paths", lambda _k: paths)
+
+    def fake_open(path):
+        if path == paths[0]:
+            raise PermissionError(path)
+        if path == paths[1]:
+            raise OSError(5, "Input/output error")
+        return io.StringIO("0\n")
+
+    monkeypatch.setattr("builtins.open", fake_open)
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {eth0: "0", wlan0: "0"}}}}})
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [("t", [{"key": key, "value": "0", "desc": "d"}])])
+
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.actual[eth0] == "0"
+    assert item.actual[wlan0] is None
+    assert item.status == "unknown"
+    assert item.source == "读取失败"
+
+
+def test_udev_devlinks_dedup_and_usb_camera_exclusion(monkeypatch):
+    assert checks._usb_receiver_kind({
+        "vid": "0c45", "pid": "6366", "manufacturer": "Sonix",
+        "product": "Wireless Camera USB Receiver", "cls": "ef",
+    }) is None
+
+    monkeypatch.setattr(checks.hostdata, "CURRENT", hostdata.HostData())
+    monkeypatch.setattr(checks, "run", lambda *_: (None, ""))
+    monkeypatch.setattr(checks.glob, "glob", lambda _: ["/run/udev/data/b8:1", "/run/udev/data/b8:2"])
+
+    def fake_read(path, default=""):
+        if path == "/run/udev/data/b8:1":
+            return "E:ID_FS_TYPE=exfat\nE:DEVNAME=/dev/sda1\nE:DEVLINKS=/dev/disk/by-uuid/1111\n"
+        if path == "/run/udev/data/b8:2":
+            return "E:ID_FS_TYPE=ntfs\nE:DEVNAME=/dev/sda2\nE:DEVLINKS=/dev/disk/by-uuid/2222\n"
+        if path == "/proc/mounts":
+            return (
+                "/dev/disk/by-uuid/1111 /mnt/exfat fuseblk rw 0 0\n"
+                "/dev/disk/by-uuid/2222 /mnt/win ntfs3 rw 0 0\n"
+            )
+        return default
+
+    monkeypatch.setattr(checks, "read", fake_read)
+    found, _ = checks._ntfs_partitions()
+    assert len(found) == 1
+    assert found[0].startswith("/dev/sda2 ")

@@ -122,6 +122,16 @@ def _share_roots():
             continue
         if root and root not in roots:
             roots.append(root)
+    # pip install --prefix <dir> 会把包放进 <dir>/lib*/python*/(site|dist)-packages，
+    # 而 sys.prefix 仍指向原 Python；回推安装前缀即可找到对应的 share/。
+    pkg_parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if os.path.basename(pkg_parent) in ("site-packages", "dist-packages"):
+        py_dir = os.path.dirname(pkg_parent)
+        lib_dir = os.path.dirname(py_dir)
+        if os.path.basename(lib_dir).startswith("lib"):
+            prefix = os.path.dirname(lib_dir)
+            if prefix and prefix not in roots:
+                roots.append(prefix)
     return roots
 
 

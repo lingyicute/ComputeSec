@@ -476,3 +476,11 @@ def test_default_launcher_bare_name_not_found_and_relative_home_display_dir(monk
     monkeypatch.setenv("HOME", "relative/home")
     monkeypatch.setenv("XDG_DATA_HOME", "/var/tmp/csdata")
     assert xdg.display_dir() == "/var/tmp/csdata/computesec"
+
+
+def test_share_roots_includes_custom_pip_prefix(tmp_path, monkeypatch):
+    fake_cli = tmp_path / "opt" / "lib" / "python3.12" / "site-packages" / "computesec" / "cli.py"
+    fake_cli.parent.mkdir(parents=True)
+    fake_cli.write_text("")
+    monkeypatch.setattr(cli, "__file__", str(fake_cli))
+    assert str(tmp_path / "opt") in cli._share_roots()

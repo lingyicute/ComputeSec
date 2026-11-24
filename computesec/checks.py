@@ -740,8 +740,10 @@ def get_cmdline_report() -> CmdlineReport:
                         iommu_pt_active = True
                     elif opt.startswith("nopt"):
                         iommu_pt_active = False
-            elif nk == "iommu.passthrough" and _kstrtobool(v) is not None:
-                iommu_pt_active = False
+            elif nk == "iommu.passthrough":
+                b = _kstrtobool(v)
+                if b is not None:
+                    iommu_pt_active = b == "1"
             if nk == "efi":
                 efi_tokens.append(v)
                 present[nk] = ",".join(x for x in efi_tokens if x)
@@ -781,6 +783,7 @@ def get_cmdline_report() -> CmdlineReport:
     for target, flag in forced_off.items():
         present[target] = flag
     ar, cv = arch(), cpu_vendor()
+    iommu_cmp_actual = present.get("iommu", MISSING)
     if ar == "x86_64":
         iommu_opts = [o for o in (present.get("iommu") or "").split(",") if o]
         if any(o.startswith("off") for o in iommu_opts):
@@ -790,6 +793,8 @@ def get_cmdline_report() -> CmdlineReport:
         if (iommu_pt_active and "iommu.passthrough" in present
                 and _cmdline_value_ok("iommu.passthrough", present["iommu.passthrough"], "0")):
             present["iommu.passthrough"] = "iommu=pt"
+        if "iommu" in present and present["iommu"] and not iommu_pt_active:
+            iommu_cmp_actual = f"{present['iommu']},nopt"
     running = kernelver.parse_release(platform.release())
     items = []
     for p in data.KERNEL_PARAMS:
@@ -806,11 +811,16 @@ def get_cmdline_report() -> CmdlineReport:
                 exp = legacy
         nk = _norm_key(p["key"])
         actual = present.get(nk, MISSING)
+        cmp_val = (
+            efi_tokens if nk == "efi" and efi_tokens
+            else iommu_cmp_actual if nk == "iommu" and ar == "x86_64"
+            else actual
+        )
         if p.get("cpu") and p["cpu"] != cv and (cv is not None or actual is MISSING):
             status = "na"
         elif actual is MISSING:
             status = "missing"
-        elif _cmdline_value_ok(p["key"], efi_tokens if nk == "efi" and efi_tokens else actual, exp):
+        elif _cmdline_value_ok(p["key"], cmp_val, exp):
             status = "ok"
         else:
             status = "wrong"

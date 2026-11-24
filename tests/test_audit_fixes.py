@@ -61,3 +61,18 @@ def test_ignore_loglevel_bypasses_loglevel_zero(monkeypatch, cmdline, want):
     monkeypatch.setattr(checks, "read", lambda p, d="": cmdline if p == "/proc/cmdline" else d)
     item = {i.key: i for i in checks.get_cmdline_report().items}["loglevel"]
     assert item.status == want
+
+
+@pytest.mark.parametrize("cmdline,iommu_want,pt_want", [
+    ("iommu=force,pt iommu.passthrough=0", "ok", "ok"),
+    ("iommu=force,pt iommu.passthrough=1", "wrong", "wrong"),
+    ("iommu=pt iommu.passthrough=0", "wrong", "ok"),
+    ("iommu=off,force,pt iommu.passthrough=0", "wrong", "ok"),
+])
+def test_x86_later_passthrough_zero_reconciles_iommu_force(monkeypatch, cmdline, iommu_want, pt_want):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, d="": cmdline if p == "/proc/cmdline" else d)
+    by_key = {i.key: i for i in checks.get_cmdline_report().items}
+    assert by_key["iommu"].status == iommu_want
+    assert by_key["iommu.passthrough"].status == pt_want

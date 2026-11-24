@@ -480,6 +480,15 @@ _CMDLINE_FORCE_DISABLE = {
     "nospectre_v2": "spectre_v2",
     "nospec_store_bypass_disable": "spec_store_bypass_disable",
 }
+# arch/x86/mm/pti.c 与 arch/x86/kernel/cpu/bugs.c：cpu_mitigations_off() 会无条件
+# 禁用下列 x86 缓解，即便命令行上同时写有 pti=on / spectre_v2=on 等单项参数。
+_MITIGATIONS_OFF_TARGETS = (
+    "pti",
+    "spectre_v2",
+    "spec_store_bypass_disable",
+    "l1tf",
+    "gather_data_sampling",
+)
 
 
 def _iter_cmdline_tokens(cmdline):
@@ -726,6 +735,10 @@ def get_cmdline_report() -> CmdlineReport:
                     and nk != "hash_pointers"):
                 continue
             present[nk] = None
+    if present.get("mitigations") == "off":
+        for target in _MITIGATIONS_OFF_TARGETS:
+            if target in present:
+                present[target] = "mitigations=off"
     for target, flag in forced_off.items():
         present[target] = flag
     ar, cv = arch(), cpu_vendor()

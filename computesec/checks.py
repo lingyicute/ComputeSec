@@ -701,8 +701,9 @@ def get_cmdline_report() -> CmdlineReport:
         if v is None and nk in _CMDLINE_FORCE_DISABLE:
             forced_off[_CMDLINE_FORCE_DISABLE[nk]] = nk
             continue
-        # mm/slab_common.c：slab_merge / slub_merge 按顺序重新允许合并，覆盖先前的 slab_nomerge。
-        if v is None and nk in ("slab_merge", "slub_merge"):
+        # mm/slab_common.c：slab_merge / slub_merge 经 obsolete_checksetup() 前缀匹配，
+        # setup_slab_merge() 忽略参数值并重新允许合并，覆盖先前的 slab_nomerge。
+        if nk in ("slab_merge", "slub_merge"):
             present.pop("slab_nomerge", None)
             continue
         # lib/vsprintf.c no_hash_pointers_enable()：early_param 仅比较参数名，

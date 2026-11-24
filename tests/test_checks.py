@@ -1755,7 +1755,7 @@ def test_cmdline_force_disable_flags_override_enabled_params(monkeypatch, cmdlin
     ("slab_nomerge slab_merge", "missing"),
     ("slub_nomerge slub_merge", "missing"),
     ("slab_merge slab_nomerge", "ok"),
-    ("slab_nomerge slab_merge=0", "ok"),
+    ("slab_nomerge slab_merge=0", "missing"),
 ])
 def test_cmdline_slab_merge_overrides_earlier_nomerge(monkeypatch, cmdline, want):
     monkeypatch.setattr(checks, "arch", lambda: "x86_64")

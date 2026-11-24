@@ -57,7 +57,7 @@ def run(cmd, timeout=40):
     if IN_FLATPAK:
         return None, ""
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout)
         return p.returncode, p.stdout
     except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError, OSError):
         return None, ""

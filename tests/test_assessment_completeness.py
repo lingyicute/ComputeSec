@@ -42,3 +42,9 @@ def test_missing_support_data_and_unknown_vendor_are_partial():
         release="6.18", mainline="6.18", stale=True)).incomplete
     assert replace(report, hsi=checks.HsiReport(ok=False)).incomplete
     assert replace(report, hardware=replace(report.hardware, matched_on="")).incomplete
+
+
+def test_virtual_machine_assessment_is_partial():
+    report = complete_report()
+    vm_hw = replace(report.hardware, vendor=data.VM_VENDOR, matched_on="机箱类型: vm")
+    assert replace(report, hardware=vm_hw).incomplete

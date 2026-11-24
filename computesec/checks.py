@@ -1612,7 +1612,7 @@ class Report:
         return (self.hsi.score is None or bool(self.hsi.undetermined)
                 or self.cmdline.score is None or self.sysctl.score is None
                 or bool(self.sysctl.unknown or self.sysctl.unverified)
-                or not self.hardware.matched_on or self.habits.score is None
+                or not self.hardware.matched_on or bool(self.hardware.vendor.get("virtual")) or self.habits.score is None
                 or any(c.status == "unknown" for c in self.habits.checks)
                 or ks is None or not ks.known or ks.stale or not ks.supported)
 

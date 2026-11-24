@@ -138,15 +138,29 @@ def classify(release, mainline, stable):
     return "older"
 
 
+def _coerce_now(now):
+    if isinstance(now, bool) or not isinstance(now, (int, float)):
+        return None
+    try:
+        val = int(now)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return val if val > 0 else None
+
+
 class KernelSupport:
     """本机内核的版本线信息。"""
 
     def __init__(self, release="", mainline="", stable="", tier="unknown", checked_at=0,
                  error="", stale=False):
-        self.release = release or ""
-        self.mainline = mainline or ""
-        self.stable = stable or ""
-        self.tier = tier
+        self.release = release if isinstance(release, str) else ""
+        self.mainline = mainline if isinstance(mainline, str) else ""
+        self.stable = stable if isinstance(stable, str) else ""
+        if self.have_upstream and self.parsed:
+            self.tier = tier if tier in ("mainline", "stable", "older") else classify(
+                self.release, self.mainline, self.stable)
+        else:
+            self.tier = "unknown"
         self.checked_at = checked_at
         self.error = error
         # 版本号来自过期缓存、且本次没能连上 kernel.org。此时结论可能已经过时，
@@ -176,7 +190,7 @@ class KernelSupport:
     @property
     def known(self):
         """能否下结论：既要拿到上游版本号，也要能解析本机内核。"""
-        return self.have_upstream and self.parsed
+        return self.have_upstream and self.parsed and self.tier in ("mainline", "stable", "older")
 
     @property
     def supported(self):
@@ -234,7 +248,7 @@ class KernelSupport:
         if isinstance(raw_ts, bool) or not isinstance(raw_ts, (int, float)):
             return None
         try:
-            if raw_ts < 0:
+            if raw_ts < 0 or 0 < raw_ts < 1:
                 return None
             checked_at = int(raw_ts)
         except (ValueError, OverflowError):     # int(NaN/Infinity) 抛 ValueError/OverflowError
@@ -337,7 +351,8 @@ def load_cache(path=None, now=None):
     if st is None or not st.have_upstream:
         return None
     if now is not None:
-        if st.checked_at <= 0 or not 0 <= now - st.checked_at <= CACHE_TTL:
+        cur = _coerce_now(now)
+        if cur is None or st.checked_at <= 0 or not 0 <= cur - st.checked_at <= CACHE_TTL:
             return None
     return st
 
@@ -363,7 +378,8 @@ def get_status(release=None, now=None, fetcher=None, cache_path=None, force=Fals
     写缓存，失败后照常回退缓存——否则 24 小时内手动重查根本不会发出请求。
     """
     release = platform.release() if release is None else release
-    now = int(time.time()) if now is None else int(now)
+    cur_now = _coerce_now(now)
+    now = int(time.time()) if cur_now is None else cur_now
 
     prev = load_cache(cache_path, None)
     expired = prev is None or prev.checked_at <= 0 or not 0 <= now - prev.checked_at <= CACHE_TTL

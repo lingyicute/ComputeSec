@@ -586,7 +586,16 @@ def test_future_checked_at_age_text_is_empty():
     assert st.age_text(now=1000) == ""
 
 
-def test_negative_float_timestamp_and_subsecond_or_bool_now_rejected():
+def test_negative_float_timestamp_and_subsecond_or_bool_now_rejected(tmp_path):
     assert kv.KernelSupport.from_dict({"mainline": "7.3", "stable": "7.2.1", "checked_at": -0.5}) is None
+    assert kv.KernelSupport.from_dict({"mainline": "7.3", "stable": "7.2.1", "checked_at": 0.5}) is None
     assert kv.KernelSupport(checked_at=0.5).age_text(now=1000) == ""
     assert kv.KernelSupport(checked_at=1000).age_text(now=True) == ""
+    assert kv.KernelSupport("7.2.12", "7.3", "7.2.12").tier == "stable"
+    assert kv.KernelSupport("", "7.3", "7.2.12", "stable").supported is False
+    cache = tmp_path / "kv_now.json"
+    kv.save_cache(kv.KernelSupport("7.2.12", "7.3", "7.2.12", "stable", checked_at=1), str(cache))
+    assert kv.load_cache(str(cache), now=True) is None
+    assert kv.load_cache(str(cache), now="bad") is None
+    st = kv.get_status("7.2.12", now=float("nan"), fetcher=_fetcher_returning(RELEASES_JSON), cache_path=str(cache))
+    assert st.known and st.supported

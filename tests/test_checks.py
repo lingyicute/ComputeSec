@@ -1744,3 +1744,17 @@ def test_cmdline_force_disable_flags_override_enabled_params(monkeypatch, cmdlin
     item = next(i for i in checks.get_cmdline_report().items if i.key == key)
     assert item.status == "wrong"
     assert item.actual == flag
+
+
+@pytest.mark.parametrize("cmdline,want", [
+    ("slab_nomerge slab_merge", "missing"),
+    ("slub_nomerge slub_merge", "missing"),
+    ("slab_merge slab_nomerge", "ok"),
+    ("slab_nomerge slab_merge=0", "ok"),
+])
+def test_cmdline_slab_merge_overrides_earlier_nomerge(monkeypatch, cmdline, want):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, d="": cmdline if p == "/proc/cmdline" else d)
+    item = next(i for i in checks.get_cmdline_report().items if i.key == "slab_nomerge")
+    assert item.status == want

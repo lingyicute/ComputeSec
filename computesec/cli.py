@@ -80,7 +80,10 @@ def _default_launcher():
             if os.path.isfile(cand):
                 return [cand]
         return [argv0]
-    return [os.path.abspath(argv0)]
+    resolved = os.path.abspath(argv0)
+    if sys.executable and os.path.realpath(resolved) == os.path.realpath(__file__):
+        return [sys.executable, "-m", "computesec.cli"]
+    return [resolved]
 
 
 def _quote_desktop_arg(arg):

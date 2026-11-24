@@ -161,3 +161,13 @@ def test_mounts_parser_preserves_unicode_spaces_and_decodes_utf8_octal_bytes(mon
     monkeypatch.setattr(checks, "read", lambda p, d="": mounts if p == "/proc/mounts" else d)
     found, _ = checks._ntfs_partitions()
     assert len(found) == 1 and "新加卷　D" in found[0]
+
+
+def test_cli_default_launcher_supports_python_dash_m_invocation(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(cli.shutil, "which", lambda name: None)
+    monkeypatch.setattr(cli.sys, "argv", [cli.__file__, "--install"])
+    monkeypatch.setattr(cli.sys, "executable", "/usr/bin/python3")
+    assert cli.install_desktop() is True
+    desktop = (tmp_path / "xdg" / "applications" / f"{cli.APP_ID}.desktop").read_text(encoding="utf-8")
+    assert "Exec=/usr/bin/python3 -m computesec.cli" in desktop

@@ -133,7 +133,9 @@ def classify(release, mainline, stable):
     cur_mm = cur[:2]
     if ml is not None and cur_mm >= ml[:2]:
         return "mainline"
-    if st is not None and cur_mm >= st[:2]:
+    if st is None:
+        return "unknown"
+    if cur_mm >= st[:2]:
         return "stable"
     return "older"
 
@@ -421,6 +423,8 @@ def fetch_failed_text(st):
         if st.release:
             return f"无法解析本机内核版本串「{st.release}」，因此无法判断它属于哪条版本线。"
         return "未能读取本机内核版本号，因此无法判断它属于哪条版本线。"
+    if st.have_upstream and st.parsed and not st.stable:
+        return "未能从 kernel.org 取得 stable 版本号，因此无法判断当前内核是否属于受支持分支。"
     return ("无法从 kernel.org 取得 mainline / stable 版本号"
             "（离线、代理拦截，或 Flatpak 的 network 权限已被收回）。")
 
@@ -433,6 +437,10 @@ def recheck_result_text(st):
         prefix = "未能连上 kernel.org，且" if st.error else "已取得上游版本号，但"
         target = f"无法解析本机内核「{st.release}」" if st.release else "未能读取本机内核版本号"
         return f"{prefix}{target}，版本线仍未核对"
+    if not st.known:
+        if st.error:
+            return "未能连上 kernel.org，且缓存缺少 stable 版本号，版本线仍未核对"
+        return "未能从 kernel.org 取得 stable 版本号，版本线仍未核对"
     if st.error:
         return f"未能连上 kernel.org，继续沿用 {st.age_text() or '较早'}取得的版本号"
     return f"已重新核对内核版本线：{st.tier_text}"

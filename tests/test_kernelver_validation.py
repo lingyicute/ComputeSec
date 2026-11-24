@@ -39,7 +39,7 @@ def test_unusable_cache_does_not_suppress_fetch(tmp_path):
         calls.append(1)
         return json.dumps({"releases": [{"moniker": "mainline", "version": "7.3"}]})
 
-    status = kv.get_status("7.2", now=1001, fetcher=fetch, cache_path=str(cache))
+    status = kv.get_status("7.3", now=1001, fetcher=fetch, cache_path=str(cache))
     assert calls == [1]
     assert status.known
     assert status.mainline == "7.3"

@@ -123,6 +123,13 @@ def test_classify_without_upstream_data():
     # 只拿到 stable 也能判断
     assert kv.classify("6.1.158", "", "7.2.12") == "older"
     assert kv.classify("7.2.12", "", "7.2.12") == "stable"
+    # 只拿到 mainline 而缺少 stable 时，低于 mainline 的内核无法区分 stable 与 older
+    assert kv.classify("7.3.0", "7.3", "") == "mainline"
+    assert kv.classify("7.2.12", "7.3", "") == "unknown"
+    st = kv.KernelSupport(release="7.2.12", mainline="7.3", stable="")
+    assert not st.known and st.tier == "unknown"
+    assert "stable" in kv.fetch_failed_text(st)
+    assert "stable" in kv.recheck_result_text(st)
 
 
 # ---------------------------------------------------------------------------

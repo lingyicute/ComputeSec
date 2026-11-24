@@ -902,6 +902,30 @@ def _sysctl_from_proc(key):
     return actual, denied
 
 
+def _sysctl_effective_values(key, actual):
+    """Preserve raw readings for display, but compare effective rp_filter modes."""
+    if key != "net.ipv4.conf.*.rp_filter" or not actual:
+        return actual
+    all_key = "net.ipv4.conf.all.rp_filter"
+    effective = {}
+    try:
+        global_mode = int(actual.get(all_key))
+    except (TypeError, ValueError):
+        global_mode = None
+    # all=0 can still be strict if every current/default interface is strict.
+    effective[all_key] = "1" if global_mode == 0 else actual.get(all_key)
+    for k, value in actual.items():
+        if k == all_key:
+            continue
+        try:
+            mode = int(value)
+            effective[k] = ("2" if mode == 2 else
+                            str(max(mode, global_mode)) if global_mode is not None else None)
+        except (TypeError, ValueError):
+            effective[k] = None
+    return effective
+
+
 def get_sysctl_report() -> SysctlReport:
     hd = hostdata.CURRENT
     user_values = hd.sysctl_values
@@ -986,14 +1010,15 @@ def get_sysctl_report() -> SysctlReport:
                           if k.split(".")[-2] not in e["skip_ifaces"]}
                 if denied_keys is not None:
                     unreadable = unreadable and bool(denied_keys.intersection(actual))
+            compared = _sysctl_effective_values(key, actual)
             if snapshot_gap:
                 status = "unverified"
             elif not actual:
                 status = "unknown" if unreadable else "na"
             elif any(v is not None and not _sysctl_value_ok(v, e["value"], cmp)
-                     for v in actual.values()):
+                     for v in compared.values()):
                 status = "missing"
-            elif unreadable or any(v is None for v in actual.values()):
+            elif unreadable or any(v is None for v in compared.values()):
                 # 部分接口读不到时，不能凭其余接口的正确值宣称整项已加固；非权限错误（如 EIO）单独标记来源。
                 status = "unknown"
                 if not unreadable:

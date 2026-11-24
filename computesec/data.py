@@ -361,7 +361,8 @@ SYSCTL_GROUPS = [
         dict(key="net.ipv4.conf.*.arp_ignore", value="2", desc="仅回应目标 IP 与来源同网段的 ARP 请求。"),
         dict(key="net.ipv4.conf.all.drop_gratuitous_arp", value="1", desc="丢弃免费 ARP，防 ARP 欺骗。"),
         dict(key="net.ipv4.conf.*.accept_source_route", value="0", desc="拒绝源路由报文。"),
-        dict(key="net.ipv6.conf.*.accept_source_route", value="0", desc="IPv6 同上。"),
+        # ip-sysctl.rst: IPv6 accepts type-2 routing headers at zero.
+        dict(key="net.ipv6.conf.*.accept_source_route", value="-1", desc="拒绝所有 IPv6 路由扩展首部（0 仍允许 type 2）。"),
         dict(key="net.ipv6.conf.all.use_tempaddr", value="2", cmp="ge", desc="优先使用 IPv6 临时隐私地址。"),
         dict(key="net.ipv6.conf.default.use_tempaddr", value="2", cmp="ge", desc="新接口默认使用临时隐私地址。"),
         dict(key="net.ipv4.conf.all.log_martians", value="1", desc="记录来源可疑的数据包。"),

@@ -1333,20 +1333,24 @@ def check_uptime() -> HabitCheck:
                       ["您近期重启过系统，内核与固件更新能够及时生效。"], "请继续保持勤更新、勤重启的好习惯！")
 
 
+def _clean_sysfs(text):
+    return text.replace("\x00", "").strip()
+
+
 def _usb_devices():
     devs = []
     for d in sorted(glob.glob("/sys/bus/usb/devices/*")):
-        vid = read(os.path.join(d, "idVendor")).strip()
+        vid = _clean_sysfs(read(os.path.join(d, "idVendor")))
         if not vid:
             continue
-        pid = read(os.path.join(d, "idProduct")).strip().lower()
-        product = read(os.path.join(d, "product")).strip()
-        manufacturer = read(os.path.join(d, "manufacturer")).strip()
+        pid = _clean_sysfs(read(os.path.join(d, "idProduct"))).lower()
+        product = _clean_sysfs(read(os.path.join(d, "product")))
+        manufacturer = _clean_sysfs(read(os.path.join(d, "manufacturer")))
         # 若 sysfs 字符串为空，从 udev 数据库补全 hwdb 名称：
         # USB 设备带有字符设备号（189:<minor>），udev 数据库文件名是 c<major>:<minor>，
         # 而非 +usb:<sysname>（后者仅用于无设备号的接口）；保留 +usb: 作为兜底。
         if not product or not manufacturer:
-            devnum = read(os.path.join(d, "dev")).strip()
+            devnum = _clean_sysfs(read(os.path.join(d, "dev")))
             udev_txt = read(f"/run/udev/data/c{devnum}") if devnum else ""
             if not udev_txt:
                 udev_txt = read(f"/run/udev/data/+usb:{os.path.basename(d)}")
@@ -1354,13 +1358,21 @@ def _usb_devices():
                 if not manufacturer:
                     m_v = re.search(r"^E:ID_VENDOR_FROM_DATABASE=(.+)$", udev_txt, re.M)
                     if m_v:
-                        manufacturer = m_v.group(1).strip()
+                        manufacturer = _clean_sysfs(m_v.group(1))
                 if not product:
                     m_p = re.search(r"^E:ID_MODEL_FROM_DATABASE=(.+)$", udev_txt, re.M)
                     if m_p:
-                        product = m_p.group(1).strip()
+                        product = _clean_sysfs(m_p.group(1))
+        cls = _clean_sysfs(read(os.path.join(d, "bDeviceClass"))).lower()
+        if cls in ("", "00", "ef"):
+            if_classes = {
+                _clean_sysfs(read(p)).lower()
+                for p in sorted(glob.glob(os.path.join(d, f"{os.path.basename(d)}:*", "bInterfaceClass")))
+            } - {""}
+            if if_classes and if_classes.issubset(data.USB_NON_INPUT_CLASSES):
+                cls = sorted(if_classes)[0]
         devs.append(dict(vid=vid.lower(), pid=pid, product=product, manufacturer=manufacturer,
-                         cls=read(os.path.join(d, "bDeviceClass")).strip().lower()))
+                         cls=cls))
     if devs:
         return devs, "sysfs"
     rc, out = run(["lsusb"])

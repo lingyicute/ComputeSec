@@ -111,3 +111,28 @@ def test_hardware_strips_interior_nul_in_dt_model_and_detects_vm_bios_vendor(mon
     assert "\x00" not in hw.model and hw.model == "RaspberryPi 5"
     assert hw.vendor is data.VM_VENDOR
     assert hw.matched_on == "固件厂商: QEMU"
+
+
+def test_usb_devices_cleans_nul_bytes_and_reads_composite_interface_classes(monkeypatch):
+    def fake_glob(pat):
+        if pat == "/sys/bus/usb/devices/*":
+            return ["/sys/bus/usb/devices/1-4"]
+        if pat == "/sys/bus/usb/devices/1-4/1-4:*/bInterfaceClass":
+            return ["/sys/bus/usb/devices/1-4/1-4:1.0/bInterfaceClass",
+                    "/sys/bus/usb/devices/1-4/1-4:1.1/bInterfaceClass"]
+        return []
+
+    files = {
+        "/sys/bus/usb/devices/1-4/idVendor": "8087\x00\n",
+        "/sys/bus/usb/devices/1-4/idProduct": "0033\x00\n",
+        "/sys/bus/usb/devices/1-4/manufacturer": "Intel\x00\n",
+        "/sys/bus/usb/devices/1-4/product": "USB Dongle\x00\n",
+        "/sys/bus/usb/devices/1-4/bDeviceClass": "ef\n",
+        "/sys/bus/usb/devices/1-4/1-4:1.0/bInterfaceClass": "e0\n",
+        "/sys/bus/usb/devices/1-4/1-4:1.1/bInterfaceClass": "e0\n",
+    }
+    monkeypatch.setattr(checks.glob, "glob", fake_glob)
+    monkeypatch.setattr(checks, "read", lambda p, d="": files.get(p, d))
+    devs, _ = checks._usb_devices()
+    assert devs == [{"vid": "8087", "pid": "0033", "product": "USB Dongle", "manufacturer": "Intel", "cls": "e0"}]
+    assert checks.check_usb().status == "good"

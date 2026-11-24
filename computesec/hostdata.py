@@ -165,7 +165,7 @@ def _is_number(v):
 
 
 def _is_timestamp(v):
-    return _is_number(v) and v >= 0
+    return _is_number(v) and (v == 0 or v >= 1)
 
 
 def _sysctl_data_ok(d):
@@ -269,7 +269,9 @@ class HostData:
     def get(self, key):
         steps = self.payload.get("steps")
         entry = steps.get(key) if isinstance(steps, dict) else None
-        return entry.get("data") if isinstance(entry, dict) else None
+        data = entry.get("data") if isinstance(entry, dict) else None
+        check = _STEP_DATA_OK.get(key)
+        return data if (data is not None and (check is None or check(data))) else None
 
     def has(self, key):
         return self.get(key) is not None
@@ -279,13 +281,11 @@ class HostData:
     @property
     def sysctl_values(self):
         d = self.get("sysctl")
-        values = d.get("values") if isinstance(d, dict) else None
-        return values if isinstance(values, dict) else {}
+        return d["values"] if isinstance(d, dict) else {}
 
     @property
     def lsblk(self):
-        d = self.get("lsblk")
-        return d if _lsblk_data_ok(d) else None
+        return self.get("lsblk")
 
     @property
     def collected_at(self):
@@ -326,11 +326,11 @@ class HostData:
         steps = self.payload.get("steps")
         entry = steps.get(key) if isinstance(steps, dict) else None
         at = entry.get("at") if isinstance(entry, dict) else None
-        return self._age(at if _is_number(at) and at > 0 else self.collected_at)
+        return self._age(at if _is_timestamp(at) and at >= 1 else self.collected_at)
 
     @staticmethod
     def _age(ts):
-        if not _is_timestamp(ts) or ts == 0:
+        if not _is_timestamp(ts) or ts < 1:
             return ""
         try:
             diff = time.time() - ts

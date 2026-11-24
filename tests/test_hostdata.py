@@ -382,11 +382,19 @@ def test_load_rejects_bad_nested_structure(tmp_path, monkeypatch, payload):
 def test_accessors_survive_bad_nested_payload():
     hd = hostdata.HostData({"collected_at": "bad", "boot_id": 42,
                             "steps": {"sysctl": {"data": ["oops"]}, "lsblk": {"data": ["x"]}}})
+    assert hd.get("sysctl") is None and hd.has("sysctl") is False
+    assert hd.get("lsblk") is None and hd.has("lsblk") is False
+    assert hd.any_data is False
     assert hd.sysctl_values == {}
     assert hd.sysctl_lookup("kernel.kptr_restrict") == {}
     assert hd.lsblk is None
     assert hd.age_text == ""
     assert hd.collected_boot_id == ""
+    hd_bad_val = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {"k": 123}}}}})
+    assert hd_bad_val.sysctl_values == {} and hd_bad_val.any_data is False
+    assert hostdata._payload_ok({"collected_at": 0.5}) is False
+    assert hostdata.HostData({"collected_at": 0.5}).age_text == ""
+    assert hostdata.HostData({"collected_at": 0, "steps": {"sysctl": {"data": {"values": {}}, "at": 0.5}}}).step_age_text("sysctl") == ""
 
 
 def test_load_keeps_valid_payload_with_both_steps(tmp_path, monkeypatch):

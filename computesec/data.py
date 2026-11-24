@@ -51,9 +51,9 @@ HSI_ATTRS = {
         fix="需要 OEM 固件更新修复。"),
     "org.fwupd.hsi.Uefi.Db": dict(
         name="UEFI 签名数据库 (db)", kind="os",
-        meaning="db 中不应包含已被撤销或已知有漏洞的证书（如 Microsoft UEFI CA 2011）。",
-        risk="已知存在漏洞的旧版引导程序仍能被加载，BlackLotus 之类的 Bootkit 可绕过安全启动。",
-        fix="运行 `fwupdmgr refresh --force && fwupdmgr update` 应用 dbx 撤销列表更新；新证书（Microsoft UEFI CA 2023）通常由 OEM 固件更新提供。"),
+        meaning="使用微软 UEFI 签名信任链时，db 应包含 Microsoft UEFI CA 2023；这是证书迁移检查，不是 dbx 撤销列表检查。",
+        risk="缺少新证书时，使用新证书签名的发行版引导程序可能无法启动；旧证书到期本身不会使现有 Linux 安装立即无法启动。",
+        fix="通过 fwupdmgr refresh --force 和 fwupdmgr update 检查本机适用更新：先更新 KEK，再更新 db；如 LVFS 暂无适配更新，请联系 OEM。仅更新 dbx 不能补入新证书，不要仅因此删除旧证书或重置自有安全启动密钥。"),
     "org.fwupd.hsi.Uefi.Db.Production": dict(
         name="UEFI 签名数据库只含生产证书", kind="bios",
         meaning="db 中只应有正式发布的生产签名证书，不得残留开发调试用的测试签名证书（例如签名工具自带的默认测试证书）。",

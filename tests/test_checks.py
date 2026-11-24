@@ -278,7 +278,11 @@ def test_hsi_attr_tails_have_no_ambiguity():
     ("init_on_alloc", None, "1", False),
     ("ia32_emulation", "off", "0", True),     # arch/x86/entry/common.c: kstrtobool
     ("ia32_emulation", "n", "0", True),
-    ("page_alloc.shuffle", None, "1", True),  # module_param_cb + param_set_bool
+    # mm/shuffle.c 的 shuffle_param_ops 没有 NOARG 标志：裸 token 被 parse_one() 以 -EINVAL 拒绝
+    ("page_alloc.shuffle", None, "1", False),
+    ("page_alloc.shuffle", "1", "1", True),
+    ("page_alloc.shuffle", "on", "1", True),
+    ("page_alloc.shuffle", "0", "1", False),
 ])
 def test_cmdline_value_ok(key, actual, expected, want):
     assert checks._cmdline_value_ok(key, actual, expected) is want

@@ -438,6 +438,10 @@ _CMDLINE_BOOL_KEYS = {
     "kpti", "random.trust_bootloader", "random.trust_cpu",
     "randomize_kstack_offset", "irqchip.gicv3_pseudo_nmi",
     "ia32_emulation",   # arch/x86/entry/common.c: kstrtobool，off/0/n 等价
+    # mm/shuffle.c 用 module_param_cb 注册，shuffle_param_ops 没有设置
+    # KERNEL_PARAM_OPS_FL_NOARG（只有 param_ops_bool 等标准 ops 才带），因此
+    # kernel/params.c parse_one() 对裸 token 直接返回 -EINVAL，不会置真。
+    "page_alloc.shuffle",
 }
 # dracut 的 getargbool 不是 kstrtobool：只有 0 / no / off（区分大小写）为假，其余任何值
 # （包括 false、n、OFF）都算真，所以 rd.shell=false 并没有关掉 initramfs 的 shell。
@@ -451,9 +455,6 @@ _RD_EMERGENCY_NO_SHELL = {"halt", "poweroff"}
 _CMDLINE_MODULE_BOOL_KEYS = {
     "kvm_amd.sev", "kvm_amd.sev_es", "kvm_amd.sev_snp", "kvm.mitigate_smt_rsb",
     "module.sig_enforce", "bdev_allow_write_mounted",
-    # mm/shuffle.c 用 module_param_cb 注册、底层走 param_set_bool（FL_NOARG），
-    # 因此裸 token 同样等价于真，归类应与上面的 module_param(bool) 一致。
-    "page_alloc.shuffle",
 }
 # systemd ssh-generator.c：value ? parse_boolean(value) : 1，裸 token 会重新置真；
 # parse_boolean() 是整串精确匹配（不区分大小写），而内核 kstrtobool() 只看首字符。

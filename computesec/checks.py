@@ -746,6 +746,12 @@ def get_cmdline_report() -> CmdlineReport:
     for target, flag in forced_off.items():
         present[target] = flag
     ar, cv = arch(), cpu_vendor()
+    if ar == "x86_64":
+        iommu_opts = [o for o in (present.get("iommu") or "").split(",") if o]
+        if any(o.startswith("off") for o in iommu_opts):
+            for target in ("intel_iommu", "amd_iommu"):
+                if target in present:
+                    present[target] = "iommu=off"
     running = kernelver.parse_release(platform.release())
     items = []
     for p in data.KERNEL_PARAMS:

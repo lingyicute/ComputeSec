@@ -242,10 +242,10 @@ HSI_ATTRS = {
         risk="内存中的密钥、密码、明文文档会被换出到磁盘并长期保留。",
         fix="推荐使用 zram（Fedora 默认，`sudo dnf install zram-generator-defaults`）；或在 LUKS 卷内建立 swap，或 `swapoff -a` 后删除未加密的交换分区。"),
     "org.fwupd.hsi.Fwupd.Plugins": dict(
-        name="fwupd 插件", kind="os",
-        meaning="fwupd 的安全相关插件应全部正常加载。",
-        risk="部分检测无法执行，结果不完整。",
-        fix="确保安装了发行版官方的完整 fwupd 包并重启 fwupd 服务：`sudo systemctl restart fwupd`。"),
+        name="fwupd 插件完整性", kind="os",
+        meaning="fwupd 的检测不应被自定义插件或显式插件过滤配置污染；并非要求所有平台的插件都在本机加载。",
+        risk="修改或过滤插件会使检测结果不完整，可能漏掉本应报告的固件风险。",
+        fix="使用发行版官方 fwupd，核对插件禁用配置及 fwupdtool --plugins 等过滤选项，撤销不必要的自定义限制后重新检测。服务配置调整后运行 `sudo systemctl restart fwupd`；仅重装软件不会清除已有过滤配置。"),
     "org.fwupd.hsi.Fwupd.Updates": dict(
         name="固件为最新", kind="os",
         meaning="所有可通过 LVFS 更新的固件应为最新版本。",

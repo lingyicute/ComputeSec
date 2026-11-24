@@ -161,7 +161,7 @@ def _build_identity() -> HostIdentity:
     if props:
         populated = False
         for prop, attr in _HOSTNAME1_FIELDS:
-            val = props.get(prop, "")
+            val = props.get(prop, "").strip()
             if val:
                 setattr(ident, attr, val)
                 populated = True

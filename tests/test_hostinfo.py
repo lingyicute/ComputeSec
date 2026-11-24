@@ -233,3 +233,15 @@ def test_build_identity_records_os_release_when_filling_cpe_and_falls_back_when_
 def test_parse_os_release_strips_utf8_bom():
     d = hostinfo.parse_os_release('\ufeffPRETTY_NAME="Fedora Linux 42"\nID=fedora\n')
     assert d == {"PRETTY_NAME": "Fedora Linux 42", "ID": "fedora"}
+
+
+def test_build_identity_ignores_whitespace_only_dbus_fields(monkeypatch):
+    monkeypatch.setattr(hostinfo, "IN_FLATPAK", False)
+    monkeypatch.setattr(hostinfo, "_dbus_hostname1",
+                        lambda: ({"OperatingSystemPrettyName": "   ", "Hostname": " host1 "}, ""))
+    monkeypatch.setattr(hostinfo, "_host_os_release_text",
+                        lambda: ('PRETTY_NAME="Debian 13"\n', "/etc/os-release"))
+    ident = hostinfo._build_identity()
+    assert ident.pretty_name == "Debian 13"
+    assert ident.hostname == "host1"
+    assert "/etc/os-release" in ident.source

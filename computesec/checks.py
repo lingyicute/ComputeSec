@@ -1493,8 +1493,10 @@ def _ntfs_from_lsblk_json(j):
         return []
     found = []
 
-    def walk(nodes):
-        for n in nodes:
+    if isinstance(j, dict) and isinstance(j.get("blockdevices"), list):
+        stack = list(reversed(j["blockdevices"]))
+        while stack:
+            n = stack.pop()
             if not isinstance(n, dict):
                 continue
             ftype = (n.get("fstype") or "").lower()
@@ -1513,10 +1515,9 @@ def _ntfs_from_lsblk_json(j):
                     # 加密卷看不出里面是 NTFS，界面上要说清楚是被什么加密的。
                     line += "  （BitLocker 加密）"
                 found.append(line)
-            walk(n.get("children", []) or [])
-
-    if isinstance(j, dict) and isinstance(j.get("blockdevices"), list):
-        walk(j["blockdevices"])
+            children = n.get("children") or []
+            if isinstance(children, list):
+                stack.extend(reversed(children))
     return found
 
 

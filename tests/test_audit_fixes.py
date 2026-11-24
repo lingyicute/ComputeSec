@@ -136,3 +136,14 @@ def test_usb_devices_cleans_nul_bytes_and_reads_composite_interface_classes(monk
     devs, _ = checks._usb_devices()
     assert devs == [{"vid": "8087", "pid": "0033", "product": "USB Dongle", "manufacturer": "Intel", "cls": "e0"}]
     assert checks.check_usb().status == "good"
+
+
+def test_ntfs_from_lsblk_json_handles_deeply_nested_children_without_recursion_error():
+    leaf = {"name": "dm-999", "fstype": "ntfs", "label": "Deep", "size": "1G", "mountpoint": None}
+    cur = leaf
+    for idx in range(1500):
+        cur = {"name": f"dm-{idx}", "fstype": None, "children": [cur]}
+    payload = {"blockdevices": [cur]}
+    assert hostdata._lsblk_data_ok(payload) is True
+    found = checks._ntfs_from_lsblk_json(payload)
+    assert len(found) == 1 and "/dev/dm-999" in found[0]

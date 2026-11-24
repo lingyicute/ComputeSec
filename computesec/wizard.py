@@ -68,6 +68,8 @@ class CollectWizard(Adw.Window):
         self.index = -1                 # -1 = 介绍页；len(steps) = 完成页
         self._busy = False
         self._finished = False          # 保证 on_finish 只会被调用一次
+        self._req_gen = 0               # 剪贴板读取与自动跳转代际，屏蔽过期回调
+        self._advance_id = 0            # 读取成功后延迟切页的定时器 source id
         self.connect("close-request", self._on_close_request)
 
         self.toasts = Adw.ToastOverlay()
@@ -122,7 +124,14 @@ class CollectWizard(Adw.Window):
         self.skip_btn.set_sensitive(sensitive)
         self.copy_cmd_btn.set_sensitive(sensitive)
 
+    def _cancel_advance(self):
+        if self._advance_id:
+            GLib.source_remove(self._advance_id)
+            self._advance_id = 0
+
     def go(self, index):
+        self._req_gen += 1
+        self._cancel_advance()
         self._busy = False
         self._set_controls_sensitive(True)
         self.index = max(-1, min(index, len(self.steps)))
@@ -263,15 +272,20 @@ class CollectWizard(Adw.Window):
             self._set_controls_sensitive(True)
             self.set_status("无法读取剪贴板：没有可用的显示连接。", "error")
             return
+        self._req_gen += 1
         step_index = self.index
-        disp.get_clipboard().read_text_async(None, self._on_clipboard_text, step_index)
+        disp.get_clipboard().read_text_async(None, self._on_clipboard_text, (step_index, self._req_gen))
 
-    def _on_clipboard_text(self, clipboard, result, step_index=None):
+    def _on_clipboard_text(self, clipboard, result, step_info=None):
         if self._finished:
             return
-        idx = self.index if step_index is None else step_index
-        # 已切到其它步骤时，go() 已重置当前步状态；旧回调不得解锁新一步正在进行的读取。
-        if idx != self.index or not hostdata.valid_step_index(idx):
+        if isinstance(step_info, tuple):
+            idx, req_gen = step_info
+        else:
+            idx, req_gen = (self.index if step_info is None else step_info), None
+        # 已切到其它步骤或已发起新读取时，旧回调不得解锁或覆盖当前步骤状态。
+        if ((req_gen is not None and req_gen != self._req_gen)
+                or idx != self.index or not hostdata.valid_step_index(idx)):
             return
         try:
             text = clipboard.read_text_finish(result)
@@ -303,7 +317,16 @@ class CollectWizard(Adw.Window):
                 extra += ("；有 %d 行提示权限不足——如果您没有加 sudo，"
                           "请用 sudo 重新执行以获取 vm.mmap_rnd_bits 等参数" % denied)
         self.toast(f"已读取「{step.title}」的结果{extra}")
-        GLib.timeout_add(220, lambda: (None if self._finished or self.index != idx else self.go(idx + 1), False)[1])
+        self._cancel_advance()
+        gen = self._req_gen
+
+        def _advance():
+            self._advance_id = 0
+            if not self._finished and self._req_gen == gen and self.index == idx:
+                self.go(idx + 1)
+            return False
+
+        self._advance_id = GLib.timeout_add(220, _advance)
 
     def set_status(self, text, css):
         self.status.set_label(text)
@@ -322,6 +345,7 @@ class CollectWizard(Adw.Window):
         if self._finished:
             return
         self._finished = True
+        self._cancel_advance()
         self.hd.mark_done(skipped=skipped and not self.hd.any_data)
         self.hd.save()
         hostdata.set_current(self.hd)

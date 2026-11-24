@@ -1,0 +1,9 @@
+include run.py conftest.py README.en.md
+include uk._92li.lingyicute.ComputeSec.json
+include .github/workflows/*.yml
+include scripts/.font-subset-cache.json
+recursive-include scripts *.py
+recursive-include web *.html *.svg *.woff2 *.png *.webp
+recursive-include tests *.py
+recursive-include screenshot *.png
+global-exclude __pycache__ *.py[cod]

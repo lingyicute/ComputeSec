@@ -9,6 +9,7 @@ on:
       - 'data/**'
       - 'web/**'
       - 'scripts/**'
+      - 'MANIFEST.in'
       - 'pyproject.toml'          # ruff 规则集与 fail_under 都在里面
       - 'conftest.py'             # 决定 sys.path，删掉 test_run.py 就 import 失败
       - '*.json'
@@ -24,6 +25,7 @@ on:
       - 'data/**'
       - 'web/**'
       - 'scripts/**'
+      - 'MANIFEST.in'
       - 'pyproject.toml'
       - 'conftest.py'
       - '*.json'
@@ -81,6 +83,15 @@ jobs:
         run: ruff check .
       - name: 运行单元测试与覆盖率门槛
         run: python -m pytest -q --cov=computesec --cov=run
+      - name: 验证源码分发包可以独立运行和测试
+        run: |
+          python -m build --sdist --outdir /tmp/computesec-dist
+          mkdir -p /tmp/computesec-sdist
+          tar -xzf /tmp/computesec-dist/computesec-*.tar.gz -C /tmp/computesec-sdist
+          cd /tmp/computesec-sdist/computesec-*
+          python run.py --version
+          python -m pytest -q
+          python scripts/subset_font.py --check
       - name: 安装元数据校验工具
         run: |
           sudo apt-get update

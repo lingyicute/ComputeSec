@@ -33,7 +33,7 @@ Homepage = "https://github.com/lingyicute/ComputeSec"
 Issues = "https://github.com/lingyicute/ComputeSec/issues"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "fonttools", "brotli"]
+dev = ["pytest", "pytest-cov", "ruff", "fonttools", "brotli", "build"]
 # PyGObject / GTK4 / libadwaita 只能由发行版提供（不能用 pip 装），故不写进依赖。
 
 [project.gui-scripts]

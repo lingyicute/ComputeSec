@@ -79,6 +79,7 @@ def _default_launcher():
             cand = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), argv0)
             if os.path.isfile(cand):
                 return [cand]
+        return [argv0]
     return [os.path.abspath(argv0)]
 
 

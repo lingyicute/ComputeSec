@@ -86,3 +86,8 @@ def test_age_text_handles_huge_integer_timestamps():
     assert st.age_text() == ""
     assert st.age_text(now=1000) == ""
     assert st.age_text(now=huge + 10) == "刚刚"
+
+
+def test_default_fetcher_rejects_overflowing_timeout():
+    with pytest.raises(ValueError):
+        kv._default_fetcher(kv.RELEASES_URL, 10 ** 400)

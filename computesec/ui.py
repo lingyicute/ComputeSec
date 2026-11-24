@@ -497,7 +497,10 @@ def build_hsi(report, win):
     fixable = h.fixable
     if not fixable:
         if not scored:
-            fix.add(text_row("暂无可评估的检测项", "所有检测项均因缺少数据而无法判定。"))
+            fix.add(text_row(
+                "暂无可评估的检测项",
+                "所有检测项均因缺少数据而无法判定。" if h.undetermined else "当前没有处于生效状态的检测项。",
+            ))
         elif h.failed:
             fix.add(praise_row(
                 "所有可判定的用户可修复项目均已通过，做得非常好！"

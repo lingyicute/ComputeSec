@@ -62,7 +62,7 @@ class HostIdentity:
 
     @property
     def kernel(self):
-        return self.kernel_release or platform.release()
+        return self.kernel_release.strip() or platform.release()
 
 
 def _read(path, default=""):

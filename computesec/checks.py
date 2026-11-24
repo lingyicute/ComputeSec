@@ -706,6 +706,12 @@ def get_cmdline_report() -> CmdlineReport:
         if nk in ("slab_merge", "slub_merge"):
             present.pop("slab_nomerge", None)
             continue
+        # init/main.c：quiet（级别 4）与 debug（级别 10）同为 early_param，忽略参数值，
+        # 出现在 loglevel=0 之后时会把 console_loglevel 覆盖回非 0。
+        if nk in ("quiet", "debug"):
+            if "loglevel" in present:
+                present["loglevel"] = nk
+            continue
         # lib/vsprintf.c no_hash_pointers_enable()：early_param 仅比较参数名，
         # 处理函数忽略参数值并一律调用 hash_pointers_mode_parse("never")。
         if nk == "no_hash_pointers":

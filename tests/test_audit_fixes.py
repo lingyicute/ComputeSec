@@ -28,3 +28,20 @@ def test_slab_merge_with_value_overrides_earlier_nomerge(monkeypatch, cmdline, w
     monkeypatch.setattr(checks, "read", lambda p, d="": cmdline if p == "/proc/cmdline" else d)
     item = {i.key: i for i in checks.get_cmdline_report().items}["slab_nomerge"]
     assert item.status == want
+
+
+@pytest.mark.parametrize("cmdline,want,actual", [
+    ("quiet loglevel=0", "ok", "0"),
+    ("debug loglevel=0", "ok", "0"),
+    ("loglevel=0 quiet", "wrong", "quiet"),
+    ("loglevel=0 debug", "wrong", "debug"),
+    ("loglevel=0 quiet=1", "wrong", "quiet"),
+    ("loglevel=0 quiet loglevel=0", "ok", "0"),
+])
+def test_later_quiet_or_debug_overrides_loglevel_zero(monkeypatch, cmdline, want, actual):
+    monkeypatch.setattr(checks, "arch", lambda: "x86_64")
+    monkeypatch.setattr(checks, "cpu_vendor", lambda: "intel")
+    monkeypatch.setattr(checks, "read", lambda p, d="": cmdline if p == "/proc/cmdline" else d)
+    item = {i.key: i for i in checks.get_cmdline_report().items}["loglevel"]
+    assert item.status == want
+    assert item.actual == actual

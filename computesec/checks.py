@@ -948,9 +948,12 @@ def _sysctl_effective_values(key, actual):
         return actual
     if key == "net.ipv6.conf.*.use_tempaddr":
         default_key = "net.ipv6.conf.default.use_tempaddr"
-        if default_key not in actual:
-            return {**actual, default_key: None}
-        return actual
+        effective = dict(actual)
+        if default_key not in effective:
+            effective[default_key] = None
+        if not any(k != default_key for k in actual):
+            effective[key] = None
+        return effective
     if key != "net.ipv4.conf.*.rp_filter":
         return actual
     all_key = "net.ipv4.conf.all.rp_filter"

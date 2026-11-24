@@ -74,3 +74,16 @@ def test_missing_default_use_tempaddr_cannot_pass(monkeypatch):
         "sysctl": {"data": {"values": {"net.ipv6.conf.eth0.use_tempaddr": "2"}}}}}))
     item = checks.get_sysctl_report().all_items[0]
     assert item.status == "unknown"
+
+
+def test_default_only_use_tempaddr_cannot_pass(monkeypatch):
+    entries = [e for _, group in data.SYSCTL_GROUPS for e in group
+               if e["key"].endswith(".use_tempaddr")]
+    monkeypatch.setattr(data, "SYSCTL_GROUPS", [("privacy", entries)])
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(hostdata, "CURRENT", hostdata.HostData({"steps": {
+        "sysctl": {"data": {"values": {"net.ipv6.conf.default.use_tempaddr": "2"}}}}}))
+    assert checks.get_sysctl_report().all_items[0].status == "unknown"
+    monkeypatch.setattr(hostdata, "CURRENT", hostdata.HostData({"steps": {
+        "sysctl": {"data": {"values": {"net.ipv6.conf.default.use_tempaddr": "0"}}}}}))
+    assert checks.get_sysctl_report().all_items[0].status == "missing"

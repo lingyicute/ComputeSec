@@ -463,3 +463,16 @@ def test_default_launcher_empty_argv_checks_path_and_venv_bin(monkeypatch, tmp_p
     monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
     monkeypatch.setattr(cli.sys, "executable", str(venv_bin / "python3"))
     assert cli._default_launcher() == [str(script)]
+
+
+def test_default_launcher_bare_name_not_found_and_relative_home_display_dir(monkeypatch):
+    from computesec import xdg
+
+    monkeypatch.setattr(cli.sys, "argv", ["computesec"])
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(cli.sys, "executable", "")
+    assert cli._default_launcher() == ["computesec"]
+
+    monkeypatch.setenv("HOME", "relative/home")
+    monkeypatch.setenv("XDG_DATA_HOME", "/var/tmp/csdata")
+    assert xdg.display_dir() == "/var/tmp/csdata/computesec"

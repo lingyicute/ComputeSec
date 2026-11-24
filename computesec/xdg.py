@@ -52,7 +52,7 @@ def display_dir(name="computesec"):
     """
     d = os.path.normpath(data_dir(name, create=False))
     raw_home = os.path.expanduser("~")
-    home = os.path.normpath(raw_home).rstrip(os.sep) if raw_home else ""
+    home = os.path.normpath(raw_home).rstrip(os.sep) if raw_home and os.path.isabs(raw_home) else ""
     if home and (d == home or d.startswith(home + os.sep)):
         return "~" + d[len(home):]
     return d

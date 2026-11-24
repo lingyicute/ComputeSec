@@ -256,10 +256,12 @@ class MainWindow(Adw.ApplicationWindow):
         if self._wizard is not None:
             self._wizard.present()
             return False
-        existing = (hostdata.HostData(copy.deepcopy(hostdata.CURRENT.payload))
-                    if hostdata.CURRENT.any_data else hostdata.HostData.load())
-        if not existing.fresh:
-            existing = hostdata.HostData()
+        if hostdata.CURRENT.any_data:
+            existing = hostdata.HostData(copy.deepcopy(hostdata.CURRENT.payload))
+        else:
+            existing = hostdata.HostData.load()
+            if not existing.fresh:
+                existing = hostdata.HostData()
         self._wizard = wizard.CollectWizard(self, host_data=existing, on_finish=self.on_wizard_finish)
         self._wizard.present()
         return False

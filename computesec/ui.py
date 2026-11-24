@@ -510,7 +510,8 @@ def build_hsi(report, win):
 
             fix.add(lazy_expander(row, populate))
 
-    others = [i for i in h.failed if i not in fixable]
+    fixable_ids = {id(i) for i in fixable}
+    others = [i for i in h.failed if id(i) not in fixable_ids]
     unfix = None
     if others:
         unfix = group("无法自行修复的项目", "这些项目取决于硬件或厂商，若对您的威胁模型至关重要，请考虑更换硬件。")

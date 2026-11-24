@@ -499,7 +499,10 @@ def build_hsi(report, win):
         if not scored:
             fix.add(text_row("暂无可评估的检测项", "所有检测项均因缺少数据而无法判定。"))
         elif h.failed:
-            fix.add(praise_row("所有可由用户修复的项目均已通过，做得非常好！"))
+            fix.add(praise_row(
+                "所有可判定的用户可修复项目均已通过，做得非常好！"
+                if h.undetermined else
+                "所有可由用户修复的项目均已通过，做得非常好！"))
         elif h.undetermined:
             fix.add(praise_row("所有可判定的检测项均已通过，做得非常好！"))
         else:

@@ -296,9 +296,13 @@ def build_dashboard(report, win, navigate):
             hsi_desc += f"，另有 {len(report.hsi.undetermined)} 项数据缺失无法判定"
     else:
         hsi_desc = report.hsi.error
+    sysctl_unassessed = len(report.sysctl.unknown) + len(report.sysctl.unverified)
+    kernel_desc = f"内核参数缺失 {len(report.cmdline.missing)} 项｜sysctl 缺失 {len(report.sysctl.missing)} 项"
+    if sysctl_unassessed:
+        kernel_desc += f"，另有 {sysctl_unassessed} 项无法判定"
     cards = [
         ("hsi", "HSI 固件安全", hsi_score, hsi_desc, "security-high-symbolic"),
-        ("kernel", "内核加固", report.kernel_score, f"内核参数缺失 {len(report.cmdline.missing)} 项｜sysctl 缺失 {len(report.sysctl.missing)} 项", "emblem-system-symbolic"),
+        ("kernel", "内核加固", report.kernel_score, kernel_desc, "emblem-system-symbolic"),
         ("hardware", "硬件品牌", report.hardware.score, f"{report.hardware.vendor['name']} · {data.RATING_ZH[report.hardware.vendor['rating']]}", "computer-symbolic"),
         ("habits", "使用习惯", report.habits.score, "、".join(f"{c.title.split(' ')[0]}{_HABIT_MARK.get(c.status, '?')}" for c in report.habits.checks), "avatar-default-symbolic"),
     ]

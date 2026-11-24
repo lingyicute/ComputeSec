@@ -967,7 +967,7 @@ def get_sysctl_report() -> SysctlReport:
                     age = hd.step_age_text("sysctl")
                     source = f"用户提供（{age}）" if age else "用户提供"
                     if denied_keys is not None and any(k in denied_keys for k in actual):
-                        unreadable = bool(denied_keys - set(filled))
+                        unreadable = bool((denied_keys & actual.keys()) - set(filled))
                     else:
                         unreadable = any(v is None for v in actual.values())
             elif IN_FLATPAK and user_values and not (

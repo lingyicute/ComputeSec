@@ -60,3 +60,14 @@ def test_io_failure_is_unknown_not_unsupported(monkeypatch):
     ])
     monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _key: ({ETH: None}, False))
     assert checks.get_sysctl_report().all_items[0].status == "unknown"
+
+
+def test_unrelated_denied_key_does_not_keep_filled_item_unknown(monkeypatch):
+    hd = hostdata.HostData({"steps": {"sysctl": {"data": {"values": {ETH: "0"}}}}})
+    monkeypatch.setattr(hostdata, "CURRENT", hd)
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(checks.data, "SYSCTL_GROUPS", [
+        ("test", [{"key": KEY, "value": "0", "desc": "test"}]),
+    ])
+    monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _key: ({ALL: "0", ETH: None}, {ETH, WLAN}))
+    assert checks.get_sysctl_report().all_items[0].status == "ok"

@@ -23,3 +23,9 @@ def test_kernel_cache_rejects_invalid_timestamps(value, tmp_path):
     cache.write_text(json.dumps(payload))
     assert kernelver.KernelSupport.from_dict(payload) is None
     assert kernelver.load_cache(str(cache)) is None
+
+
+def test_kernelver_age_text_rejects_fractional_future_timestamp():
+    st = kernelver.KernelSupport(checked_at=1000.9)
+    assert st.age_text(now=1000.1) == ""
+    assert st.age_text(now=1001.0) == "刚刚"

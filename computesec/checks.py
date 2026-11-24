@@ -1571,6 +1571,17 @@ class Report:
     hostdata: object = None         # hostdata.HostData
     kernel_support: object = None   # kernelver.KernelSupport（联网检查失败时为 None 或已知的缓存值）
 
+    @property
+    def incomplete(self):
+        """A high partial score must not be presented as complete assurance."""
+        ks = self.kernel_support
+        return (self.hsi.score is None or bool(self.hsi.undetermined)
+                or self.cmdline.score is None or self.sysctl.score is None
+                or bool(self.sysctl.unknown or self.sysctl.unverified)
+                or not self.hardware.matched_on or self.habits.score is None
+                or any(c.status == "unknown" for c in self.habits.checks)
+                or ks is None or not ks.known or ks.stale or not ks.supported)
+
     @staticmethod
     def _mean(values):
         """各分项的平均分，无法评估（None）的分项跳过；全部无法评估时返回 None。

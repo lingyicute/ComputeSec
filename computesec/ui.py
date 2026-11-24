@@ -268,6 +268,8 @@ def build_dashboard(report, win, navigate):
     head.append(score_label(overall, big=True))
     if overall is None:
         grade = "无法评估：没有可用的检测项，请检查下方的提示"
+    elif report.incomplete:
+        grade = "评分仅涵盖已评估项目；仍有结果未能验证，请核对各板块提示"
     else:
         grade = "安全状况良好，请继续保持！" if overall >= 90 else ("还有一些可以改进的地方" if overall >= 70 else "存在多项需要处理的风险")
     head.append(wrapped_label(grade, css=("title-4",)))
@@ -376,6 +378,8 @@ def build_dashboard(report, win, navigate):
     if n == 0:
         if overall is None:
             todo.add(text_row("暂无待办事项", "当前没有可评估的检测结果。"))
+        elif report.incomplete:
+            todo.add(text_row("暂无已确认的待办事项", "仍有结果未能验证；没有待办事项不代表系统已通过全部安全检查。"))
         else:
             todo.add(praise_row("没有待办事项，您的安全配置非常出色，请继续保持！"))
 

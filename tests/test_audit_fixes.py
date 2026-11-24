@@ -76,3 +76,23 @@ def test_x86_later_passthrough_zero_reconciles_iommu_force(monkeypatch, cmdline,
     by_key = {i.key: i for i in checks.get_cmdline_report().items}
     assert by_key["iommu"].status == iommu_want
     assert by_key["iommu.passthrough"].status == pt_want
+
+
+def test_sysctl_rejects_python_underscores_non_ascii_digits_and_invalid_rp_filter(monkeypatch):
+    assert checks._sysctl_value_ok("3_2", "32", "ge") is False
+    assert checks._sysctl_value_ok("３２", "32", "ge") is False
+    assert checks._sysctl_value_ok("5_0", "100", "le") is False
+
+    entries = [e for _, grp in data.SYSCTL_GROUPS for e in grp if e["key"].endswith(".rp_filter")]
+    monkeypatch.setattr(data, "SYSCTL_GROUPS", [("test", entries)])
+    monkeypatch.setattr(checks, "IN_FLATPAK", False)
+    monkeypatch.setattr(hostdata, "CURRENT", hostdata.HostData())
+    for bad_iface in ("-1", "abc", "1_0"):
+        vals = {
+            "net.ipv4.conf.all.rp_filter": "1",
+            "net.ipv4.conf.default.rp_filter": "1",
+            "net.ipv4.conf.eth0.rp_filter": bad_iface,
+        }
+        monkeypatch.setattr(checks, "_sysctl_from_proc", lambda _, v=vals: (v, set()))
+        item = checks.get_sysctl_report().all_items[0]
+        assert item.status == "missing"

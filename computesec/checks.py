@@ -934,6 +934,16 @@ _SYSCTL_WORD_ALIASES = {
 }
 
 
+_ASCII_INT_RE = re.compile(r"^-?[0-9]+$")
+
+
+def _parse_ascii_int(v):
+    if not isinstance(v, str):
+        return None
+    s = v.strip()
+    return int(s) if _ASCII_INT_RE.fullmatch(s) else None
+
+
 def _sysctl_norm(v):
     """把读到的值归一化，便于与期望值比较。"""
     v = " ".join(v.split())
@@ -946,17 +956,13 @@ def _sysctl_value_ok(actual, expected, cmp):
     a = _sysctl_norm(actual)
     e = _sysctl_norm(expected)
     if cmp == "ge":
-        try:
-            return int(a) >= int(e)
-        except ValueError:
-            return a == e
+        ia, ie = _parse_ascii_int(a), _parse_ascii_int(e)
+        return ia >= ie if (ia is not None and ie is not None) else a == e
     if cmp == "le":
         # 上限型阈值（kernel.oops_limit / warn_limit）：越小越早 panic、越严格；
         # 但 0 表示关闭计数，不是"最严格"，必须单独排除。
-        try:
-            return 0 < int(a) <= int(e)
-        except ValueError:
-            return a == e
+        ia, ie = _parse_ascii_int(a), _parse_ascii_int(e)
+        return 0 < ia <= ie if (ia is not None and ie is not None) else a == e
     return a == e
 
 
@@ -1004,21 +1010,24 @@ def _sysctl_effective_values(key, actual):
     if not any(k not in (all_key, default_key) for k in actual):
         # All/default alone cannot rule out a loose-mode existing interface.
         effective[key] = None
-    try:
-        global_mode = int(actual.get(all_key))
-    except (TypeError, ValueError):
-        global_mode = None
+    raw_all = actual.get(all_key)
+    parsed_all = _parse_ascii_int(raw_all)
+    global_mode = parsed_all if parsed_all in (0, 1, 2) else None
     # all=0 can still be strict if every current/default interface is strict.
-    effective[all_key] = "1" if global_mode == 0 else actual.get(all_key)
+    effective[all_key] = "1" if global_mode == 0 else raw_all
     for k, value in actual.items():
         if k == all_key:
             continue
-        try:
-            mode = int(value)
-            effective[k] = (str(mode) if mode >= 2 else
-                            str(max(mode, global_mode)) if global_mode is not None else None)
-        except (TypeError, ValueError):
+        if value is None:
             effective[k] = None
+            continue
+        mode = _parse_ascii_int(value)
+        if mode is None or mode < 0 or mode > 2:
+            effective[k] = value
+        elif mode == 2:
+            effective[k] = "2"
+        else:
+            effective[k] = str(max(mode, global_mode)) if global_mode is not None else None
     return effective
 
 

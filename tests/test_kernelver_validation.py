@@ -43,3 +43,10 @@ def test_unusable_cache_does_not_suppress_fetch(tmp_path):
     assert calls == [1]
     assert status.known
     assert status.mainline == "7.3"
+
+
+def test_kernel_support_clears_invalid_upstream_version_strings():
+    st = kv.KernelSupport(release="6.12.1", mainline="not-a-version", stable="7.2.12")
+    assert st.mainline == ""
+    assert st.stable == "7.2.12"
+    assert st.tier == "older"

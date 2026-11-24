@@ -160,8 +160,8 @@ class KernelSupport:
     def __init__(self, release="", mainline="", stable="", tier="unknown", checked_at=0,
                  error="", stale=False):
         self.release = release if isinstance(release, str) else ""
-        self.mainline = mainline if isinstance(mainline, str) else ""
-        self.stable = stable if isinstance(stable, str) else ""
+        self.mainline = mainline if _upstream_version_ok(mainline) else ""
+        self.stable = stable if _upstream_version_ok(stable) else ""
         if self.have_upstream and self.parsed:
             self.tier = tier if tier in ("mainline", "stable", "older") else classify(
                 self.release, self.mainline, self.stable)

@@ -378,7 +378,7 @@
   /* Reveal */
   .reveal { opacity: 0; transform: translateY(22px); transition: opacity .6s var(--motion-emph), transform .6s var(--motion-emph); }
   .reveal.in { opacity: 1; transform: none; }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .score, .shot-frame::before { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .score, .shot-frame::before { animation: none; } .ripple { animation: none; display: none; } }
 
   /* ---------- Page loading overlay ---------- */
   .page-loader {
@@ -1010,7 +1010,9 @@
   apply();
 
   /* ---------- Ripple (Material state layer) ---------- */
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   document.addEventListener('pointerdown', e => {
+    if (reducedMotion.matches) return;
     const el = e.target.closest('.btn, .icon-btn, .tab, .fab, .nav a, .swatch');
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -1021,7 +1023,9 @@
     s.style.left = (e.clientX - r.left - size / 2) + 'px';
     s.style.top = (e.clientY - r.top - size / 2) + 'px';
     el.appendChild(s);
-    s.addEventListener('animationend', () => s.remove());
+    const cleanup = () => s.remove();
+    s.addEventListener('animationend', cleanup, { once: true });
+    setTimeout(cleanup, 700);
   });
 
   /* ---------- Tabs ---------- */

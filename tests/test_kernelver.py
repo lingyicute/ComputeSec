@@ -614,3 +614,13 @@ def test_load_cache_reads_raw_utf8(tmp_path):
     cache.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     loaded = kv.load_cache(str(cache))
     assert loaded is not None and loaded.error == "连接超时"
+
+
+def test_parse_releases_json_prefers_latest_maintained_mainline():
+    doc = {"releases": [
+        {"moniker": "mainline", "version": "7.4-rc1", "iseol": True},
+        {"moniker": "mainline", "version": "7.2", "iseol": False},
+        {"moniker": "mainline", "version": "7.3-rc2", "iseol": False},
+        {"moniker": "stable", "version": "7.1.4", "iseol": False},
+    ]}
+    assert kv.parse_releases_json(json.dumps(doc)) == ("7.3-rc2", "7.1.4")

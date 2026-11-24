@@ -95,7 +95,7 @@ def parse_releases_json(text):
     releases = doc.get("releases")
     if not isinstance(releases, list):
         return "", ""
-    mainline = ""
+    mainlines, active_mainlines = [], []
     stables, maintained = [], []
     for rel in releases:
         if not isinstance(rel, dict):
@@ -104,12 +104,16 @@ def parse_releases_json(text):
         version = rel.get("version")
         if not _upstream_version_ok(version):
             continue
-        if moniker == "mainline" and not mainline:
-            mainline = version
+        if moniker == "mainline":
+            mainlines.append(version)
+            if rel.get("iseol") is not True:
+                active_mainlines.append(version)
         elif moniker == "stable":
             stables.append(version)
             if rel.get("iseol") is not True:
                 maintained.append(version)
+    mainline = (max(active_mainlines, key=parse_release) if active_mainlines
+                else (max(mainlines, key=parse_release) if mainlines else ""))
     # stable 可能同时有两条：新分支出了 .1 之后，上一条还会再维护两三周才标成 EOL
     # （iseol=true）。classify() 拿这里的 stable 当「受支持」的门槛，所以取仍在维护的
     # 最旧一条；只认最新一条会把还在上游维护期内的内核判成「旧分支」——Fedora 等

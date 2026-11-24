@@ -246,7 +246,7 @@ class CollectWizard(Adw.Window):
             self.go(0)
             return
         if self.index >= len(self.steps):
-            self.finish()
+            self.finish(skipped=not self.hd.any_data)
             return
         self.read_clipboard()
 

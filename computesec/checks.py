@@ -705,10 +705,9 @@ def get_cmdline_report() -> CmdlineReport:
         if v is None and nk in ("slab_merge", "slub_merge"):
             present.pop("slab_nomerge", None)
             continue
-        # lib/vsprintf.c no_hash_pointers_enable()：仅接受无值的裸 token（带 = 返回 -EINVAL）。
+        # lib/vsprintf.c no_hash_pointers_enable()：early_param 仅比较参数名，
+        # 处理函数忽略参数值并一律调用 hash_pointers_mode_parse("never")。
         if nk == "no_hash_pointers":
-            if v is not None:
-                continue
             nk, v = "hash_pointers", "never"
         if v is not None:
             if nk == "mitigations" and v in _MITIGATIONS_RANK:

@@ -1638,7 +1638,7 @@ def test_hsi_normalize_attrs_skips_missing_id_and_clamps_level_and_no_hash_point
         "hash_pointers=always no_hash_pointers=0" if p == "/proc/cmdline" else default
     ))
     by_key = {i.key: i for i in checks.get_cmdline_report().items}
-    assert by_key["hash_pointers"].status == "ok"
+    assert by_key["hash_pointers"].status == "wrong"
 
 
 def test_hsi_flags_and_result_strip_whitespace_and_ignore_non_strings():

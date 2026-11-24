@@ -824,7 +824,11 @@ class SysctlItem:
             # 沙箱网络隔离时用户可能根本没提供过快照，不能说「您提供的快照中没有」。
             return "（沙箱网络隔离，无法验证）" if self.source == "沙箱网络隔离" else "（您提供的快照中没有这一项）"
         if self.status == "unknown":
-            return "（无法读取）" if self.source == "读取失败" else "（无法读取，需要 root 权限）"
+            if self.source == "读取失败":
+                return "（无法读取）"
+            if self.source == "数据不完整":
+                return "（缺少接口或默认配置，无法验证）"
+            return "（无法读取，需要 root 权限）"
         if not self.actual:
             return "（内核不支持）"
         vals = {v for v in self.actual.values()}
@@ -1082,10 +1086,11 @@ def get_sysctl_report() -> SysctlReport:
                      for v in compared.values()):
                 status = "missing"
             elif unreadable or any(v is None for v in compared.values()):
-                # 部分接口读不到时，不能凭其余接口的正确值宣称整项已加固；非权限错误（如 EIO）单独标记来源。
+                # 部分接口读不到时，不能凭其余接口的正确值宣称整项已加固；
+                # 区分权限不足、内核 I/O 读取失败、以及缺少接口/默认配置导致的数据不完整。
                 status = "unknown"
                 if not unreadable:
-                    source = "读取失败"
+                    source = "读取失败" if any(v is None for v in actual.values()) else "数据不完整"
             else:
                 status = "ok"
             items.append(SysctlItem(key=key, expected=e["value"], cmp=cmp, actual=actual, status=status,

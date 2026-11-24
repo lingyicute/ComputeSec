@@ -641,8 +641,9 @@ def build_kernel(report, win):
     # 沙箱里能读到的条目（kernel.*、vm.*、fs.* 等）本来就是宿主机视图。
     g_src = None
     n = len(s.unknown)
-    n_perm = sum(1 for i in s.unknown if i.source != "读取失败")
-    n_io = n - n_perm
+    n_io = sum(1 for i in s.unknown if i.source == "读取失败")
+    n_incomplete = sum(1 for i in s.unknown if i.source == "数据不完整")
+    n_perm = n - n_io - n_incomplete
     m = len(s.unverified)
     m_net = sum(1 for i in s.unverified if i.source == "沙箱网络隔离")
     if s.user_supplied or n or m:
@@ -655,6 +656,8 @@ def build_kernel(report, win):
                 parts.append(f"仍有 {n_perm} 项无法判定，可能是您执行命令时没有加 sudo。")
             if n_io:
                 parts.append(f"另有 {n_io} 项因内核接口读取失败而无法判定，未计入评分。")
+            if n_incomplete:
+                parts.append(f"另有 {n_incomplete} 项缺少接口或默认配置而无法完整验证，未计入评分。")
             if m:
                 parts.append(f"另有 {m} 项不在您提供的输出中（可能被 2>/dev/null 过滤，或该内核没有这一项）；"
                              "沙箱内的读数不可信，已忽略，未计入评分。")
@@ -670,10 +673,12 @@ def build_kernel(report, win):
                 parts.append(f"当前有 {n_perm} 项 sysctl 因为文件仅 root 可读而无法判定（例如 vm.mmap_rnd_bits），未计入评分。")
             if n_io:
                 parts.append(f"当前有 {n_io} 项 sysctl 因内核接口返回读取错误而无法判定，未计入评分。")
-            if n_perm or m:
+            if n_incomplete:
+                parts.append(f"当前有 {n_incomplete} 项 sysctl 缺少接口或默认配置而无法完整验证，未计入评分。")
+            if n_perm or n_incomplete or m:
                 parts.append("点击右侧按钮，按向导在终端执行一条只读命令并复制结果，即可得到完整准确的评估。")
         g_src = group(title, "".join(parts))
-        if s.user_supplied or n_perm or m:
+        if s.user_supplied or n_perm or n_incomplete or m:
             g_src.set_header_suffix(_collect_button(win, "重新采集" if s.user_supplied else "采集系统数据"))
 
     # ---- cmdline ----
@@ -742,6 +747,8 @@ def build_kernel(report, win):
                 sub += "  （内核不支持或模块未加载）"
             elif it.status == "unknown" and it.source == "读取失败":
                 sub += "  （内核接口读取失败，未参与评分）"
+            elif it.status == "unknown" and it.source == "数据不完整":
+                sub += "  （缺少接口或默认配置，无法完整验证，未参与评分）"
             elif it.status == "unknown":
                 sub += "  （该文件仅 root 可读，未参与评分；请用主菜单的「重新采集系统数据」提供 sudo sysctl -a 的结果）"
             elif it.status == "unverified" and it.source == "沙箱网络隔离":
@@ -752,7 +759,7 @@ def build_kernel(report, win):
                         "已忽略且未参与评分）")
             row.set_subtitle(esc(sub))
             row.add_prefix(status_icon(
-                "locked" if it.status == "unknown" and it.source != "读取失败" else it.status))
+                "locked" if it.status == "unknown" and it.source not in ("读取失败", "数据不完整") else it.status))
             # source 可能是 "用户提供" 或 "用户提供（3 小时前）"：只有这一项是
             # 靠快照补上的才打标签，剩下的都是 /proc 的实时读数。
             if it.source.startswith("用户提供") and it.status != "unknown":

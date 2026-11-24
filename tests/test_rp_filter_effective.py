@@ -30,3 +30,16 @@ def test_incomplete_interface_snapshot_cannot_pass(names):
     actual = {f"net.ipv4.conf.{name}.rp_filter": "1" for name in names}
     compared = checks._sysctl_effective_values("net.ipv4.conf.*.rp_filter", actual)
     assert any(value is None for value in compared.values())
+
+
+def test_incomplete_rp_filter_reports_incomplete_data_not_io_failure(monkeypatch):
+    entries = [e for _, group in data.SYSCTL_GROUPS for e in group if e["key"].endswith(".rp_filter")]
+    monkeypatch.setattr(data, "SYSCTL_GROUPS", [("test", entries)])
+    monkeypatch.setattr(checks, "IN_FLATPAK", True)
+    monkeypatch.setattr(hostdata, "CURRENT", hostdata.HostData({"steps": {
+        "sysctl": {"data": {"values": {"net.ipv4.conf.all.rp_filter": "1"}}},
+    }}))
+    item = checks.get_sysctl_report().all_items[0]
+    assert item.status == "unknown"
+    assert item.source == "数据不完整"
+    assert "缺少接口或默认配置" in item.actual_text

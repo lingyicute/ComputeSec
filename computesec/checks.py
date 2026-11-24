@@ -209,6 +209,10 @@ def _flags_to_set(v):
     if isinstance(v, bool):
         return s
     if isinstance(v, int):
+        # fwupd exports an unsigned 64-bit flag mask. Negative Python ints
+        # otherwise set success/obsoleted through sign extension.
+        if not 0 <= v < (1 << 64):
+            return s
         for bit, name in data.HSI_FLAG_BITS.items():
             if v & bit:
                 s.add(name)

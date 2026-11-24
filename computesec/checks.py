@@ -950,7 +950,7 @@ def _sysctl_effective_values(key, actual):
             continue
         try:
             mode = int(value)
-            effective[k] = ("2" if mode == 2 else
+            effective[k] = (str(mode) if mode >= 2 else
                             str(max(mode, global_mode)) if global_mode is not None else None)
         except (TypeError, ValueError):
             effective[k] = None

@@ -5,7 +5,7 @@ from computesec import checks, data, hostdata
     ("1", "1", "2", "missing"), ("1", "0", "0", "ok"),
     ("0", "1", "1", "ok"), ("0", "0", "1", "missing"),
     ("2", "1", "1", "missing"), (None, "1", "1", "unknown"),
-    ("1", "1", None, "unknown"), (None, "1", "2", "missing"),
+    ("1", "1", None, "unknown"), (None, "1", "2", "missing"), (None, "1", "3", "missing"),
 ])
 @pytest.mark.parametrize("sandbox", [False, True])
 def test_effective_reverse_path_filter(monkeypatch, all_value, default, iface, want, sandbox):

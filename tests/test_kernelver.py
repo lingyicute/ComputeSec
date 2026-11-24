@@ -606,3 +606,11 @@ def test_negative_float_timestamp_and_subsecond_or_bool_now_rejected(tmp_path):
     assert kv.load_cache(str(cache), now="bad") is None
     st = kv.get_status("7.2.12", now=float("nan"), fetcher=_fetcher_returning(RELEASES_JSON), cache_path=str(cache))
     assert st.known and st.supported
+
+
+def test_load_cache_reads_raw_utf8(tmp_path):
+    cache = tmp_path / "kernelver.json"
+    doc = {"release": "7.2", "mainline": "7.3", "stable": "7.2.1", "tier": "stable", "checked_at": 1000, "error": "连接超时"}
+    cache.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    loaded = kv.load_cache(str(cache))
+    assert loaded is not None and loaded.error == "连接超时"

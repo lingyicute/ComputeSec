@@ -346,7 +346,7 @@ def load_cache(path=None, now=None):
     """
     path = path or os.path.join(_data_dir(create=False), CACHE_NAME)
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             st = KernelSupport.from_dict(json.load(f))
     except (OSError, ValueError, TypeError):
         return None

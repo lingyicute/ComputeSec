@@ -376,7 +376,7 @@ def build_dashboard(report, win, navigate):
     _ks = getattr(report, "kernel_support", None)
     if _ks is not None and _ks.known and not _ks.supported:
         _add_todo(f"当前内核 {esc(_ks.release)} 不在 mainline / stable 版本线上",
-                  "旧分支未包含上游全部安全修复与加固改进，下面的加固建议不保证生效", "warn", "kernel")
+                  "旧分支未包含上游全部安全修复与加固改进，下面的加固建议可能无法完全生效", "warn", "kernel")
     if report.hsi.ok and report.hsi.undetermined:
         _add_todo(f"有 {len(report.hsi.undetermined)} 项 HSI 检测因为缺少数据而无法判定",
                   "这不是未通过，也无法通过改配置解决；展开 HSI 页面可查看具体项目", "unknown", "hsi")
@@ -384,7 +384,7 @@ def build_dashboard(report, win, navigate):
         if overall is None:
             todo.add(text_row("暂无待办事项", "当前没有可评估的检测结果。"))
         elif report.incomplete:
-            todo.add(text_row("暂无已确认的待办事项", "仍有结果未能验证；没有待办事项不代表系统已通过全部安全检查。"))
+            todo.add(text_row("暂无已确认的待办事项", "仍有结果未能验证。"))
         else:
             todo.add(praise_row("没有待办事项，您的安全配置非常出色，请继续保持！"))
 
